@@ -118,6 +118,10 @@ export class Business {
   @Prop({ type: ReviewsCache, default: () => ({}) })
   reviews: ReviewsCache;
 
+  // Google Places ID — resolved automatically on first review sync
+  @Prop()
+  googlePlaceId?: string;
+
   @Prop({ default: 0 })
   followerCount: number;
 

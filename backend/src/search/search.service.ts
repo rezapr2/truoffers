@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Business, BusinessDocument } from '../schemas/business.schema';
 import { Offer, OfferDocument } from '../schemas/offer.schema';
 import { Category, CategoryDocument } from '../schemas/category.schema';
+import { Promotion, PromotionDocument, PromotionStatus } from '../schemas/promotion.schema';
 import { OfferStatus, VerificationStatus } from '../common/enums';
 import { geocodePostcode } from '../common/postcode.util';
 
@@ -26,6 +27,7 @@ export class SearchService {
     @InjectModel(Business.name) private businessModel: Model<BusinessDocument>,
     @InjectModel(Offer.name) private offerModel: Model<OfferDocument>,
     @InjectModel(Category.name) private categoryModel: Model<CategoryDocument>,
+    @InjectModel(Promotion.name) private promotionModel: Model<PromotionDocument>,
   ) {}
 
   async searchOffers(params: SearchParams) {
@@ -93,16 +95,35 @@ export class SearchService {
 
     const offers = await this.offerModel.find(offerFilter).sort({ createdAt: -1 }).lean();
 
+    // 2b. Promoted placements: active promotions boost ranking and tag results
+    // as sponsored. A promotion without an offerId boosts the whole business.
+    const promotions = await this.promotionModel
+      .find({
+        businessId: { $in: businesses.map((b) => b._id) },
+        status: PromotionStatus.ACTIVE,
+      })
+      .lean();
+    const promotedBusinesses = new Set(
+      promotions.filter((p) => !p.offerId).map((p) => String(p.businessId)),
+    );
+    const promotedOffers = new Set(
+      promotions.filter((p) => p.offerId).map((p) => String(p.offerId)),
+    );
+    const SPONSOR_BOOST = 1.25;
+
     // 3. Rank: distance + business quality (trust score, rating, verification)
     const enriched = offers.map((o) => {
       const b = byId.get(String(o.businessId));
       const distanceMeters = b?.distanceMeters ?? null;
       const verified = b && b.verificationStatus !== VerificationStatus.UNCLAIMED;
+      const sponsored =
+        promotedBusinesses.has(String(o.businessId)) || promotedOffers.has(String(o._id));
       const quality =
         (b?.trustScore || 0) / 100 + (b?.reviews?.rating || 0) / 5 + (verified ? 0.5 : 0);
       const distancePenalty = distanceMeters != null ? distanceMeters / radiusMeters : 0.5;
       return {
         ...o,
+        sponsored,
         business: b
           ? {
               _id: b._id,
@@ -119,7 +140,7 @@ export class SearchService {
                 distanceMeters != null ? Math.round((distanceMeters / 1609.34) * 10) / 10 : null,
             }
           : null,
-        rankScore: quality - distancePenalty,
+        rankScore: quality - distancePenalty + (sponsored ? SPONSOR_BOOST : 0),
       };
     });
     enriched.sort((a, b) => b.rankScore - a.rankScore);
@@ -137,6 +158,8 @@ export class SearchService {
         reviews: b.reviews,
         logoUrl: b.logoUrl,
         activeOfferCount: b.activeOfferCount,
+        sponsored: promotedBusinesses.has(String(b._id)),
+        location: b.location,
         distanceMiles:
           b.distanceMeters != null ? Math.round((b.distanceMeters / 1609.34) * 10) / 10 : null,
       })),

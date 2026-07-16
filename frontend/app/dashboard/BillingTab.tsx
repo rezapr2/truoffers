@@ -53,10 +53,15 @@ export default function BillingTab({ business }: { business: Business }) {
         }
         setMessage('Moved to the Free plan.');
       } else {
-        await api('/billing/checkout', {
+        const res = await api<{ mode: string; url?: string }>('/billing/checkout', {
           method: 'POST',
           body: JSON.stringify({ planKey: plan.key, interval, businessId: business._id }),
         });
+        if (res.mode === 'stripe' && res.url) {
+          // Real checkout: pay on Stripe; the webhook activates the plan
+          window.location.href = res.url;
+          return;
+        }
         track('subscription_start', { businessId: business._id, metadata: { plan: plan.key, interval } });
         setMessage(`You're now on ${plan.name}. (Demo checkout — Stripe activates in production.)`);
       }

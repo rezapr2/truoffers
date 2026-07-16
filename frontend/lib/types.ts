@@ -40,6 +40,8 @@ export interface Business {
   activeOfferCount: number;
   featured: boolean;
   distanceMiles?: number | null;
+  sponsored?: boolean;
+  location?: { type: string; coordinates: [number, number] }; // [lng, lat]
 }
 
 export interface Offer {
@@ -69,6 +71,68 @@ export interface Offer {
   detailViews: number;
   orderClicks: number;
   createdAt: string;
+  sponsored?: boolean;
+}
+
+export interface Wallet {
+  _id: string;
+  businessId: string;
+  balance: number;
+  totalToppedUp: number;
+  totalSpent: number;
+}
+
+export interface WalletTransaction {
+  _id: string;
+  type: 'topup' | 'spend' | 'refund';
+  amount: number;
+  note?: string;
+  createdAt: string;
+}
+
+export interface Promotion {
+  _id: string;
+  businessId: string;
+  offerId?: { _id: string; title: string; displayLabel: string } | string | null;
+  dailyRate: number;
+  status: 'active' | 'paused' | 'ended';
+  startedAt: string;
+  endedAt?: string;
+  totalSpent: number;
+}
+
+export interface OfferCopy {
+  title: string;
+  description: string;
+  terms: string;
+  displayLabel: string;
+}
+
+export interface LocationStats {
+  business: Business;
+  stats: {
+    impressions: number;
+    flips: number;
+    detailViews: number;
+    orderClicks: number;
+    redemptions: number;
+    offerCount: number;
+  };
+}
+
+export interface FranchiseStats {
+  locations: LocationStats[];
+  totals: {
+    impressions: number;
+    flips: number;
+    detailViews: number;
+    orderClicks: number;
+    redemptions: number;
+    offerCount: number;
+    activeOffers: number;
+    followers: number;
+    locations: number;
+  } | null;
 }
 
 export interface Plan {

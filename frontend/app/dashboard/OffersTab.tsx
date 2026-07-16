@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, API_URL } from '@/lib/api';
 import { track } from '@/lib/analytics';
-import type { Business, Offer } from '@/lib/types';
+import type { Business, Offer, OfferCopy } from '@/lib/types';
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-verified/10 text-verified',
@@ -50,6 +50,7 @@ export default function OffersTab({ business }: { business: Business }) {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [writing, setWriting] = useState(false);
 
   const load = useCallback(() => {
     void api<Offer[]>(`/businesses/${business._id}/offers/manage`).then(setOffers).catch(() => {});
@@ -101,6 +102,37 @@ export default function OffersTab({ business }: { business: Business }) {
     }
   }
 
+  // AI offer writer: drafts title/description/terms from the deal settings.
+  // Uses the current title (if any) as a brief for the model.
+  async function writeWithAi() {
+    setWriting(true);
+    setError(null);
+    try {
+      const res = await api<{ mode: string; copy: OfferCopy }>('/ai/offer-writer', {
+        method: 'POST',
+        body: JSON.stringify({
+          businessId: business._id,
+          discountType: form.discountType,
+          value: Number(form.value) || undefined,
+          minOrder: Number(form.minOrder) || undefined,
+          brief: form.title || undefined,
+        }),
+      });
+      setForm({
+        ...form,
+        title: res.copy.title,
+        description: res.copy.description,
+        terms: res.copy.terms,
+        displayLabel: res.copy.displayLabel,
+      });
+      track('ai_offer_writer', { businessId: business._id, metadata: { mode: res.mode } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AI writer unavailable');
+    } finally {
+      setWriting(false);
+    }
+  }
+
   async function setStatus(offer: Offer, status: string) {
     await api(`/offers/${offer._id}/status`, {
       method: 'PATCH',
@@ -135,13 +167,32 @@ export default function OffersTab({ business }: { business: Business }) {
             </div>
           )}
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-extrabold">Offer title *</span>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-extrabold">Offer title *</span>
+              <button
+                type="button"
+                onClick={writeWithAi}
+                disabled={writing}
+                className="text-[13px] font-bold text-primary border border-primary/40 px-3 py-1.5 rounded-full hover:bg-primary hover:text-cream transition-colors cursor-pointer disabled:opacity-60"
+              >
+                {writing ? 'Writing…' : '✨ Write it for me'}
+              </button>
+            </div>
             <input
               required
               minLength={4}
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               placeholder="e.g. 20% off orders over £15"
+              className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-extrabold">Description</span>
+            <input
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="A sentence or two selling the offer"
               className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
             />
           </label>
@@ -292,6 +343,15 @@ export default function OffersTab({ business }: { business: Business }) {
                 <button onClick={() => setStatus(offer, 'active')} className="text-[13px] font-bold border border-line px-4 py-2 rounded-full hover:border-primary cursor-pointer">
                   Resume
                 </button>
+              )}
+              {offer.status === 'active' && (
+                <a
+                  href={`${API_URL}/qr/offer/${offer._id}.png?size=1024`}
+                  download={`offer-${offer._id}-qr.png`}
+                  className="text-[13px] font-bold border border-line px-4 py-2 rounded-full hover:border-primary cursor-pointer"
+                >
+                  QR code
+                </a>
               )}
               <button onClick={() => remove(offer)} className="text-[13px] font-bold text-primary border border-primary/40 px-4 py-2 rounded-full hover:bg-primary hover:text-cream transition-colors cursor-pointer">
                 Delete

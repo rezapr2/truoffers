@@ -11,6 +11,10 @@ import { SearchModule } from './search/search.module';
 import { CategoriesModule } from './categories/categories.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { BillingModule } from './billing/billing.module';
+import { AdsModule } from './ads/ads.module';
+import { AiModule } from './ai/ai.module';
+import { QrModule } from './qr/qr.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { HealthModule } from './health/health.module';
@@ -37,6 +41,10 @@ import { JwtAuthGuard, RolesGuard } from './common/guards';
     CategoriesModule,
     SuppliersModule,
     BillingModule,
+    AdsModule,
+    AiModule,
+    QrModule,
+    ReviewsModule,
     AnalyticsModule,
     AdminModule,
     HealthModule,

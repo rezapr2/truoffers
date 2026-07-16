@@ -56,6 +56,12 @@ export class BusinessesController {
     return this.service.myBusinesses(userId);
   }
 
+  // Multi-location (franchise) stats across every business the user owns
+  @Get('mine/stats')
+  myBusinessesStats(@CurrentUser('userId') userId: string) {
+    return this.service.myBusinessesStats(userId);
+  }
+
   @Get('claims/mine')
   myClaims(@CurrentUser('userId') userId: string) {
     return this.service.myClaims(userId);

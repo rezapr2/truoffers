@@ -64,11 +64,32 @@ npm run dev           # http://localhost:3000
   via `order_click` events.
 - **SEO pages (§17.2)** — town pages (`/takeaways/{town}`), business profiles
   (`/takeaway/{slug}`), category pages, per-page metadata.
+- **Real Stripe checkout + webhooks** — with `STRIPE_SECRET_KEY` set, plan checkout and wallet
+  top-ups redirect to Stripe Checkout; `POST /api/billing/webhook` (signature-verified, raw body)
+  activates subscriptions, credits wallets, and handles cancellations/payment failures. Without a
+  key everything still runs in mock mode.
+- **Promoted placements / ad wallet** — prepaid wallet per business (top up via Stripe or mock),
+  flat daily-rate promotions for the whole business or a single offer. Active promotions get a
+  ranking boost + "Sponsored" tag in search; an hourly cron charges the daily rate and auto-pauses
+  when the balance runs out. Dashboard → **Promote** tab.
+- **AI offer writer** — `POST /api/ai/offer-writer` drafts title/description/terms/label with
+  Claude (`@anthropic-ai/sdk`, structured outputs) when `ANTHROPIC_API_KEY` is set; falls back to
+  solid templates otherwise. Plan-gated (Professional+). "✨ Write it for me" in the offer form.
+- **QR codes** — `GET /api/qr/business/{slug}.png` and `/api/qr/offer/{id}.png` render print-ready
+  QR codes linking to the public pages (`?src=qr` for attribution). Download buttons in the
+  dashboard (Promote tab + per-offer).
+- **Google review sync** — with `GOOGLE_PLACES_API_KEY` set, a nightly cron (and a manual
+  `POST /api/businesses/{id}/sync-reviews`) resolves each business's Google Place ID and refreshes
+  its rating/review count. Disabled cleanly without the key.
+- **Map view** — List/Map toggle on `/offers` renders nearby takeaways on an OpenStreetMap
+  (Leaflet) map — sponsored businesses get highlighted markers. No map API key needed.
+- **Franchise dashboards** — owners with multiple locations get an **All locations** tab:
+  cross-location totals + a per-location comparison table
+  (`GET /api/businesses/mine/stats`).
 
 ## Not yet built (per roadmap §19: V1.5+)
 
-Google review sync, AI offer writer, QR codes, real Stripe checkout + webhooks, mobile apps,
-promoted placements/ad wallet, map view, franchise dashboards.
+Mobile apps (native iOS/Android).
 
 ## Social login (Google & Apple)
 
@@ -87,8 +108,9 @@ enabled.
 - **Security**: helmet headers, rate limiting (100 req/min per IP, 10/min on auth endpoints,
   analytics exempt), JWT-secret guard that refuses to boot production with the dev secret,
   server-side plan-limit enforcement, OAuth tokens verified server-side only.
-- **Background jobs** (§22): cron expires ended offers every 10 min and reconciles
-  `activeOfferCount` hourly.
+- **Background jobs** (§22): cron expires ended offers every 10 min, reconciles
+  `activeOfferCount` hourly, charges promotion daily rates hourly (deduped to once per 24h),
+  and syncs Google reviews nightly (batched to respect Places API quotas).
 - **Ops**: `GET /api/health` (DB state + uptime), graceful shutdown hooks, `.env.example` files.
 - **SEO** (§17.2): `sitemap.xml` (static + town + business pages), `robots.txt` (dashboards
   disallowed), OpenGraph metadata with title template, schema.org Restaurant/Offer JSON-LD on
@@ -98,5 +120,6 @@ enabled.
 
 ## Environment
 
-- `backend/.env` — port, Mongo URI, JWT secret, optional Stripe + OAuth keys (see `.env.example`).
+- `backend/.env` — port, Mongo URI, JWT secret, optional Stripe / OAuth / Google Places /
+  Anthropic keys (see `.env.example`). All optional keys degrade gracefully when blank.
 - `frontend/.env.local` — `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL`, optional OAuth client IDs.

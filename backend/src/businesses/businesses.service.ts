@@ -149,6 +149,61 @@ export class BusinessesService {
       .populate('categories', 'name slug emoji');
   }
 
+  // Franchise dashboard: per-location stats plus totals across every business
+  // the user owns (multi-branch operators see them side by side).
+  async myBusinessesStats(userId: string) {
+    const businesses = await this.businessModel
+      .find({ ownerId: new Types.ObjectId(userId) })
+      .select('name slug town postcode verificationStatus reviews followerCount activeOfferCount status');
+    if (businesses.length === 0) return { locations: [], totals: null };
+
+    const perBusiness = await this.offerModel.aggregate([
+      { $match: { businessId: { $in: businesses.map((b) => b._id) } } },
+      {
+        $group: {
+          _id: '$businessId',
+          impressions: { $sum: '$impressions' },
+          flips: { $sum: '$flips' },
+          detailViews: { $sum: '$detailViews' },
+          orderClicks: { $sum: '$orderClicks' },
+          redemptions: { $sum: '$redemptionCount' },
+          offerCount: { $sum: 1 },
+        },
+      },
+    ]);
+    const statsById = new Map(perBusiness.map((s) => [String(s._id), s]));
+
+    const empty = {
+      impressions: 0,
+      flips: 0,
+      detailViews: 0,
+      orderClicks: 0,
+      redemptions: 0,
+      offerCount: 0,
+    };
+    const locations = businesses.map((b) => ({
+      business: b,
+      stats: statsById.get(String(b._id)) || { _id: b._id, ...empty },
+    }));
+
+    const totals = locations.reduce(
+      (acc, l) => ({
+        impressions: acc.impressions + l.stats.impressions,
+        flips: acc.flips + l.stats.flips,
+        detailViews: acc.detailViews + l.stats.detailViews,
+        orderClicks: acc.orderClicks + l.stats.orderClicks,
+        redemptions: acc.redemptions + l.stats.redemptions,
+        offerCount: acc.offerCount + l.stats.offerCount,
+        activeOffers: acc.activeOffers + (l.business.activeOfferCount || 0),
+        followers: acc.followers + (l.business.followerCount || 0),
+        locations: acc.locations + 1,
+      }),
+      { ...empty, activeOffers: 0, followers: 0, locations: 0 },
+    );
+
+    return { locations, totals };
+  }
+
   // ---- Claim & verification flow (blueprint section 8) ----
 
   async startClaim(businessId: string, userId: string, dto: StartClaimDto) {

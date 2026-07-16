@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Business, BusinessSchema } from '../schemas/business.schema';
 import { Offer, OfferSchema } from '../schemas/offer.schema';
 import { Category, CategorySchema } from '../schemas/category.schema';
+import { Promotion, PromotionSchema } from '../schemas/promotion.schema';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
 
@@ -12,6 +13,7 @@ import { SearchService } from './search.service';
       { name: Business.name, schema: BusinessSchema },
       { name: Offer.name, schema: OfferSchema },
       { name: Category.name, schema: CategorySchema },
+      { name: Promotion.name, schema: PromotionSchema },
     ]),
   ],
   controllers: [SearchController],

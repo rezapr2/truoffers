@@ -20,6 +20,11 @@ export default function BusinessCard({ business }: { business: Business }) {
             {business.name}
           </Link>
           <FollowButton businessId={business._id} />
+          {business.sponsored && (
+            <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted bg-page px-2 py-1 rounded-full">
+              Sponsored
+            </span>
+          )}
         </div>
         <div className="text-[13px] font-semibold text-muted truncate">
           {Array.isArray(business.categories) &&

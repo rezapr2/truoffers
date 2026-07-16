@@ -84,7 +84,14 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
           onClick={flip}
           className="flip-face h-full bg-card rounded-2xl p-6 flex flex-col cursor-pointer shadow-sm hover:shadow-lg transition-shadow"
         >
-          <div className="font-display text-3xl font-extrabold text-primary">{offer.displayLabel}</div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="font-display text-3xl font-extrabold text-primary">{offer.displayLabel}</div>
+            {offer.sponsored && (
+              <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted bg-page px-2 py-1 rounded-full">
+                Sponsored
+              </span>
+            )}
+          </div>
           <div className="mt-2 text-base font-extrabold">
             {business.name}{' '}
             <VerifiedBadge status={business.verificationStatus} className="text-[12px]" />

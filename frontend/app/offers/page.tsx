@@ -1,12 +1,19 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import type { Category, SearchResult, Offer } from '@/lib/types';
 import OfferFlipCard from '@/components/OfferFlipCard';
 import BusinessCard from '@/components/BusinessCard';
+
+// Leaflet touches `window` — client-only
+const OffersMap = dynamic(() => import('@/components/OffersMap'), {
+  ssr: false,
+  loading: () => <div className="text-muted font-bold py-10 text-center">Loading map…</div>,
+});
 
 function OffersPageInner() {
   const router = useRouter();
@@ -18,6 +25,7 @@ function OffersPageInner() {
   const [allOffers, setAllOffers] = useState<Offer[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'list' | 'map'>('list');
 
   const activeCategory = params.get('category') || '';
   const delivery = params.get('delivery') === 'true';
@@ -158,6 +166,24 @@ function OffersPageInner() {
             {label}
           </button>
         ))}
+        {result && result.businesses.length > 0 && (
+          <>
+            <span className="w-px bg-line mx-1 hidden md:block" />
+            <div className="flex bg-card border border-line rounded-full p-1">
+              {(['list', 'map'] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`text-sm font-bold px-4 py-1.5 rounded-full cursor-pointer transition-colors ${
+                    view === v ? 'bg-ink text-surface' : 'text-muted'
+                  }`}
+                >
+                  {v === 'list' ? 'List' : 'Map'}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {error && (
@@ -167,8 +193,15 @@ function OffersPageInner() {
       )}
       {loading && <div className="text-muted font-bold py-10 text-center">Searching…</div>}
 
+      {/* Map view */}
+      {!loading && view === 'map' && result && (
+        <div className="mb-8">
+          <OffersMap businesses={result.businesses} />
+        </div>
+      )}
+
       {/* Offer cards */}
-      {!loading && (
+      {!loading && view === 'list' && (
         <>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {offers.map((offer) => (

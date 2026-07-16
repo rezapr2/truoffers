@@ -8,10 +8,12 @@ import { api } from '@/lib/api';
 import type { Business } from '@/lib/types';
 import OverviewTab from './OverviewTab';
 import OffersTab from './OffersTab';
+import PromoteTab from './PromoteTab';
 import BillingTab from './BillingTab';
 import LeadsTab from './LeadsTab';
+import FranchiseTab from './FranchiseTab';
 
-const BIZ_TABS = ['Overview', 'Offers', 'Billing'] as const;
+const BIZ_TABS = ['Overview', 'Offers', 'Promote', 'Billing'] as const;
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -69,7 +71,12 @@ export default function DashboardPage() {
     );
   }
 
-  const tabs = isSupplier ? ['Leads'] : [...BIZ_TABS];
+  // Multi-location owners (franchises) get a cross-location view
+  const tabs = isSupplier
+    ? ['Leads']
+    : businesses.length > 1
+      ? [...BIZ_TABS, 'All locations']
+      : [...BIZ_TABS];
 
   return (
     <div className="mx-auto max-w-6xl px-5 md:px-10 py-8">
@@ -119,7 +126,9 @@ export default function DashboardPage() {
 
       {tab === 'Overview' && selected && <OverviewTab business={selected} />}
       {tab === 'Offers' && selected && <OffersTab business={selected} />}
+      {tab === 'Promote' && selected && <PromoteTab business={selected} />}
       {tab === 'Billing' && selected && <BillingTab business={selected} />}
+      {tab === 'All locations' && <FranchiseTab />}
       {tab === 'Leads' && isSupplier && <LeadsTab />}
     </div>
   );
