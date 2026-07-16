@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# Builds
+dist/
+build/
+.next/
+out/
+
+# Environment (never commit real secrets; keep .env.example templates)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+*.pem
+*.tsbuildinfo
+
+# Next.js
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# Local Claude Code config
+.claude/

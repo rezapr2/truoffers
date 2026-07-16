@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --color-page: #EDE8E2;
+  --color-surface: #F7F1E8;
+  --color-card: #FFFFFF;
+  --color-primary: #C63D1A;
+  --color-primary-dark: #9E2E10;
+  --color-ink: #241812;
+  --color-ink-soft: #5C4D42;
+  --color-muted: #8A7666;
+  --color-muted-2: #6E625A;
+  --color-cream: #FFF6EF;
+  --color-peach: #F6CDBC;
+  --color-peach-2: #FFD9C9;
+  --color-line: #E5D9CB;
+  --color-verified: #1E8A5A;
+  --color-star: #E2941B;
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-manrope), ui-sans-serif, sans-serif;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+::placeholder {
+  color: #a79a90;
+}
+
+/* Offer flip card */
+.flip-scene {
+  perspective: 1200px;
+}
+.flip-inner {
+  transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transform-style: preserve-3d;
+  position: relative;
+}
+.flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip-back {
+  transform: rotateY(180deg);
+  position: absolute;
+  inset: 0;
+}
