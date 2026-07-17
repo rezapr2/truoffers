@@ -13,9 +13,14 @@ services:
     # Deliberately no published ports: Mongo is only reachable from the
     # internal compose network, never from the public internet.
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      # Deliberately NOT mongosh: it's a full Node.js app that needs seconds and
+      # ~100MB+ just to launch, so on a small/slow VPS every probe times out and
+      # a perfectly healthy mongod is reported unhealthy forever. A standalone
+      # mongod only opens its TCP listener after startup + journal recovery
+      # finish, so "port accepts a connection" IS the readiness signal.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/27017"]
       interval: 10s
-      timeout: 10s
+      timeout: 5s
       retries: 5
       # After an unclean shutdown, WiredTiger replays its journal before
       # accepting connections. On a small VPS that can take several minutes, and
