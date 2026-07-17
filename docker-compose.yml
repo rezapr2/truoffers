@@ -1,5 +1,9 @@
 name: truoffers
 
+# The VPS never builds — it pulls prebuilt images from GHCR.
+# Build and publish them from a machine with real RAM: ./build-and-push.sh
+# (or let .github/workflows/build-images.yml do it on push to main).
+
 services:
   mongo:
     image: mongo:7
@@ -16,8 +20,7 @@ services:
       start_period: 30s
 
   api:
-    build:
-      context: ./backend
+    image: ${REGISTRY:-ghcr.io/rezapr2}/truoffers-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -43,15 +46,9 @@ services:
       start_period: 30s
 
   web:
-    build:
-      context: ./frontend
-      args:
-        # Baked into the client bundle at build time — must be the public URL
-        # the browser will call.
-        NEXT_PUBLIC_API_URL: ${SITE_URL}/api
-        NEXT_PUBLIC_SITE_URL: ${SITE_URL}
-        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-        NEXT_PUBLIC_APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+    # NEXT_PUBLIC_* values are baked into this image at BUILD time, so the
+    # public SITE_URL must be set when building, not here.
+    image: ${REGISTRY:-ghcr.io/rezapr2}/truoffers-web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production

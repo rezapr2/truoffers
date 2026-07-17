@@ -34,3 +34,6 @@ next-env.d.ts
 
 # Local Claude Code config
 .claude/
+
+# Build-machine config (public values, but machine-specific)
+.env.build

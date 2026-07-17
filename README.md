@@ -134,6 +134,16 @@ The whole stack runs as four containers: **Caddy** (TLS + reverse proxy) → **w
 **api** (NestJS) → **mongo**. Caddy serves the site and proxies `/api/*` to the backend on the same
 origin, so there are no CORS preflights in production.
 
+**The VPS never compiles anything.** Images are built on a machine with real RAM (your Mac or
+GitHub Actions) and published to GHCR; the VPS only pulls and runs them. A 1GB VPS cannot run
+`tsc`/`next build` — it thrashes swap for 20+ minutes or gets OOM-killed — but it runs the
+prebuilt containers comfortably in ~400-600MB.
+
+```
+  BUILD MACHINE (Mac / GitHub Actions)          VPS (1GB is fine)
+  ./build-and-push.sh  ──push──▶  GHCR  ──pull──▶  ./deploy.sh
+```
+
 ```
                    :443  ┌─────────┐
   browser ──────────────▶│  caddy  │  auto TLS (Let's Encrypt)
@@ -147,12 +157,32 @@ origin, so there are no CORS preflights in production.
                           └───────┘
 ```
 
-### One-time VPS setup
+### Step 1 — Publish the images (on your Mac, once per release)
 
 ```bash
-# 1. Install Docker (official convenience script)
+cp .env.build.example .env.build
+nano .env.build          # set SITE_URL (baked into the bundle) and PLATFORM
+
+# Check the VPS architecture and match PLATFORM to it:
+#   ssh user@vps 'uname -m'   ->  x86_64 = linux/amd64,  aarch64 = linux/arm64
+
+echo <GITHUB_PAT> | docker login ghcr.io -u rezapr2 --password-stdin   # scope: write:packages
+./build-and-push.sh
+```
+
+> **Architecture matters.** A Mac builds arm64 by default, and an arm64 image **will not run** on
+> an x86_64 VPS. `build-and-push.sh` cross-builds `linux/amd64` by default for exactly this reason.
+
+**Or skip the Mac entirely:** push to `main` and `.github/workflows/build-images.yml` builds both
+images on GitHub's native amd64 runners for free. Set the repo variable `SITE_URL` first
+(Settings → Secrets and variables → Actions → Variables). Deployment stays manual — no SSH keys in CI.
+
+### Step 2 — One-time VPS setup
+
+```bash
+# 1. Install Docker
 curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER" && newgrp docker   # run docker without sudo
+sudo usermod -aG docker "$USER" && newgrp docker
 
 # 2. Point DNS at the VPS BEFORE deploying — Caddy needs it to issue certificates.
 #    A record:  truoffers.co.uk    ->  <VPS_IP>
@@ -161,7 +191,12 @@ sudo usermod -aG docker "$USER" && newgrp docker   # run docker without sudo
 # 3. Firewall: only SSH + web need to be open. Mongo is never published.
 sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw --force enable
 
-# 4. Clone and configure
+# 4. Let the VPS pull from GHCR. Packages are PRIVATE by default, so either:
+echo <GITHUB_PAT> | docker login ghcr.io -u rezapr2 --password-stdin   # scope: read:packages
+#    ...or make the packages public (GitHub → Packages → Package settings → Change visibility),
+#    in which case no login is needed.
+
+# 5. Clone and configure
 sudo mkdir -p /srv && sudo chown "$USER" /srv
 git clone https://github.com/rezapr2/truoffers.git /srv/truoffers
 cd /srv/truoffers
@@ -169,26 +204,38 @@ cp .env.production.example .env
 openssl rand -hex 32          # paste into JWT_SECRET
 nano .env                     # set SITE_DOMAIN, SITE_URL, JWT_SECRET
 
-# 5. First deploy
+# 6. First deploy + seed ONCE
 ./deploy.sh --no-pull
-
-# 6. Seed the database ONCE (creates plans, categories and demo data)
 docker compose exec api npm run seed:prod
 ```
 
 > **Careful:** `seed:prod` wipes and recreates the seeded collections. Run it on first setup only —
 > never against a database with real customer data.
 
+**Add swap anyway.** Even though nothing compiles on the box, 1GB leaves little headroom:
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
 ### Deploying updates
 
 ```bash
-ssh user@vps
-cd /srv/truoffers
-./deploy.sh          # git pull → rebuild → restart → health-check → prune
+./build-and-push.sh          # on your Mac (or just push to main and let CI do it)
+
+ssh user@vps && cd /srv/truoffers
+./deploy.sh                  # git pull → pull images → restart → health-check → prune
 ```
 
-`deploy.sh` fails loudly and prints API logs if the health check doesn't pass, so a broken build
-won't be reported as a success.
+Takes ~30 seconds — it's a download, not a compile. `deploy.sh` fails loudly and prints API logs
+if the health check doesn't pass, so a broken release is never reported as a success.
+
+**Rolling back** — every build is also tagged with its commit sha:
+
+```bash
+IMAGE_TAG=sha-a1b2c3d ./deploy.sh
+```
 
 ### Backups
 
@@ -218,9 +265,12 @@ docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups
 
 ### Notes & gotchas
 
-- **`NEXT_PUBLIC_*` are baked in at build time**, not runtime — they're passed as Docker build args
-  from `SITE_URL`/`GOOGLE_CLIENT_ID` in `.env`. Changing them requires a rebuild
-  (`./deploy.sh` does this), not just a restart.
+- **`NEXT_PUBLIC_*` are baked in at build time**, not runtime — they come from `SITE_URL` /
+  `GOOGLE_CLIENT_ID` in **`.env.build` on the build machine**, not from the VPS's `.env`.
+  Changing the domain or a client ID means `./build-and-push.sh` again, then `./deploy.sh` —
+  a restart alone will not pick it up.
+- **Two env files, two machines**: `.env.build` (build machine — public values only, no secrets)
+  and `.env` (VPS — real secrets, never committed). Production secrets never touch your laptop.
 - **No TLS yet / no domain?** Set `SITE_DOMAIN=:80` and `SITE_URL=http://<VPS_IP>` in `.env` to run
   plain HTTP. Switch to the real domain and redeploy once DNS resolves; Caddy issues the
   certificate automatically.
