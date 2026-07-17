@@ -123,3 +123,111 @@ enabled.
 - `backend/.env` — port, Mongo URI, JWT secret, optional Stripe / OAuth / Google Places /
   Anthropic keys (see `.env.example`). All optional keys degrade gracefully when blank.
 - `frontend/.env.local` — `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL`, optional OAuth client IDs.
+- `.env` (repo root) — **production only**, read by `docker compose`. See
+  `.env.production.example`.
+
+---
+
+# Deploying to the Ubuntu VPS
+
+The whole stack runs as four containers: **Caddy** (TLS + reverse proxy) → **web** (Next.js) and
+**api** (NestJS) → **mongo**. Caddy serves the site and proxies `/api/*` to the backend on the same
+origin, so there are no CORS preflights in production.
+
+```
+                   :443  ┌─────────┐
+  browser ──────────────▶│  caddy  │  auto TLS (Let's Encrypt)
+                         └────┬────┘
+                  /api/*  ┌───┴───┐  everything else
+                     ┌────▶  api  │◀──── web (server-side render,
+                     │    └───┬───┘       via internal network)
+                     │        │
+                     │    ┌───▼───┐
+                     └────│ mongo │  no published ports — internal only
+                          └───────┘
+```
+
+### One-time VPS setup
+
+```bash
+# 1. Install Docker (official convenience script)
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER" && newgrp docker   # run docker without sudo
+
+# 2. Point DNS at the VPS BEFORE deploying — Caddy needs it to issue certificates.
+#    A record:  truoffers.co.uk    ->  <VPS_IP>
+#    A record:  www.truoffers.co.uk -> <VPS_IP>
+
+# 3. Firewall: only SSH + web need to be open. Mongo is never published.
+sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw --force enable
+
+# 4. Clone and configure
+sudo mkdir -p /srv && sudo chown "$USER" /srv
+git clone https://github.com/rezapr2/truoffers.git /srv/truoffers
+cd /srv/truoffers
+cp .env.production.example .env
+openssl rand -hex 32          # paste into JWT_SECRET
+nano .env                     # set SITE_DOMAIN, SITE_URL, JWT_SECRET
+
+# 5. First deploy
+./deploy.sh --no-pull
+
+# 6. Seed the database ONCE (creates plans, categories and demo data)
+docker compose exec api npm run seed:prod
+```
+
+> **Careful:** `seed:prod` wipes and recreates the seeded collections. Run it on first setup only —
+> never against a database with real customer data.
+
+### Deploying updates
+
+```bash
+ssh user@vps
+cd /srv/truoffers
+./deploy.sh          # git pull → rebuild → restart → health-check → prune
+```
+
+`deploy.sh` fails loudly and prints API logs if the health check doesn't pass, so a broken build
+won't be reported as a success.
+
+### Backups
+
+`backup.sh` writes a gzipped `mongodump` archive and keeps the newest 14. Schedule it nightly:
+
+```bash
+crontab -e
+# 0 3 * * * /srv/truoffers/backup.sh >> /var/log/truoffers-backup.log 2>&1
+```
+
+Restore with:
+
+```bash
+docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups/truoffers/<file>
+```
+
+### Operating it
+
+| Task              | Command                                              |
+| ----------------- | ---------------------------------------------------- |
+| Status            | `docker compose ps`                                  |
+| Logs (follow)     | `docker compose logs -f api` (or `web`, `caddy`)     |
+| Restart one app   | `docker compose restart api`                         |
+| Mongo shell       | `docker compose exec mongo mongosh truoffers`        |
+| Stop everything   | `docker compose down` (data survives in volumes)     |
+| Health            | `curl https://truoffers.co.uk/api/health`            |
+
+### Notes & gotchas
+
+- **`NEXT_PUBLIC_*` are baked in at build time**, not runtime — they're passed as Docker build args
+  from `SITE_URL`/`GOOGLE_CLIENT_ID` in `.env`. Changing them requires a rebuild
+  (`./deploy.sh` does this), not just a restart.
+- **No TLS yet / no domain?** Set `SITE_DOMAIN=:80` and `SITE_URL=http://<VPS_IP>` in `.env` to run
+  plain HTTP. Switch to the real domain and redeploy once DNS resolves; Caddy issues the
+  certificate automatically.
+- **Mongo publishes no ports.** To inspect it from your laptop, tunnel over SSH:
+  `ssh -L 27017:localhost:27017 user@vps` won't work directly (no published port) — use
+  `docker compose exec mongo mongosh` on the box instead.
+- **Sizing**: ~2GB RAM is comfortable. On a 1GB VPS add swap before building, as `next build` is
+  memory-hungry.
+- **Cron jobs run in-process** (`@nestjs/schedule`) inside the always-on `api` container — offer
+  expiry, promotion charges and review sync need no external scheduler.

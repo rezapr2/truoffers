@@ -1,0 +1,26 @@
+# Caddy terminates TLS and obtains/renews Let's Encrypt certificates
+# automatically, provided SITE_DOMAIN resolves to this VPS on ports 80/443.
+#
+# Set SITE_DOMAIN=:80 in .env to run without TLS (local testing / no domain yet).
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# The API is served from the same origin, so the browser never issues a
+	# cross-origin request and CORS preflights never happen.
+	# NestJS already serves under the /api global prefix, so no path rewrite.
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MB
+			roll_keep 5
+		}
+	}
+}
