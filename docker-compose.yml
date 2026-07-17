@@ -15,9 +15,15 @@ services:
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
-      start_period: 30s
+      # After an unclean shutdown, WiredTiger replays its journal before
+      # accepting connections. On a small VPS that can take several minutes, and
+      # a short start_period marks Mongo unhealthy mid-recovery -- which aborts
+      # the deploy, recreates the container, and corrupts the shutdown again on
+      # the next attempt. A generous window costs nothing: a healthy check during
+      # start_period passes immediately.
+      start_period: 240s
 
   api:
     image: ${REGISTRY:-ghcr.io/rezapr2}/truoffers-api:${IMAGE_TAG:-latest}
@@ -41,9 +47,9 @@ services:
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/health"]
       interval: 15s
-      timeout: 5s
+      timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 90s
 
   web:
     # NEXT_PUBLIC_* values are baked into this image at BUILD time, so the

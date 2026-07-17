@@ -4,6 +4,17 @@ The UK takeaway offers search engine — customers search live offers by postcod
 found without paying marketplace commission. Built from the July 2026 business plan & product
 blueprint (MVP scope).
 
+**What do you want to do?**
+
+| | |
+| --- | --- |
+| Run it on my machine | [Run it locally](#run-it-locally) → [Demo logins](#demo-logins-password-for-all-password123) |
+| Deploy it for the first time | [First deployment — do these in order](#first-deployment--do-these-in-order) |
+| Ship an update | [Routine deploys](#routine-deploys-every-release-after-that) |
+| Something's broken | [Troubleshooting](#troubleshooting) |
+| Know which `.env` goes where | [Environment files](#environment-files) |
+| See what's built vs not | [What's implemented](#whats-implemented-blueprint--code) · [Not yet built](#not-yet-built) |
+
 ## Stack
 
 | Layer    | Tech                                                        |
@@ -12,9 +23,10 @@ blueprint (MVP scope).
 | Backend  | NestJS 10 + Mongoose (JWT auth, role guards, class-validator) |
 | Database | MongoDB (`truoffers` db, 2dsphere geo index for postcode search) |
 
-## Run it
+## Run it locally
 
-MongoDB must be running on `localhost:27017` (ServBay's MongoDB works as-is).
+MongoDB must be running on `localhost:27017` (ServBay's MongoDB works as-is). Docker is **not**
+needed for local development — it's only used for production.
 
 ```bash
 # 1. Backend (port 4000)
@@ -87,9 +99,22 @@ npm run dev           # http://localhost:3000
   cross-location totals + a per-location comparison table
   (`GET /api/businesses/mine/stats`).
 
-## Not yet built (per roadmap §19: V1.5+)
+## Not yet built
 
-Mobile apps (native iOS/Android).
+Honest gaps against the blueprint, so nobody plans around something that isn't there:
+
+- **Mobile apps (§13)** — no native iOS/Android. The site is fully responsive; the blueprint puts
+  apps in V2 anyway.
+- **Two verification methods (§8)** — `email_domain` and `google_profile_match` exist as enum
+  values but perform no automated check: picking them just files a claim for manual admin review.
+  Working today: phone OTP, document upload, manual review, Foodbell auto-verify.
+- **Admin tooling (§14.1)** — duplicate-listing detection/merge, complaint handling, blog/category
+  CMS, and the email/SMS/push campaign manager are not built. Claim + offer moderation queues,
+  plans, users and the dashboards *are*.
+- **`audit_logs` and `support_tickets` (§11)** — these collections don't exist. Support runs over
+  email for now.
+- **Foodbell deep integration (§27)** — only the hooks exist (`isFoodbellClient`, the verified
+  badge, tracked order links). Menu import and dashboard publishing need a real Foodbell API.
 
 ## Social login (Google & Apple)
 
@@ -97,11 +122,17 @@ The login/register pages include "Continue with Google/Apple". The frontend only
 provider's **ID token**; the backend verifies it server-side (Google tokeninfo / Apple JWKS via
 `jose`) and issues a TruOffers JWT, auto-creating the account on first sign-in.
 
-To activate: create a Google OAuth client ID and/or an Apple Services ID, then set
-`GOOGLE_CLIENT_ID` / `APPLE_CLIENT_ID` in `backend/.env` **and** the matching
-`NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `NEXT_PUBLIC_APPLE_CLIENT_ID` in `frontend/.env.local`.
-Until then the buttons show a "not configured" notice. `GET /api/auth/providers` reports what's
-enabled.
+To activate, create a Google OAuth client ID and/or an Apple Services ID, then set them in **both**
+halves — the backend verifies tokens, the frontend renders the buttons:
+
+- **Local dev**: `GOOGLE_CLIENT_ID` / `APPLE_CLIENT_ID` in `backend/.env`, plus
+  `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `NEXT_PUBLIC_APPLE_CLIENT_ID` in `frontend/.env.local`.
+- **Production**: `GOOGLE_CLIENT_ID` / `APPLE_CLIENT_ID` in the VPS `.env` (backend), **and** the
+  same values in `.env.build` on the build machine (frontend) — they're compiled into the bundle,
+  so changing them needs a rebuild, not just a restart.
+
+Until configured, the buttons show a "not configured" notice rather than failing silently.
+`GET /api/auth/providers` reports what's enabled.
 
 ## Hardening & best practices in place
 
@@ -118,13 +149,22 @@ enabled.
 - **UX resilience**: branded 404 and error pages, global loading state, stale-token auto-logout
   on 401.
 
-## Environment
+## Environment files
 
-- `backend/.env` — port, Mongo URI, JWT secret, optional Stripe / OAuth / Google Places /
-  Anthropic keys (see `.env.example`). All optional keys degrade gracefully when blank.
-- `frontend/.env.local` — `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL`, optional OAuth client IDs.
-- `.env` (repo root) — **production only**, read by `docker compose`. See
-  `.env.production.example`.
+Four files, each on exactly one machine. Every `.example` is committed; every real one is
+gitignored.
+
+| File | Lives on | Used by | Holds |
+| ---- | -------- | ------- | ----- |
+| `backend/.env` | your Mac | local dev API | Mongo URI, dev JWT secret, optional API keys |
+| `frontend/.env.local` | your Mac | local dev web | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL` |
+| `.env.build` | build machine (Mac/CI) | `build-and-push.sh` | `SITE_URL`, `PLATFORM`, `REGISTRY`, public client IDs — **no secrets** |
+| `.env` (repo root) | **VPS only** | `docker compose` / `deploy.sh` | `SITE_DOMAIN`, `SITE_URL`, `JWT_SECRET`, Stripe/API keys |
+
+Every optional key (Stripe, OAuth, Google Places, Anthropic) degrades gracefully when blank — the
+feature switches to mock/template mode rather than crashing.
+
+The split is deliberate: production secrets exist **only** on the VPS, never on your laptop or in CI.
 
 ---
 
@@ -157,79 +197,122 @@ prebuilt containers comfortably in ~400-600MB.
                           └───────┘
 ```
 
-### Step 1 — Publish the images (on your Mac, once per release)
+## First deployment — do these in order
+
+Steps 1-4 happen **on the VPS**, step 5 **on your Mac**, step 6 back on the VPS. Do not skip
+ahead: step 5 needs the architecture from step 1, and Caddy needs DNS from step 2.
+
+### 1. Prepare the VPS
 
 ```bash
-cp .env.build.example .env.build
-nano .env.build          # set SITE_URL (baked into the bundle) and PLATFORM
+ssh user@vps
 
-# Check the VPS architecture and match PLATFORM to it:
-#   ssh user@vps 'uname -m'   ->  x86_64 = linux/amd64,  aarch64 = linux/arm64
+uname -m          # NOTE THIS DOWN. x86_64 -> linux/amd64 | aarch64 -> linux/arm64
+
+# Install Docker
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER" && newgrp docker
+
+# Add swap — 1GB leaves little headroom even just running containers
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# Firewall: only SSH + web. Mongo is never published.
+sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw --force enable
+```
+
+### 2. Point DNS at the VPS
+
+Do this **before** deploying — Caddy cannot issue a TLS certificate for a domain that doesn't
+resolve to the box yet. Wait until `dig +short truoffers.co.uk` returns your VPS IP.
+
+```
+A    truoffers.co.uk       ->  <VPS_IP>
+A    www.truoffers.co.uk   ->  <VPS_IP>
+```
+
+No domain yet? Skip this and set `SITE_DOMAIN=:80` / `SITE_URL=http://<VPS_IP>` in step 4 to run
+plain HTTP. Switch to the real domain and redeploy later.
+
+### 3. Let the VPS pull from the registry
+
+GHCR packages are **private by default**, so the VPS needs credentials. Create a GitHub token
+([Settings → Developer settings → Personal access tokens](https://github.com/settings/tokens)) with
+the **`read:packages`** scope, then:
+
+```bash
+echo <GITHUB_PAT> | docker login ghcr.io -u rezapr2 --password-stdin
+```
+
+Or make the packages public once they exist (GitHub → your profile → Packages →
+`truoffers-api` / `truoffers-web` → Package settings → Change visibility), and no login is needed.
+
+### 4. Clone and configure the VPS
+
+```bash
+sudo mkdir -p /srv && sudo chown "$USER" /srv
+git clone https://github.com/rezapr2/truoffers.git /srv/truoffers
+cd /srv/truoffers
+
+cp .env.production.example .env
+openssl rand -hex 32          # copy the output into JWT_SECRET
+nano .env                     # set SITE_DOMAIN, SITE_URL, JWT_SECRET
+```
+
+`JWT_SECRET` is mandatory — the API deliberately refuses to boot in production without a real one.
+
+### 5. Build and publish the images (on your Mac)
+
+```bash
+cd ~/Desktop/truoffers
+cp .env.build.example .env.build
+nano .env.build      # SITE_URL=https://truoffers.co.uk
+                     # PLATFORM=  <- the value from step 1 (linux/amd64 for x86_64)
 
 echo <GITHUB_PAT> | docker login ghcr.io -u rezapr2 --password-stdin   # scope: write:packages
 ./build-and-push.sh
 ```
 
-> **Architecture matters.** A Mac builds arm64 by default, and an arm64 image **will not run** on
-> an x86_64 VPS. `build-and-push.sh` cross-builds `linux/amd64` by default for exactly this reason.
+> **Architecture matters.** Your Mac is arm64; your VPS is almost certainly x86_64. An arm64 image
+> pushes and pulls fine, then fails to start on the VPS with a confusing "exec format error".
+> `build-and-push.sh` cross-builds `linux/amd64` by default to prevent this — only change
+> `PLATFORM` if step 1 said `aarch64`.
 
-**Or skip the Mac entirely:** push to `main` and `.github/workflows/build-images.yml` builds both
+**Prefer not to use your Mac?** Push to `main` and `.github/workflows/build-images.yml` builds both
 images on GitHub's native amd64 runners for free. Set the repo variable `SITE_URL` first
-(Settings → Secrets and variables → Actions → Variables). Deployment stays manual — no SSH keys in CI.
+(Settings → Secrets and variables → Actions → Variables). Deploys stay manual — no SSH keys in CI.
 
-### Step 2 — One-time VPS setup
+### 6. Deploy and seed (on the VPS)
 
 ```bash
-# 1. Install Docker
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER" && newgrp docker
-
-# 2. Point DNS at the VPS BEFORE deploying — Caddy needs it to issue certificates.
-#    A record:  truoffers.co.uk    ->  <VPS_IP>
-#    A record:  www.truoffers.co.uk -> <VPS_IP>
-
-# 3. Firewall: only SSH + web need to be open. Mongo is never published.
-sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw --force enable
-
-# 4. Let the VPS pull from GHCR. Packages are PRIVATE by default, so either:
-echo <GITHUB_PAT> | docker login ghcr.io -u rezapr2 --password-stdin   # scope: read:packages
-#    ...or make the packages public (GitHub → Packages → Package settings → Change visibility),
-#    in which case no login is needed.
-
-# 5. Clone and configure
-sudo mkdir -p /srv && sudo chown "$USER" /srv
-git clone https://github.com/rezapr2/truoffers.git /srv/truoffers
 cd /srv/truoffers
-cp .env.production.example .env
-openssl rand -hex 32          # paste into JWT_SECRET
-nano .env                     # set SITE_DOMAIN, SITE_URL, JWT_SECRET
+./deploy.sh --no-git-pull            # nothing to git pull on a fresh clone
 
-# 6. First deploy + seed ONCE
-./deploy.sh --no-pull
-docker compose exec api npm run seed:prod
+docker compose exec api npm run seed:prod   # ONCE, first setup only
 ```
 
-> **Careful:** `seed:prod` wipes and recreates the seeded collections. Run it on first setup only —
-> never against a database with real customer data.
+> **Careful:** `seed:prod` wipes and recreates the seeded collections. Never run it against a
+> database holding real customer data.
 
-**Add swap anyway.** Even though nothing compiles on the box, 1GB leaves little headroom:
-```bash
-sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-sudo mkswap /swapfile && sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-```
+Visit `https://truoffers.co.uk` — you should get the homepage with seeded offers, and
+`https://truoffers.co.uk/api/health` should return `{"status":"ok","db":"connected"}`.
 
-### Deploying updates
+---
+
+## Routine deploys (every release after that)
 
 ```bash
-./build-and-push.sh          # on your Mac (or just push to main and let CI do it)
+# 1. On your Mac — or just push to main and let GitHub Actions build it
+./build-and-push.sh
 
+# 2. On the VPS
 ssh user@vps && cd /srv/truoffers
-./deploy.sh                  # git pull → pull images → restart → health-check → prune
+./deploy.sh          # git pull → pull images → restart → health-check → prune
 ```
 
-Takes ~30 seconds — it's a download, not a compile. `deploy.sh` fails loudly and prints API logs
-if the health check doesn't pass, so a broken release is never reported as a success.
+Takes ~30 seconds — it's a download, not a compile. `deploy.sh` fails loudly and prints the API
+logs if the health check doesn't pass, so a broken release is never reported as a success.
 
 **Rolling back** — every build is also tagged with its commit sha:
 
@@ -263,6 +346,18 @@ docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups
 | Stop everything   | `docker compose down` (data survives in volumes)     |
 | Health            | `curl https://truoffers.co.uk/api/health`            |
 
+### Troubleshooting
+
+| Symptom | Cause & fix |
+| ------- | ----------- |
+| `deploy.sh`: "could not pull the images" | Images not published yet (run `./build-and-push.sh`), or the VPS isn't logged in to GHCR (step 3). The script prints the full checklist. |
+| Container exits with **"exec format error"** | Architecture mismatch — an arm64 image on an x86_64 VPS. Set `PLATFORM=linux/amd64` in `.env.build` and rebuild. |
+| API restarts in a loop | Usually a missing/blank `JWT_SECRET` in the VPS `.env` — the app refuses to boot in production without one. Check `docker compose logs api`. |
+| **"dependency mongo failed to start … is unhealthy"**, and `docker compose logs mongo` shows `Detected unclean shutdown` + `WT_VERB_RECOVERY_PROGRESS` | Mongo is **not** broken — it's replaying its WiredTiger journal, which takes minutes on a small VPS. Retrying `deploy.sh` makes it *worse*: each attempt recreates the container mid-recovery, causing another unclean shutdown, so recovery never finishes. Break the loop by letting it recover alone:<br>`docker compose up -d mongo` then `docker compose logs -f mongo` and wait for `"Waiting for connections"`. Then run `./deploy.sh`. |
+| Site loads but every API call fails | `SITE_URL` in `.env.build` didn't match the live domain, so the wrong URL was baked into the bundle. Rebuild and repush. |
+| No TLS certificate | DNS isn't pointing at the VPS yet, or ports 80/443 are firewalled. Check `dig +short <domain>` and `docker compose logs caddy`. |
+| Frontend changes don't appear | You restarted instead of rebuilding. `NEXT_PUBLIC_*` is compile-time — rerun `./build-and-push.sh`. |
+
 ### Notes & gotchas
 
 - **`NEXT_PUBLIC_*` are baked in at build time**, not runtime — they come from `SITE_URL` /
@@ -271,13 +366,11 @@ docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups
   a restart alone will not pick it up.
 - **Two env files, two machines**: `.env.build` (build machine — public values only, no secrets)
   and `.env` (VPS — real secrets, never committed). Production secrets never touch your laptop.
-- **No TLS yet / no domain?** Set `SITE_DOMAIN=:80` and `SITE_URL=http://<VPS_IP>` in `.env` to run
-  plain HTTP. Switch to the real domain and redeploy once DNS resolves; Caddy issues the
-  certificate automatically.
-- **Mongo publishes no ports.** To inspect it from your laptop, tunnel over SSH:
-  `ssh -L 27017:localhost:27017 user@vps` won't work directly (no published port) — use
-  `docker compose exec mongo mongosh` on the box instead.
-- **Sizing**: ~2GB RAM is comfortable. On a 1GB VPS add swap before building, as `next build` is
-  memory-hungry.
+- **Mongo publishes no ports**, by design. There's nothing to tunnel to from your laptop — use
+  `docker compose exec mongo mongosh truoffers` on the box instead.
+- **Sizing**: the prebuilt containers run in roughly 400-600MB, so 1GB + 2GB swap is workable.
+  Nothing compiles on the VPS — that's the whole point of the registry flow. Don't be tempted to
+  add a `build:` section back into `docker-compose.yml`; a 1GB box cannot run `tsc`/`next build`.
 - **Cron jobs run in-process** (`@nestjs/schedule`) inside the always-on `api` container — offer
-  expiry, promotion charges and review sync need no external scheduler.
+  expiry, promotion charges and review sync need no external scheduler. This is why the app wants
+  a real server rather than serverless.

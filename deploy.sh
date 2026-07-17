@@ -2,9 +2,9 @@
 # TruOffers deploy — runs on the VPS. Pulls prebuilt images and restarts.
 # Nothing is compiled here, so a 1GB box is plenty.
 #
-#   ./deploy.sh                     pull latest code + images, restart, verify
-#   ./deploy.sh --no-pull           skip git pull (use the working tree as-is)
-#   IMAGE_TAG=sha-abc123 ./deploy.sh   roll back to a specific published build
+#   ./deploy.sh                       pull latest code + images, restart, verify
+#   ./deploy.sh --no-git-pull         skip `git pull` (images are still pulled)
+#   IMAGE_TAG=sha-abc123 ./deploy.sh  roll back to a specific published build
 #
 # Publish images first from a build machine: ./build-and-push.sh
 set -euo pipefail
@@ -16,7 +16,7 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-if [[ "${1:-}" != "--no-pull" ]]; then
+if [[ "${1:-}" != "--no-git-pull" ]]; then
   echo "==> Pulling latest code"
   git pull --ff-only
 fi
@@ -47,19 +47,44 @@ fi
 echo "==> Starting the stack"
 docker compose up -d
 
-echo "==> Waiting for the API to report healthy"
-for i in {1..60}; do
-  status="$(docker compose ps --format json api 2>/dev/null | sed -n 's/.*"Health":"\([^"]*\)".*/\1/p' | head -1)"
-  if [[ "$status" == "healthy" ]]; then
+health_of() {
+  docker compose ps --format json "$1" 2>/dev/null \
+    | sed -n 's/.*"Health":"\([^"]*\)".*/\1/p' | head -1
+}
+
+# Mongo replays its journal before accepting connections after an unclean
+# shutdown, which can take minutes on a small VPS. Be patient rather than
+# aborting and recreating the container mid-recovery.
+echo "==> Waiting for services to report healthy"
+deadline=$(( SECONDS + 420 ))
+last_note=0
+while true; do
+  api_status="$(health_of api)"
+  if [[ "$api_status" == "healthy" ]]; then
     echo "    API healthy"
     break
   fi
-  if [[ $i -eq 60 ]]; then
-    echo "ERROR: API did not become healthy in time. Recent logs:" >&2
-    docker compose logs --tail 40 api >&2
+
+  if (( SECONDS >= deadline )); then
+    echo "ERROR: services did not become healthy within 7 minutes." >&2
+    echo "       mongo=$(health_of mongo)  api=${api_status:-starting}" >&2
+    echo "--- mongo logs ---" >&2; docker compose logs --tail 20 mongo >&2
+    echo "--- api logs ---" >&2;   docker compose logs --tail 30 api >&2
     exit 1
   fi
-  sleep 2
+
+  # Progress note every 30s so a slow recovery doesn't look like a hang
+  if (( SECONDS - last_note >= 30 )); then
+    mongo_status="$(health_of mongo)"
+    if [[ "$mongo_status" != "healthy" ]]; then
+      echo "    mongo: ${mongo_status:-starting} — if this is the first start after an"
+      echo "           unclean shutdown it is replaying its journal; leave it running."
+    else
+      echo "    mongo healthy; waiting on api (${api_status:-starting})"
+    fi
+    last_note=$SECONDS
+  fi
+  sleep 3
 done
 
 echo "==> Verifying the site responds through the proxy"
