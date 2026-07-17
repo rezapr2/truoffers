@@ -16,6 +16,20 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
+# A full disk does not announce itself: Mongo just fails to write its journal and
+# looks like database corruption instead. Check before touching anything.
+avail_mb="$(df -Pm . | awk 'NR==2 {print $4}')"
+if (( avail_mb < 1500 )); then
+  echo "ERROR: only ${avail_mb}MB free on this filesystem — too little to deploy safely." >&2
+  echo "       A full disk corrupts Mongo's journal and surfaces as an unhealthy" >&2
+  echo "       container, not as an obvious 'disk full' error. Reclaim space first:" >&2
+  echo "         docker builder prune -a -f      # build cache" >&2
+  echo "         docker system prune -a -f       # unused images (NOT --volumes)" >&2
+  echo "         sudo du -sh /var/lib/docker /swapfile /var/log | sort -h" >&2
+  df -h . >&2
+  exit 1
+fi
+
 if [[ "${1:-}" != "--no-git-pull" ]]; then
   echo "==> Pulling latest code"
   git pull --ff-only

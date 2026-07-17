@@ -213,10 +213,14 @@ uname -m          # NOTE THIS DOWN. x86_64 -> linux/amd64 | aarch64 -> linux/arm
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker "$USER" && newgrp docker
 
-# Add swap — 1GB leaves little headroom even just running containers
+# Add swap — 1GB RAM leaves little headroom even just running containers.
+# Keep it to 2G: the swapfile lives on the same disk, and these VPS images are
+# often only ~10GB. Nothing compiles here, so 2G is plenty.
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+df -h /   # need ~4GB free AFTER the swapfile: images ~1.5GB + Mongo data + room to grow
 
 # Firewall: only SSH + web. Mongo is never published.
 sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw --force enable
@@ -353,7 +357,8 @@ docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups
 | `deploy.sh`: "could not pull the images" | Images not published yet (run `./build-and-push.sh`), or the VPS isn't logged in to GHCR (step 3). The script prints the full checklist. |
 | Container exits with **"exec format error"** | Architecture mismatch — an arm64 image on an x86_64 VPS. Set `PLATFORM=linux/amd64` in `.env.build` and rebuild. |
 | API restarts in a loop | Usually a missing/blank `JWT_SECRET` in the VPS `.env` — the app refuses to boot in production without one. Check `docker compose logs api`. |
-| **"dependency mongo failed to start … is unhealthy"**, and `docker compose logs mongo` shows `Detected unclean shutdown` + `WT_VERB_RECOVERY_PROGRESS` | Mongo is **not** broken — it's replaying its WiredTiger journal, which takes minutes on a small VPS. Retrying `deploy.sh` makes it *worse*: each attempt recreates the container mid-recovery, causing another unclean shutdown, so recovery never finishes. Break the loop by letting it recover alone:<br>`docker compose up -d mongo` then `docker compose logs -f mongo` and wait for `"Waiting for connections"`. Then run `./deploy.sh`. |
+| **"dependency mongo failed to start … is unhealthy"** | **Check `df -h /` first.** A full disk is the #1 cause and does not look like one: Mongo can't write its journal, so it shuts down uncleanly and never recovers, and the FTDC thread throws a scary stack trace. See the disk-full row below.<br><br>If there IS free space, Mongo is simply replaying its journal (`docker compose logs mongo` shows `Detected unclean shutdown` + `WT_VERB_RECOVERY_PROGRESS`), which takes minutes on a small VPS. Retrying `deploy.sh` makes it *worse* — each attempt recreates the container mid-recovery. Let it recover alone: `docker compose up -d mongo`, then `docker compose logs -f mongo` until `"Waiting for connections"`, then `./deploy.sh`. |
+| **Disk 100% full** (`df -h /` shows `0` available) | Usually Docker build cache and old images, plus an oversized swapfile. Reclaim:<br>`docker builder prune -a -f`<br>`docker compose down && docker system prune -a -f` (**never** `--volumes` — that deletes your database)<br>`sudo du -sh /var/lib/docker /swapfile /var/log \| sort -h`<br>If Mongo won't recover afterwards its files were damaged by the full disk; if the data is expendable: `docker compose down -v && ./deploy.sh && docker compose exec api npm run seed:prod`. `deploy.sh` now refuses to run below 1.5GB free. |
 | Site loads but every API call fails | `SITE_URL` in `.env.build` didn't match the live domain, so the wrong URL was baked into the bundle. Rebuild and repush. |
 | No TLS certificate | DNS isn't pointing at the VPS yet, or ports 80/443 are firewalled. Check `dig +short <domain>` and `docker compose logs caddy`. |
 | Frontend changes don't appear | You restarted instead of rebuilding. `NEXT_PUBLIC_*` is compile-time — rerun `./build-and-push.sh`. |
