@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Jest transpiles each file on its own; `npm run typecheck` does the type checking.
+    "isolatedModules": true
+  }
+}

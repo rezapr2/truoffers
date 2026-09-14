@@ -7,8 +7,8 @@ const project = (name, extra = {}) => ({
   testMatch: [`<rootDir>/test/${name}/**/*.spec.ts`],
   setupFiles: ['<rootDir>/test/setup-env.ts'],
   transform: {
-    // `npm run typecheck` covers test files, so skip per-file diagnostics here for speed.
-    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json', diagnostics: false }],
+    // Transpile-only (isolatedModules): a full type-checking program per worker needs gigabytes of heap.
+    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json', diagnostics: false }],
   },
   ...extra,
 });
