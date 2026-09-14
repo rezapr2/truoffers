@@ -67,8 +67,13 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       res.writeHead(404, { 'Content-Type': 'text/plain' }).end('not found');
       return;
     }
-    res.writeHead(200, { 'Content-Type': CONTENT_TYPES[path.extname(file)] ?? 'application/octet-stream' });
-    res.end(readFileSync(file));
+    const extension = path.extname(file);
+    res.writeHead(200, { 'Content-Type': CONTENT_TYPES[extension] ?? 'application/octet-stream' });
+    // Fixture files write same-site absolute URLs as {{origin}}; fill in the real host and port.
+    const body = ['.html', '.xml', '.txt', '.json'].includes(extension)
+      ? readFileSync(file, 'utf8').replaceAll('{{origin}}', `http://${host}:${port}`)
+      : readFileSync(file);
+    res.end(body);
   });
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

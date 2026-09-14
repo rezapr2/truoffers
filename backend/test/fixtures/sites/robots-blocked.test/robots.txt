@@ -1,0 +1,5 @@
+User-agent: TruOffersBot
+Disallow: /
+
+User-agent: *
+Allow: /

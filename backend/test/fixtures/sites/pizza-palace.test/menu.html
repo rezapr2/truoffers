@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <title>Menu | Pizza Palace</title>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Menu",
+    "hasMenuSection": {
+      "@type": "MenuSection",
+      "name": "Pizzas",
+      "hasMenuItem": [
+        { "@type": "MenuItem", "name": "Margherita", "offers": { "@type": "Offer", "price": "9.99", "priceCurrency": "GBP" } },
+        { "@type": "MenuItem", "name": "Pepperoni", "offers": { "@type": "Offer", "price": "11.49", "priceCurrency": "GBP" } }
+      ]
+    }
+  }
+  </script>
+</head>
+<body>
+  <h1>Menu</h1>
+  <section class="menu-section">
+    <h2>Pizzas</h2>
+    <ul>
+      <li>Margherita — £9.99</li>
+      <li>Pepperoni — <s>£12.99</s> £11.49</li>
+      <li>Garlic bread — £3.50</li>
+    </ul>
+    <p>Gluten free bases available on request.</p>
+  </section>
+</body>
+</html>

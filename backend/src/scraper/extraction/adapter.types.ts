@@ -102,7 +102,7 @@ export interface DiscoveredPage {
   url: string;
   roles: PageRole[];
   priority: number;
-  source: 'seed' | 'homepage_link' | 'sitemap';
+  source: 'seed' | 'homepage_link' | 'listing_link' | 'sitemap';
   anchorText?: string;
 }
 
@@ -123,6 +123,8 @@ export interface WebsiteContext {
   runId: string;
   checkedAt: Date;
   signal: AbortSignal;
+  // The page plan from discovery, when the pipeline has one.
+  plan?: DiscoveredPage[];
   // Returns null when the page may not be used: gate denial, robots, noindex, page cap, wrong content type.
   loadPage(url: string): Promise<LoadedPage | null>;
   log(message: string, data?: Record<string, unknown>): void;
