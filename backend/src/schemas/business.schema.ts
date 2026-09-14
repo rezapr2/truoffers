@@ -40,6 +40,22 @@ export class ReviewsCache {
   lastSync?: Date;
 }
 
+// Set when a listing was created from an imported website; drives the public "Imported from" notice.
+@Schema({ _id: false })
+export class ImportSource {
+  @Prop({ type: Types.ObjectId, ref: 'ScrapedWebsite', required: true })
+  scrapedWebsiteRef: Types.ObjectId;
+
+  @Prop({ required: true })
+  domain: string;
+
+  @Prop({ type: Date, required: true })
+  importedAt: Date;
+
+  @Prop({ type: Date })
+  lastCheckedAt?: Date;
+}
+
 @Schema({ timestamps: true })
 export class Business {
   @Prop({ required: true, trim: true })
@@ -131,8 +147,36 @@ export class Business {
 
   @Prop({ default: false })
   featured: boolean;
+
+  // ---- Normalised identity, derived from name/phone/postcode/website (see common/business-identity.ts) ----
+
+  @Prop({ index: true })
+  phoneE164?: string;
+
+  @Prop()
+  postcodeCanonical?: string;
+
+  @Prop()
+  nameNormalized?: string;
+
+  @Prop({ index: true })
+  websiteHost?: string;
+
+  @Prop({ type: ImportSource })
+  importSource?: ImportSource;
 }
 
 export const BusinessSchema = SchemaFactory.createForClass(Business);
 BusinessSchema.index({ location: '2dsphere' });
 BusinessSchema.index({ name: 'text', description: 'text' });
+// Phone is deliberately not unique: branches of one takeaway often share an ordering line.
+BusinessSchema.index(
+  { postcodeCanonical: 1, nameNormalized: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      postcodeCanonical: { $type: 'string' },
+      nameNormalized: { $type: 'string' },
+    },
+  },
+);

@@ -178,6 +178,36 @@ export class AiService {
         terms: 'Meal deal items only. Not valid with other offers.',
         displayLabel: 'Meal deal',
       },
+      [DiscountType.MULTI_BUY]: {
+        title: `Multi-buy deal${min}`,
+        description: `Stock up on ${cuisine} from ${name} — buy more, pay less.`,
+        terms: 'Selected items only. Not valid with other offers.',
+        displayLabel: 'Multi-buy',
+      },
+      [DiscountType.FREE_ITEM]: {
+        title: `Free extra with your order${min}`,
+        description: `Order ${cuisine} from ${name} and get a little something extra on the house.`,
+        terms: `Free item${min || ' with any order'}. While stocks last.`,
+        displayLabel: 'Free item',
+      },
+      [DiscountType.COLLECTION_DISCOUNT]: {
+        title: `${dto.value || 10}% off collection orders${min}`,
+        description: `Collect your ${cuisine} from ${name} and save ${dto.value || 10}%.`,
+        terms: `Collection orders only${min}. Not valid with other offers.`,
+        displayLabel: `${dto.value || 10}% collect`,
+      },
+      [DiscountType.DELIVERY_DISCOUNT]: {
+        title: `${dto.value || 10}% off delivery orders${min}`,
+        description: `Get ${cuisine} from ${name} delivered for ${dto.value || 10}% less.`,
+        terms: `Delivery orders only${min}. Not valid with other offers.`,
+        displayLabel: `${dto.value || 10}% delivery`,
+      },
+      [DiscountType.CUSTOM]: {
+        title: `Special offer${min}`,
+        description: `A special offer on ${cuisine} from ${name}. Order direct to claim it.`,
+        terms: 'Not valid with other offers.',
+        displayLabel: 'Special',
+      },
     };
     const copy = byType[dto.discountType];
     if (dto.brief) copy.description = `${copy.description} ${dto.brief}`.slice(0, 200);

@@ -47,7 +47,25 @@ export enum OfferStatus {
   PAUSED = 'paused',
   REJECTED = 'rejected',
   EXPIRED = 'expired',
+  POSSIBLY_REMOVED = 'possibly_removed',
+  EXPIRY_REVIEW = 'expiry_review',
+  REVISION_PENDING = 'revision_pending',
+  REMOVED = 'removed',
 }
+
+// Statuses a member of the public may see.
+export const PUBLIC_OFFER_STATUSES: OfferStatus[] = [OfferStatus.ACTIVE];
+
+// Statuses in which an offer still occupies its dedupe slot (business + content fingerprint).
+export const LIVE_OFFER_STATUSES: OfferStatus[] = [
+  OfferStatus.DRAFT,
+  OfferStatus.PENDING,
+  OfferStatus.ACTIVE,
+  OfferStatus.PAUSED,
+  OfferStatus.POSSIBLY_REMOVED,
+  OfferStatus.EXPIRY_REVIEW,
+  OfferStatus.REVISION_PENDING,
+];
 
 export enum DiscountType {
   PERCENT = 'percent',
@@ -55,6 +73,11 @@ export enum DiscountType {
   FREE_DELIVERY = 'free_delivery',
   BOGOF = 'bogof',
   MEAL_DEAL = 'meal_deal',
+  MULTI_BUY = 'multi_buy',
+  FREE_ITEM = 'free_item',
+  COLLECTION_DISCOUNT = 'collection_discount',
+  DELIVERY_DISCOUNT = 'delivery_discount',
+  CUSTOM = 'custom',
 }
 
 export enum RedemptionType {
