@@ -20,6 +20,7 @@ import {
   VerificationStatus,
 } from '../common/enums';
 import { geocodePostcode, normalisePostcode, outwardCode } from '../common/postcode.util';
+import { deriveBusinessIdentity } from '../common/business-identity';
 import {
   CreateBusinessDto,
   CreateMenuItemDto,
@@ -102,12 +103,18 @@ export class BusinessesService {
     return { business, offers, menu };
   }
 
-  async create(dto: CreateBusinessDto, ownerId?: string, claimImmediately = false) {
+  async create(
+    dto: CreateBusinessDto,
+    ownerId?: string,
+    claimImmediately = false,
+    options: { importSource?: { scrapedWebsiteRef: Types.ObjectId; domain: string; importedAt: Date; lastCheckedAt?: Date } } = {},
+  ) {
     const slug = await this.uniqueSlug(dto.name);
     const postcode = normalisePostcode(dto.postcode);
     const geo = await geocodePostcode(postcode);
     const business = await this.businessModel.create({
       ...dto,
+      ...deriveBusinessIdentity({ name: dto.name, phone: dto.phone, postcode, website: dto.website }),
       slug,
       postcode,
       postcodeArea: outwardCode(postcode),
@@ -116,6 +123,7 @@ export class BusinessesService {
       verificationStatus:
         claimImmediately && ownerId ? VerificationStatus.CLAIMED : VerificationStatus.UNCLAIMED,
       categories: (dto.categories || []).map((id) => new Types.ObjectId(id)),
+      importSource: options.importSource,
     });
     if (business.categories.length) {
       await this.categoryModel.updateMany(
@@ -139,6 +147,10 @@ export class BusinessesService {
     if (dto.categories) {
       business.categories = dto.categories.map((c) => new Types.ObjectId(c));
     }
+    Object.assign(
+      business,
+      deriveBusinessIdentity({ name: business.name, phone: business.phone, postcode: business.postcode, website: business.website }),
+    );
     await business.save();
     return business;
   }
