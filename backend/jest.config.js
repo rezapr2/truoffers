@@ -16,7 +16,8 @@ const project = (name, extra = {}) => ({
 module.exports = {
   projects: [
     project('unit'),
-    project('integration', { testTimeout: 30_000 }),
-    project('e2e', { testTimeout: 120_000 }),
+    // testTimeout is a global option that projects ignore, so timeouts are set per project here.
+    project('integration', { setupFilesAfterEnv: ['<rootDir>/test/setup-timeout-integration.ts'] }),
+    project('e2e', { setupFilesAfterEnv: ['<rootDir>/test/setup-timeout-e2e.ts'] }),
   ],
 };

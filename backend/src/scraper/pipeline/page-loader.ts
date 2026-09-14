@@ -36,8 +36,35 @@ const PAGE_LEVEL_FETCH_FAILURES = new Set(['content_type', 'too_large', 'decompr
  */
 export class PageLoader {
   private readonly memo = new Map<string, Promise<LoadedPage | null>>();
+  private readonly loaded = new Map<string, LoadedPage>();
   readonly skipped = new Map<string, string>();
   fetchedCount = 0;
+
+  // Pages loaded so far in this job, keyed by page key; their DOMs are still in memory.
+  loadedPages(): Map<string, LoadedPage> {
+    return new Map(this.loaded);
+  }
+
+  // A non-page document (sitemap) through the same gate and rate limit; not counted against the page cap.
+  async fetchText(url: string, purpose: 'sitemap'): Promise<string | null> {
+    const settings = await this.deps.settings.get();
+    try {
+      const response = await this.deps.fetcher.fetch(url, {
+        purpose,
+        signal: this.ctx.signal,
+        extraNeverCrawlDomains: settings.extraNeverCrawlDomains,
+        beforeRequest: async (hop) => {
+          await this.deps.gate.assertRequestAllowed(hop, this.gateContext());
+          await this.throttle(hop, true);
+        },
+      });
+      return response.status >= 200 && response.status < 300 ? response.body : null;
+    } catch (err) {
+      if (err instanceof CrawlDeniedError && PAGE_LEVEL_DENIALS.has(err.denial)) return this.skip(url, err.message);
+      if (err instanceof FetchFailedError && (PAGE_LEVEL_FETCH_FAILURES.has(err.code) || !err.retryable)) return this.skip(url, err.message);
+      throw err;
+    }
+  }
 
   constructor(
     private readonly deps: PageLoaderDeps,
@@ -133,7 +160,7 @@ export class PageLoader {
     const directives = pageDirectives(response.headers, $);
     if (directives.noindex) return this.skip(url, 'noindex: page content may not be used');
 
-    return {
+    const page: LoadedPage = {
       url: target.toString(),
       finalUrl: response.finalUrl,
       status: response.status,
@@ -144,5 +171,7 @@ export class PageLoader {
       lastModified: response.lastModified && !Number.isNaN(response.lastModified.getTime()) ? response.lastModified : undefined,
       fetchedAt: new Date(),
     };
+    this.loaded.set(key, page);
+    return page;
   }
 }

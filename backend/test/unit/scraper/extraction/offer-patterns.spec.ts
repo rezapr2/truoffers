@@ -131,6 +131,13 @@ describe('offer patterns', () => {
     ])('%s', (text, product, price) => {
       expect(findPricePoint(text)?.value).toEqual({ product, price });
     });
+
+    it.each(['15% off all collection orders over £25', 'Free delivery on all orders of £20', 'any order worth £30'])(
+      'does not read a spend threshold as a price point: %s',
+      (text) => {
+        expect(findPricePoint(text)).toBeNull();
+      },
+    );
   });
 
   describe('terms', () => {

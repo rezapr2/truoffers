@@ -171,6 +171,8 @@ export function findPricePoint(text: string): TextMatch<{ product: string; price
       const price = parseMoney(m[2]);
       const product = m[1].trim().toLowerCase();
       if (!price || /^(orders?|items?|products?|food)$/.test(product)) return undefined;
+      // "all collection orders over £25" is a spend threshold, not a price.
+      if (/\b(?:orders?|over|above|of|worth|spend|from|min(?:imum)?|more\s+than)\b/.test(product)) return undefined;
       return { product, price };
     },
   );

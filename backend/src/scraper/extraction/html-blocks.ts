@@ -115,6 +115,25 @@ export function offerTextBlocks($: CheerioAPI, options: { pageIsOffers: boolean 
   return blocks;
 }
 
+const PROMO_HINT = /offer|deal|discount|promo|special|save|saving|free|%|£|code|voucher|half\s+price|2\s?for\s?1|bogof/i;
+
+// Short promotional-looking text for the AI fallback: leaf text only, never whole pages.
+export function promotionalTextBlocks($: CheerioAPI, max = 12): string[] {
+  const root = $.root().clone();
+  root.find(NON_CONTENT).remove();
+  const blocks: string[] = [];
+  const seen = new Set<string>();
+  root.find('h1, h2, h3, h4, p, li, span, div, a, strong, small, td').each((_, node) => {
+    if (blocks.length >= max || !isElement(node)) return;
+    if ($(node).children('p, li, div, h1, h2, h3, h4, ul, ol, table, section, article').length > 0) return;
+    const value = collapse($(node).text());
+    if (value.length < 12 || value.length > 400 || seen.has(value) || !PROMO_HINT.test(value)) return;
+    seen.add(value);
+    blocks.push(value);
+  });
+  return blocks;
+}
+
 function nearestPrecedingHeading(el: Element, text: (el: Element) => string): string | undefined {
   let node: Element | null = el;
   for (let depth = 0; node && depth < 4; depth++) {
