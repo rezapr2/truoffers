@@ -9,7 +9,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { InjectModel, MongooseModule } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { IsIn, IsMongoId, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import Anthropic from '@anthropic-ai/sdk';
 import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';

@@ -72,6 +72,7 @@ function OffersPageInner() {
   }, [searchedPostcode, lat, lng, activeCategory, delivery, collection, verifiedOnly]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-runs the search when URL params change; runSearch resets error/loading before awaiting
     void runSearch();
   }, [runSearch]);
 

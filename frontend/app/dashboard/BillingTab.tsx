@@ -59,7 +59,7 @@ export default function BillingTab({ business }: { business: Business }) {
         });
         if (res.mode === 'stripe' && res.url) {
           // Real checkout: pay on Stripe; the webhook activates the plan
-          window.location.href = res.url;
+          window.location.assign(res.url);
           return;
         }
         track('subscription_start', { businessId: business._id, metadata: { plan: plan.key, interval } });

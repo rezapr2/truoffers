@@ -33,11 +33,7 @@ export default function DashboardPage() {
       router.push('/admin');
       return;
     }
-    if (user.role === 'supplier') {
-      setTab('Leads');
-      setLoaded(true);
-      return;
-    }
+    if (user.role === 'supplier') return;
     void api<Business[]>('/businesses/mine')
       .then((list) => {
         setBusinesses(list);
@@ -46,11 +42,12 @@ export default function DashboardPage() {
       .finally(() => setLoaded(true));
   }, [user, router]);
 
-  if (loading || !user || !loaded) {
+  if (loading || !user || !(loaded || user.role === 'supplier')) {
     return <div className="py-24 text-center text-muted font-bold">Loading…</div>;
   }
 
   const isSupplier = user.role === 'supplier';
+  const activeTab = isSupplier ? 'Leads' : tab;
   const selected = businesses.find((b) => b._id === selectedId) || null;
 
   if (!isSupplier && businesses.length === 0) {
@@ -116,7 +113,7 @@ export default function DashboardPage() {
             key={t}
             onClick={() => setTab(t)}
             className={`text-sm font-bold px-5 py-2.5 rounded-full transition-colors cursor-pointer ${
-              tab === t ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
+              activeTab === t ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
             }`}
           >
             {t}
@@ -124,12 +121,12 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {tab === 'Overview' && selected && <OverviewTab business={selected} />}
-      {tab === 'Offers' && selected && <OffersTab business={selected} />}
-      {tab === 'Promote' && selected && <PromoteTab business={selected} />}
-      {tab === 'Billing' && selected && <BillingTab business={selected} />}
-      {tab === 'All locations' && <FranchiseTab />}
-      {tab === 'Leads' && isSupplier && <LeadsTab />}
+      {activeTab === 'Overview' && selected && <OverviewTab business={selected} />}
+      {activeTab === 'Offers' && selected && <OffersTab business={selected} />}
+      {activeTab === 'Promote' && selected && <PromoteTab business={selected} />}
+      {activeTab === 'Billing' && selected && <BillingTab business={selected} />}
+      {activeTab === 'All locations' && <FranchiseTab />}
+      {activeTab === 'Leads' && isSupplier && <LeadsTab />}
     </div>
   );
 }

@@ -55,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- session bootstrap: the token lives in localStorage, which is only readable after mount
     void refresh();
   }, [refresh]);
 

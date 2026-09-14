@@ -17,14 +17,17 @@ export default function SupplierPage({ params }: { params: Promise<{ slug: strin
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [prefilledFor, setPrefilledFor] = useState<string | null>(null);
 
   useEffect(() => {
     api<Supplier>(`/suppliers/${slug}`).then(setSupplier).catch(() => setNotFound(true));
   }, [slug]);
 
-  useEffect(() => {
-    if (user) setForm((f) => ({ ...f, contactName: f.contactName || user.name, contactEmail: f.contactEmail || user.email }));
-  }, [user]);
+  // Prefill contact details once the signed-in user is known (adjusting state during render).
+  if (user && prefilledFor !== user.id) {
+    setPrefilledFor(user.id);
+    setForm((f) => ({ ...f, contactName: f.contactName || user.name, contactEmail: f.contactEmail || user.email }));
+  }
 
   if (notFound) {
     return (

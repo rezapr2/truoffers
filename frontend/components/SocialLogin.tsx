@@ -8,10 +8,32 @@ import type { User } from '@/lib/types';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const APPLE_CLIENT_ID = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || '';
 
+interface GoogleIdentityServices {
+  accounts: {
+    id: {
+      initialize(options: {
+        client_id: string;
+        callback: (response: { credential: string }) => void;
+      }): void;
+      renderButton(parent: HTMLElement, options: Record<string, unknown>): void;
+    };
+  };
+}
+
+interface AppleIdJs {
+  auth: {
+    init(options: { clientId: string; scope: string; redirectURI: string; usePopup: boolean }): void;
+    signIn(): Promise<{
+      authorization: { id_token: string };
+      user?: { name?: { firstName?: string; lastName?: string } };
+    }>;
+  };
+}
+
 declare global {
   interface Window {
-    google?: any;
-    AppleID?: any;
+    google?: GoogleIdentityServices;
+    AppleID?: AppleIdJs;
   }
 }
 
@@ -99,6 +121,7 @@ export default function SocialLogin({
       await loadScript(
         'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js',
       );
+      if (!window.AppleID) throw new Error('Apple sign-in failed to load');
       window.AppleID.auth.init({
         clientId: APPLE_CLIENT_ID,
         scope: 'name email',

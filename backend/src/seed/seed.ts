@@ -102,7 +102,7 @@ async function main() {
     withTimestamps({ name: 'Demo Customer', email: 'customer@example.com', passwordHash: hash, role: 'customer', status: 'active', postcode: 'M14 5TQ', favouriteCuisines: ['pizza', 'indian'], savedOffers: [], followedBusinesses: [] }),
     withTimestamps({ name: 'PackRight Supplies', email: 'sales@packright.co.uk', passwordHash: hash, role: 'supplier', status: 'active', favouriteCuisines: [], savedOffers: [], followedBusinesses: [] }),
   ]);
-  const [adminId, ownerId, customerId, supplierUserId] = Object.values(usersResult.insertedIds);
+  const [, ownerId, , supplierUserId] = Object.values(usersResult.insertedIds);
   console.log('Seeded users: 4 (password for all: Password123!)');
 
   // ---- Businesses ----
