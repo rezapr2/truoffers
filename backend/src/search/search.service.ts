@@ -7,6 +7,7 @@ import { Category, CategoryDocument } from '../schemas/category.schema';
 import { Promotion, PromotionDocument, PromotionStatus } from '../schemas/promotion.schema';
 import { OfferStatus, VerificationStatus } from '../common/enums';
 import { geocodePostcode } from '../common/postcode.util';
+import { PUBLIC_OFFER_PROJECTION, withImportNotice } from '../common/public-offer';
 
 export interface SearchParams {
   postcode?: string;
@@ -93,7 +94,11 @@ export class SearchService {
     if (params.delivery) offerFilter.delivery = true;
     if (params.collection) offerFilter.collection = true;
 
-    const offers = await this.offerModel.find(offerFilter).sort({ createdAt: -1 }).lean();
+    const offers = await this.offerModel
+      .find(offerFilter)
+      .select(PUBLIC_OFFER_PROJECTION)
+      .sort({ createdAt: -1 })
+      .lean();
 
     // 2b. Promoted placements: active promotions boost ranking and tag results
     // as sponsored. A promotion without an offerId boosts the whole business.
@@ -122,7 +127,7 @@ export class SearchService {
         (b?.trustScore || 0) / 100 + (b?.reviews?.rating || 0) / 5 + (verified ? 0.5 : 0);
       const distancePenalty = distanceMeters != null ? distanceMeters / radiusMeters : 0.5;
       return {
-        ...o,
+        ...withImportNotice(o),
         sponsored,
         business: b
           ? {

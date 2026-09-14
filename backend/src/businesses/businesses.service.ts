@@ -13,12 +13,14 @@ import { MenuItem, MenuItemDocument } from '../schemas/menu.schema';
 import { Offer, OfferDocument } from '../schemas/offer.schema';
 import { Category, CategoryDocument } from '../schemas/category.schema';
 import {
+  BusinessStatus,
   ClaimMethod,
   ClaimStatus,
-  OfferStatus,
+  PUBLIC_OFFER_STATUSES,
   Role,
   VerificationStatus,
 } from '../common/enums';
+import { PUBLIC_OFFER_PROJECTION, withImportNotice } from '../common/public-offer';
 import { geocodePostcode, normalisePostcode, outwardCode } from '../common/postcode.util';
 import { deriveBusinessIdentity } from '../common/business-identity';
 import {
@@ -84,9 +86,11 @@ export class BusinessesService {
     ]);
   }
 
+  // Suspended, pending and closed listings are not public, including by direct link.
   async findBySlug(slug: string) {
     const business = await this.businessModel
-      .findOne({ slug })
+      .findOne({ slug, status: BusinessStatus.ACTIVE })
+      .select('-phoneE164 -nameNormalized -postcodeCanonical -websiteHost -importSource.scrapedWebsiteRef')
       .populate('categories', 'name slug emoji');
     if (!business) throw new NotFoundException('Business not found');
     const now = new Date();
@@ -94,13 +98,20 @@ export class BusinessesService {
       this.offerModel
         .find({
           businessId: business._id,
-          status: OfferStatus.ACTIVE,
+          status: { $in: PUBLIC_OFFER_STATUSES },
           $or: [{ endsAt: null }, { endsAt: { $gte: now } }],
         })
-        .sort({ createdAt: -1 }),
+        .select(PUBLIC_OFFER_PROJECTION)
+        .sort({ createdAt: -1 })
+        .lean(),
       this.menuModel.find({ businessId: business._id }).sort({ section: 1, sortOrder: 1 }),
     ]);
-    return { business, offers, menu };
+    // A listing created from the business's website (and not yet claimed) says so, like imported offers do.
+    const imported =
+      business.importSource?.domain && !business.ownerId
+        ? { domain: business.importSource.domain, lastCheckedAt: business.importSource.lastCheckedAt }
+        : null;
+    return { business: { ...business.toJSON(), imported }, offers: offers.map(withImportNotice), menu };
   }
 
   async create(

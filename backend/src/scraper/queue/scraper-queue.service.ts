@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import type { Types } from 'mongoose';
 import type { ImportJobDocument } from '../../schemas/import-job.schema';
@@ -12,6 +12,7 @@ export type QueueCounts = Record<string, { waiting: number; active: number; dela
 // Producer side of the scraper queues, shared by the API and the worker.
 @Injectable()
 export class ScraperQueueService implements OnApplicationShutdown {
+  private readonly logger = new Logger(ScraperQueueService.name);
   private readonly queues = new Map<string, Queue<StageJobData>>();
   private deadLetter?: Queue;
 
@@ -21,13 +22,18 @@ export class ScraperQueueService implements OnApplicationShutdown {
     let queue = this.queues.get(name);
     if (!queue) {
       queue = new Queue<StageJobData>(name, { connection: bullConnectionOptions() });
+      // Without a listener a Redis outage would surface as an uncaught 'error' event and stop the API.
+      queue.on('error', (err) => this.logger.warn(`Queue ${name}: ${err.message}`));
       this.queues.set(name, queue);
     }
     return queue;
   }
 
   private deadLetterQueue(): Queue {
-    this.deadLetter ??= new Queue(SCRAPER_QUEUES.deadLetter, { connection: bullConnectionOptions() });
+    if (!this.deadLetter) {
+      this.deadLetter = new Queue(SCRAPER_QUEUES.deadLetter, { connection: bullConnectionOptions() });
+      this.deadLetter.on('error', (err) => this.logger.warn(`Queue ${SCRAPER_QUEUES.deadLetter}: ${err.message}`));
+    }
     return this.deadLetter;
   }
 

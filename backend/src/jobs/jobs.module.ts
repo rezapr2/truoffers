@@ -24,7 +24,8 @@ export class JobsService {
     const now = new Date();
     const result = await this.offerModel.updateMany(
       { status: OfferStatus.ACTIVE, endsAt: { $ne: null, $lt: now } },
-      { status: OfferStatus.EXPIRED },
+      // expiredAt starts the retention clock for imported offers' stored excerpts.
+      { $set: { status: OfferStatus.EXPIRED, expiredAt: now } },
     );
     if (result.modifiedCount > 0) {
       this.logger.log(`Expired ${result.modifiedCount} offer(s)`);

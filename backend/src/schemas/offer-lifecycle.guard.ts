@@ -102,6 +102,10 @@ function updatedFields(update: Record<string, any> | null | undefined): Map<stri
   return fields;
 }
 
+// Provenance the retention job may clear on any offer; it never touches what the offer says.
+const RETENTION_REDACTABLE = new Set(['sources', 'evidence', 'excerptsRedactedAt']);
+export const RETENTION_COMPONENT = 'retention';
+
 function checkUpdate(fields: Map<string, unknown>, actor: Actor): { restrictToScraperManaged: boolean } {
   if (fields.has('verification')) assertVerification(fields.get('verification'), actor);
   if (fields.has('managedBy')) assertCanChangeManagement(actor);
@@ -110,9 +114,10 @@ function checkUpdate(fields: Map<string, unknown>, actor: Actor): { restrictToSc
   if (status && PUBLIC_OFFER_STATUSES.includes(status)) assertCanPublish(actor);
 
   if (ActorContext.isHuman(actor)) return { restrictToScraperManaged: false };
+  const retention = actor.kind === ActorKind.SYSTEM && actor.component === RETENTION_COMPONENT;
   const touchesMerchantData = [...fields.keys()].some(
     (field) =>
-      !BACKGROUND_WRITABLE_ON_MERCHANT_OFFERS.has(field) ||
+      !(BACKGROUND_WRITABLE_ON_MERCHANT_OFFERS.has(field) || (retention && RETENTION_REDACTABLE.has(field))) ||
       (field === 'status' && fields.get('status') !== OfferStatus.EXPIRED),
   );
   return { restrictToScraperManaged: touchesMerchantData };
@@ -128,7 +133,11 @@ export function applyOfferLifecycleGuard(schema: Schema) {
         modifiedPaths(): string[];
         dedupeKey?: string;
       };
-      offer.dedupeKey = computeDedupeKey(offer);
+      // Only when identity or liveness changes, so saving an unrelated field (a redemption count)
+      // never collides with a legacy duplicate that was left without a key.
+      if (offer.isNew || offer.isModified('contentFingerprint') || offer.isModified('status') || offer.isModified('businessId')) {
+        offer.dedupeKey = computeDedupeKey(offer);
+      }
 
       if (offer.isNew) {
         checkNewOffer(offer, actor);

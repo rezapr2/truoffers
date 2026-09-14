@@ -154,6 +154,10 @@ export class Offer {
   @Prop({ type: Types.ObjectId, ref: 'ScrapedWebsite', index: true })
   scrapedWebsiteRef?: Types.ObjectId;
 
+  // Shown publicly as "Imported from <domain>".
+  @Prop()
+  sourceDomain?: string;
+
   // The spec offer type when discountType alone can't express it.
   @Prop()
   offerTypeRaw?: string;

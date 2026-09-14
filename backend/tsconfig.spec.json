@@ -2,6 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     // Jest transpiles each file on its own; `npm run typecheck` does the type checking.
-    "isolatedModules": true
+    "isolatedModules": true,
+    // Lets ts-jest compile ESM-only dependencies (jose) to CommonJS.
+    "allowJs": true
   }
 }

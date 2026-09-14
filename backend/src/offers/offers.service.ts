@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -12,13 +13,29 @@ import { Redemption, RedemptionDocument } from '../schemas/redemption.schema';
 import { Subscription, SubscriptionDocument } from '../schemas/subscription.schema';
 import { Plan, PlanDocument } from '../schemas/plan.schema';
 import {
+  BusinessStatus,
   OfferStatus,
   PlanKey,
+  PUBLIC_OFFER_STATUSES,
   Role,
   SubscriptionStatus,
   VerificationStatus,
 } from '../common/enums';
+import { ActorContext } from '../common/actor-context';
+import { recountActiveOffers } from '../common/offer-counts';
+import { PUBLIC_OFFER_PROJECTION, withImportNotice } from '../common/public-offer';
+import { OfferOrigin } from '../common/scraper.enums';
+import { fingerprintOfPublishedOffer } from '../scraper/lifecycle/offer-mapping';
+import { removeAsMerchant, takeOverAsMerchant } from '../scraper/lifecycle/merchant-management';
 import { CreateOfferDto, RedeemOfferDto, UpdateOfferDto } from './offers.dto';
+
+// An identical offer (same business and content fingerprint) can only be live once.
+function isDuplicateOffer(err: unknown): boolean {
+  return (err as { code?: number; keyPattern?: Record<string, unknown> }).code === 11000 &&
+    'dedupeKey' in ((err as { keyPattern?: Record<string, unknown> }).keyPattern ?? {});
+}
+
+const DUPLICATE_OFFER_MESSAGE = 'An identical offer is already live for this business';
 
 @Injectable()
 export class OffersService {
@@ -36,28 +53,45 @@ export class OffersService {
       status: OfferStatus.ACTIVE,
       $or: [{ endsAt: null }, { endsAt: { $gte: now } }],
     };
-    if (params.businessId) filter.businessId = new Types.ObjectId(params.businessId);
-    return this.offerModel
+    if (params.businessId) {
+      if (!Types.ObjectId.isValid(params.businessId)) return [];
+      filter.businessId = new Types.ObjectId(params.businessId);
+    }
+    const offers = await this.offerModel
       .find(filter)
+      .select(PUBLIC_OFFER_PROJECTION)
       .sort({ createdAt: -1 })
       .limit(Math.min(100, params.limit || 24))
-      .populate('businessId', 'name slug town postcodeArea verificationStatus reviews logoUrl orderUrl phone');
+      .populate('businessId', 'name slug town postcodeArea verificationStatus reviews logoUrl orderUrl phone')
+      .lean();
+    return offers.map(withImportNotice);
   }
 
+  // Unpublished offers (pending, paused, removed, ...) and offers of hidden listings don't load from direct links either.
   async getPublic(id: string) {
-    const offer = await this.offerModel
-      .findById(id)
-      .populate(
-        'businessId',
-        'name slug town postcode postcodeArea verificationStatus reviews logoUrl orderUrl phone website',
-      );
-    if (!offer) throw new NotFoundException('Offer not found');
-    return offer;
+    const offer = Types.ObjectId.isValid(id)
+      ? await this.offerModel
+          .findOne({ _id: id, status: { $in: PUBLIC_OFFER_STATUSES } })
+          .select(PUBLIC_OFFER_PROJECTION)
+          .populate(
+            'businessId',
+            'name slug town postcode postcodeArea verificationStatus reviews logoUrl orderUrl phone website status',
+          )
+          .lean()
+      : null;
+    const business = offer?.businessId as unknown as { status?: BusinessStatus } | null | undefined;
+    if (!offer || business?.status !== BusinessStatus.ACTIVE) throw new NotFoundException('Offer not found');
+    return withImportNotice(offer);
   }
 
   async listForBusiness(businessId: string, user: { userId: string; role: Role }) {
     await this.assertCanManage(businessId, user);
-    return this.offerModel.find({ businessId: new Types.ObjectId(businessId) }).sort({ createdAt: -1 });
+    const offers = await this.offerModel
+      .find({ businessId: new Types.ObjectId(businessId), status: { $ne: OfferStatus.REMOVED } })
+      .select('-evidence -dedupeKey -contentFingerprint -adapterId -adapterVersion -offerTypeRaw')
+      .sort({ createdAt: -1 })
+      .lean();
+    return offers.map(withImportNotice);
   }
 
   async create(businessId: string, dto: CreateOfferDto, user: { userId: string; role: Role }) {
@@ -73,13 +107,27 @@ export class OffersService {
       VerificationStatus.FRANCHISE_VERIFIED,
     ].includes(business.verificationStatus);
 
-    const offer = await this.offerModel.create({
-      ...dto,
-      businessId: business._id,
-      startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
-      endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
-      status: autoApprove ? OfferStatus.ACTIVE : OfferStatus.PENDING,
-    });
+    const endsAt = dto.endsAt ? new Date(dto.endsAt) : undefined;
+    const offer = await this.offerModel
+      .create({
+        ...dto,
+        businessId: business._id,
+        startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
+        endsAt,
+        status: autoApprove ? OfferStatus.ACTIVE : OfferStatus.PENDING,
+        // Fingerprinted like imported offers, so a later scrape of the same offer is never duplicated.
+        contentFingerprint: fingerprintOfPublishedOffer({
+          title: dto.title,
+          discountType: dto.discountType,
+          value: dto.value ?? 0,
+          code: dto.code,
+          minOrder: dto.minOrder ?? 0,
+          endsAt,
+        }),
+      })
+      .catch((err) => {
+        throw isDuplicateOffer(err) ? new ConflictException(DUPLICATE_OFFER_MESSAGE) : err;
+      });
     await this.refreshActiveOfferCount(business._id);
     return offer;
   }
@@ -88,12 +136,18 @@ export class OffersService {
     const offer = await this.offerModel.findById(offerId);
     if (!offer) throw new NotFoundException('Offer not found');
     await this.assertCanManage(String(offer.businessId), user);
+    if (offer.status === OfferStatus.REMOVED) throw new BadRequestException('This offer was removed');
     Object.assign(offer, {
       ...dto,
       startsAt: dto.startsAt ? new Date(dto.startsAt) : offer.startsAt,
       endsAt: dto.endsAt ? new Date(dto.endsAt) : offer.endsAt,
     });
-    await offer.save();
+    // Editing an imported offer makes it the merchant's: future scrapes only flag source changes.
+    takeOverAsMerchant(offer, ActorContext.current());
+    offer.contentFingerprint = fingerprintOfPublishedOffer(offer);
+    await offer.save().catch((err) => {
+      throw isDuplicateOffer(err) ? new ConflictException(DUPLICATE_OFFER_MESSAGE) : err;
+    });
     await this.refreshActiveOfferCount(offer.businessId);
     return offer;
   }
@@ -113,8 +167,12 @@ export class OffersService {
     if (offer.status === OfferStatus.PENDING || offer.status === OfferStatus.REJECTED) {
       throw new BadRequestException('Offer is awaiting moderation');
     }
+    if (offer.status === OfferStatus.REMOVED) throw new BadRequestException('This offer was removed');
     offer.status = status;
-    await offer.save();
+    takeOverAsMerchant(offer, ActorContext.current());
+    await offer.save().catch((err) => {
+      throw isDuplicateOffer(err) ? new ConflictException(DUPLICATE_OFFER_MESSAGE) : err;
+    });
     await this.refreshActiveOfferCount(offer.businessId);
     return offer;
   }
@@ -123,7 +181,13 @@ export class OffersService {
     const offer = await this.offerModel.findById(offerId);
     if (!offer) throw new NotFoundException('Offer not found');
     await this.assertCanManage(String(offer.businessId), user);
-    await offer.deleteOne();
+    if (offer.origin === OfferOrigin.SCRAPER) {
+      // Imported offers are kept as removed so the next scrape of the website doesn't bring them back.
+      removeAsMerchant(offer, ActorContext.current());
+      await offer.save();
+    } else {
+      await offer.deleteOne();
+    }
     await this.refreshActiveOfferCount(offer.businessId);
     return { deleted: true };
   }
@@ -182,9 +246,11 @@ export class OffersService {
     const plan = await this.getActivePlan(business);
     const max = plan?.limits?.maxLiveOffers ?? 2; // Free plan: 2 live offers
     if (max === -1) return;
+    // Offers imported from the business's website don't use up its plan allowance.
     const liveCount = await this.offerModel.countDocuments({
       businessId: business._id,
       status: { $in: [OfferStatus.ACTIVE, OfferStatus.PENDING] },
+      origin: { $ne: OfferOrigin.SCRAPER },
     });
     if (liveCount >= max) {
       throw new ForbiddenException(
@@ -202,12 +268,8 @@ export class OffersService {
     return this.planModel.findOne({ key });
   }
 
-  private async refreshActiveOfferCount(businessId: Types.ObjectId) {
-    const count = await this.offerModel.countDocuments({
-      businessId,
-      status: OfferStatus.ACTIVE,
-    });
-    await this.businessModel.findByIdAndUpdate(businessId, { activeOfferCount: count });
+  refreshActiveOfferCount(businessId: Types.ObjectId) {
+    return recountActiveOffers(this.offerModel, this.businessModel, businessId);
   }
 
   private async assertCanManage(businessId: string, user: { userId: string; role: Role }) {

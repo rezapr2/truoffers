@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -20,6 +20,8 @@ import { AdminModule } from './admin/admin.module';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { JwtAuthGuard, RolesGuard } from './common/guards';
+import { ActorContextInterceptor, ActorContextMiddleware } from './common/actor-context';
+import { ScraperModule } from './scraper/scraper.module';
 
 @Module({
   imports: [
@@ -49,11 +51,18 @@ import { JwtAuthGuard, RolesGuard } from './common/guards';
     AdminModule,
     HealthModule,
     JobsModule,
+    ScraperModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Who is acting (admin, merchant, public) for the offer lifecycle guard and the audit log.
+    { provide: APP_INTERCEPTOR, useClass: ActorContextInterceptor },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(ActorContextMiddleware).forRoutes('*');
+  }
+}

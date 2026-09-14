@@ -9,7 +9,10 @@ const project = (name, extra = {}) => ({
   transform: {
     // Transpile-only (isolatedModules): a full type-checking program per worker needs gigabytes of heap.
     '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json', diagnostics: false }],
+    // jose (used by OAuth sign-in) ships ES modules only; compile it to CommonJS for Jest.
+    '^.+/node_modules/jose/.+\\.js$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json', diagnostics: false }],
   },
+  transformIgnorePatterns: ['/node_modules/(?!jose/)'],
   ...extra,
 });
 
