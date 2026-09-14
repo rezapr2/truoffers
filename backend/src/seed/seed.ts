@@ -6,6 +6,8 @@
 import 'reflect-metadata';
 import mongoose from 'mongoose';
 import * as bcrypt from 'bcryptjs';
+import { deriveBusinessIdentity } from '../common/business-identity';
+import { fingerprintOfPublishedOffer } from '../scraper/lifecycle/offer-mapping';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/truoffers';
 
@@ -18,6 +20,9 @@ async function main() {
   const collections = [
     'users', 'businesses', 'offers', 'categories', 'claims', 'menuitems',
     'suppliers', 'leads', 'plans', 'subscriptions', 'analyticsevents', 'redemptions',
+    // Scraper collections
+    'scrapedwebsites', 'extractedoffercandidates', 'importjobs', 'providerpolicies', 'domainoptouts',
+    'robotscaches', 'domaincrawlconfigs', 'adminauditlogs', 'scraperadapters', 'scrapersettings',
   ];
   for (const c of collections) {
     await db.collection(c).deleteMany({});
@@ -211,6 +216,7 @@ async function main() {
         reviews: { ...b.reviews, lastSync: new Date() },
         followerCount: Math.floor(Math.random() * 120), activeOfferCount: 0,
         featured: !!b.featured, photos: [],
+        ...definedOnly(deriveBusinessIdentity({ name: b.name, phone: b.phone, postcode: b.postcode, website: b.website })),
       }),
     ),
   );
@@ -293,12 +299,15 @@ async function main() {
     },
   ];
   await db.collection('offers').insertMany(
-    offerDefs.map((o) =>
-      withTimestamps({
+    offerDefs.map((o) => {
+      const offer = {
         collection: true, delivery: true, minOrder: 0, maxRedemptions: 0,
-        redemptionCount: 0, excludedItems: [], ...o,
-      }),
-    ),
+        redemptionCount: 0, excludedItems: [], origin: 'merchant', verification: 'unverified', ...o,
+      };
+      // Raw inserts skip the Offer model hooks, so derive the dedupe fingerprint here as the service does.
+      const contentFingerprint = fingerprintOfPublishedOffer(offer as any);
+      return withTimestamps({ ...offer, contentFingerprint, dedupeKey: `${offer.businessId}:${contentFingerprint}` });
+    }),
   );
   // Refresh denormalised active offer counts
   for (const id of bizIds) {
@@ -398,6 +407,25 @@ async function main() {
   await db.collection('analyticsevents').insertMany(events);
   console.log('Seeded analytics events:', events.length);
 
+  // ---- Scraper: an example provider policy, deliberately left unreviewed ----
+  // The seed never allows a provider: that needs an admin decision with a recorded basis.
+  await db.collection('providerpolicies').insertOne(
+    withTimestamps({
+      name: 'OrderNest (example provider)',
+      status: 'unknown',
+      autoCreated: false,
+      basisNotes: 'Fictional ordering provider used by the scraper test fixtures. Safe to delete.',
+      detection: {
+        hostSuffixes: ['ordernest.test'],
+        cnameSuffixes: [],
+        footerPatterns: ['Powered by OrderNest'],
+        generatorPatterns: ['OrderNest Sites'],
+        assetHosts: ['cdn.ordernest.test'],
+      },
+    }),
+  );
+  console.log('Seeded provider policies: 1 (unknown)');
+
   // Indexes used by geo search
   await db.collection('businesses').createIndex({ location: '2dsphere' });
   await db.collection('businesses').createIndex({ slug: 1 }, { unique: true });
@@ -409,6 +437,10 @@ async function main() {
   console.log('  Customer:       customer@example.com');
   console.log('  Supplier:       sales@packright.co.uk (owns PackRight Supplies)');
   await mongoose.disconnect();
+}
+
+function definedOnly<T extends object>(fields: T): Partial<T> {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as Partial<T>;
 }
 
 function withTimestamps(doc: any) {

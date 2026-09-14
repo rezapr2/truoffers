@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -31,6 +32,14 @@ import {
 } from './businesses.dto';
 
 const AUTO_APPROVE_METHODS = [ClaimMethod.PHONE_OTP, ClaimMethod.FOODBELL_AUTO];
+
+// Listings are unique by canonical postcode and normalised name.
+function duplicateListing(err: unknown): unknown {
+  const { code, keyPattern } = err as { code?: number; keyPattern?: Record<string, unknown> };
+  return code === 11000 && keyPattern && 'nameNormalized' in keyPattern
+    ? new ConflictException('A listing with this name already exists at this postcode')
+    : err;
+}
 
 @Injectable()
 export class BusinessesService {
@@ -123,19 +132,23 @@ export class BusinessesService {
     const slug = await this.uniqueSlug(dto.name);
     const postcode = normalisePostcode(dto.postcode);
     const geo = await geocodePostcode(postcode);
-    const business = await this.businessModel.create({
-      ...dto,
-      ...deriveBusinessIdentity({ name: dto.name, phone: dto.phone, postcode, website: dto.website }),
-      slug,
-      postcode,
-      postcodeArea: outwardCode(postcode),
-      location: geo ? { type: 'Point', coordinates: [geo.lng, geo.lat] } : undefined,
-      ownerId: claimImmediately && ownerId ? new Types.ObjectId(ownerId) : undefined,
-      verificationStatus:
-        claimImmediately && ownerId ? VerificationStatus.CLAIMED : VerificationStatus.UNCLAIMED,
-      categories: (dto.categories || []).map((id) => new Types.ObjectId(id)),
-      importSource: options.importSource,
-    });
+    const business = await this.businessModel
+      .create({
+        ...dto,
+        ...deriveBusinessIdentity({ name: dto.name, phone: dto.phone, postcode, website: dto.website }),
+        slug,
+        postcode,
+        postcodeArea: outwardCode(postcode),
+        location: geo ? { type: 'Point', coordinates: [geo.lng, geo.lat] } : undefined,
+        ownerId: claimImmediately && ownerId ? new Types.ObjectId(ownerId) : undefined,
+        verificationStatus:
+          claimImmediately && ownerId ? VerificationStatus.CLAIMED : VerificationStatus.UNCLAIMED,
+        categories: (dto.categories || []).map((id) => new Types.ObjectId(id)),
+        importSource: options.importSource,
+      })
+      .catch((err) => {
+        throw duplicateListing(err);
+      });
     if (business.categories.length) {
       await this.categoryModel.updateMany(
         { _id: { $in: business.categories } },
@@ -162,7 +175,9 @@ export class BusinessesService {
       business,
       deriveBusinessIdentity({ name: business.name, phone: business.phone, postcode: business.postcode, website: business.website }),
     );
-    await business.save();
+    await business.save().catch((err) => {
+      throw duplicateListing(err);
+    });
     return business;
   }
 

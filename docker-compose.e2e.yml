@@ -1,0 +1,63 @@
+# Local end-to-end run of the whole stack against fictional fixture websites. Never deployed.
+#
+#   scripts/e2e-phase1.sh
+#
+# Every service sits on an internal network with no route to the internet: the worker can reach
+# only the fixture sites (*.test names, which can never exist publicly), and nothing real is contacted.
+services:
+  api:
+    image: truoffers-api:e2e
+    build: ./backend
+    environment:
+      FRONTEND_URL: http://web:3000
+
+  worker:
+    image: truoffers-api:e2e
+    build: ./backend
+    environment:
+      # SCRAPER_FIXTURE_HOSTS is refused when NODE_ENV=production.
+      NODE_ENV: e2e
+      SCRAPER_FIXTURE_HOSTS: pizza-palace.test,curry-house.test,kebab-king.test,noindex.test,robots-blocked.test,ordernest-bella.test,spa-only.test
+      ANTHROPIC_API_KEY: ""
+
+  web:
+    image: truoffers-web:e2e
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://api:4000/api
+        NEXT_PUBLIC_SITE_URL: http://web:3000
+
+  caddy:
+    profiles: [production]
+
+  fixtures:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./backend/test/fixtures/sites:/sites:ro
+      - ./scripts/e2e/fixtures.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      default:
+        aliases:
+          - pizza-palace.test
+          - curry-house.test
+          - kebab-king.test
+          - noindex.test
+          - robots-blocked.test
+          - ordernest-bella.test
+          - spa-only.test
+
+  e2e:
+    image: node:22-alpine
+    profiles: [e2e]
+    working_dir: /e2e
+    volumes:
+      - ./scripts/e2e:/e2e:ro
+    environment:
+      API_URL: http://api:4000/api
+      WEB_URL: http://web:3000
+    command: ["node", "phase1.mjs"]
+
+networks:
+  default:
+    internal: true

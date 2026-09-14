@@ -101,6 +101,13 @@ while true; do
   sleep 3
 done
 
+# The site doesn't depend on the scraper worker, so an unhealthy worker is reported, not fatal.
+worker_status="$(health_of worker)"
+if [[ "$worker_status" != "healthy" ]]; then
+  echo "WARNING: scraper worker is ${worker_status:-starting} (it can take a minute to report)." >&2
+  echo "         Check: docker compose logs --tail 50 worker" >&2
+fi
+
 echo "==> Verifying the site responds through the proxy"
 site_url="$(grep -E '^SITE_URL=' .env | cut -d= -f2-)"
 if curl -fsS --max-time 10 "${site_url}/api/health" > /dev/null; then

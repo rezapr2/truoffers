@@ -30,6 +30,21 @@ services:
       # start_period passes immediately.
       start_period: 240s
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # The scraper's job queue (BullMQ). AOF keeps queued jobs across restarts. noeviction is required:
+    # evicting a queue key under memory pressure would silently lose jobs, so Redis refuses writes instead.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    # Like Mongo: no published ports, internal network only.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     image: ${REGISTRY:-ghcr.io/rezapr2}/truoffers-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -37,6 +52,7 @@ services:
       NODE_ENV: production
       PORT: 4000
       MONGODB_URI: mongodb://mongo:27017/truoffers
+      REDIS_URL: redis://redis:6379
       JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env - generate one with 'openssl rand -hex 32'}"
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       FRONTEND_URL: ${SITE_URL:?set SITE_URL in .env}
@@ -49,12 +65,45 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      # Started, not healthy: the site keeps working if Redis is down; only the scraper stops.
+      redis:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/health"]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 90s
+
+  worker:
+    # The website crawler: same image as the API, different entrypoint. It is the only process that
+    # fetches third-party pages; the API just queues work and reviews results.
+    image: ${REGISTRY:-ghcr.io/rezapr2}/truoffers-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["node", "dist/main-worker"]
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/truoffers
+      REDIS_URL: redis://redis:6379
+      # The bot's User-Agent links to ${SITE_URL}/bot.
+      SITE_URL: ${SITE_URL:?set SITE_URL in .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SCRAPER_AI_MODEL: ${SCRAPER_AI_MODEL:-claude-opus-5}
+      # Keep V8's heap under the container limit so it collects garbage before the kernel kills it.
+      NODE_OPTIONS: --max-old-space-size=192
+    mem_limit: 256m
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Passes while the worker's heartbeat key in Redis is fresh (written every 10s, expires after 30s).
+      test: ["CMD", "node", "dist/worker-healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   web:
     # NEXT_PUBLIC_* values are baked into this image at BUILD time, so the
@@ -87,5 +136,6 @@ services:
 
 volumes:
   mongo-data:
+  redis-data:
   caddy-data:
   caddy-config:

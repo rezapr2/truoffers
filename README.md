@@ -14,6 +14,7 @@ blueprint (MVP scope).
 | Something's broken | [Troubleshooting](#troubleshooting) |
 | Know which `.env` goes where | [Environment files](#environment-files) |
 | See what's built vs not | [What's implemented](#whats-implemented-blueprint--code) · [Not yet built](#not-yet-built) |
+| Import offers from takeaway websites | [Website import robot](#website-import-robot-truoffersbot) |
 
 ## Stack
 
@@ -22,18 +23,21 @@ blueprint (MVP scope).
 | Frontend | Next.js 16 (App Router, TypeScript, Tailwind 4)             |
 | Backend  | NestJS 10 + Mongoose (JWT auth, role guards, class-validator) |
 | Database | MongoDB (`truoffers` db, 2dsphere geo index for postcode search) |
+| Queue    | Redis 7 + BullMQ (website import robot jobs; separate worker process) |
 
 ## Run it locally
 
-MongoDB must be running on `localhost:27017` (ServBay's MongoDB works as-is). Docker is **not**
-needed for local development — it's only used for production.
+MongoDB must be running on `localhost:27017` and Redis on `localhost:6379` (ServBay's MongoDB and
+Redis work as-is). Docker is **not** needed for local development — it's only used for production.
 
 ```bash
 # 1. Backend (port 4000)
 cd backend
 npm install
-npm run seed          # wipes + seeds demo data (idempotent, dev only)
-npm run start:dev     # API at http://localhost:4000/api
+npm run seed              # wipes + seeds demo data (idempotent, dev only)
+npm run migrate:scraper   # website import robot indexes + adapters (idempotent)
+npm run start:dev         # API at http://localhost:4000/api
+npm run start:worker      # in a second terminal: the website import robot's worker
 
 # 2. Frontend (port 3000)
 cd frontend
@@ -99,6 +103,69 @@ npm run dev           # http://localhost:3000
   cross-location totals + a per-location comparison table
   (`GET /api/businesses/mine/stats`).
 
+## Website import robot (TruOffersBot)
+
+Admins submit takeaway websites; the robot crawls **only authorised, permitted pages** and turns
+what it finds into offer candidates with field-by-field evidence. **Nothing is published or
+verified until an admin approves it or the business confirms it.** Data handling is documented in
+[docs/data-protection.md](docs/data-protection.md).
+
+```
+admin UI ─▶ API (review, publish, opt-outs) ─▶ MongoDB ◀─ structured results only
+               │ enqueue                                  │
+               ▼                                          │
+             Redis/BullMQ ◀──── worker: gate → safe fetch → extract → match → dedupe/score
+```
+
+**Using it** (sign in as admin@truoffers.co.uk):
+
+1. **Submit websites** at `/admin/scraper/websites`: paste URLs, upload a CSV, or import a
+   provider's client list (only for a provider with an *allowed* policy and a written agreement
+   reference).
+2. **Watch the run** at `/admin/scraper/jobs`. Each website goes through six stages: analyse,
+   discover, business, offers, match, dedupe.
+3. **Review** at `/admin/scraper/candidates`.
+   - Compare the extracted offer with the source excerpts and the confidence breakdown.
+   - Then edit, approve (unverified or admin-verified), reject, merge, or send it to the business
+     to confirm.
+   - Branches that couldn't be matched automatically wait in the **Business matches** tab.
+4. **Businesses** see offers found on their website in their dashboard. Confirming or editing an
+   imported offer makes it theirs: from then on the robot never changes it.
+5. **Removal requests** (`/removal-request`) opt the domain out and unpublish its imported offers
+   immediately. Acknowledge them at `/admin/scraper/policies`.
+
+**Safety controls, all enforced in code:**
+
+- **Pages it will fetch:**
+  - A fixed never-crawl list covering marketplaces, search engines, maps and social networks.
+  - Authorised domains only; domains the robot merely finds linked wait for an admin.
+  - robots.txt, `X-Robots-Tag` and meta robots are respected.
+- **How it fetches:**
+  - One request every 2s per domain and 50 pages per website by default.
+  - SSRF protection with DNS pinning, and at most 5 redirects.
+  - Responses capped at 2 MB and a 20:1 compression ratio.
+  - One fixed User-Agent (`TruOffersBot/1.0 (+<SITE_URL>/bot)`); logins, CAPTCHAs and rate limits
+    are never bypassed.
+- **What happens to results:**
+  - Provider-hosted sites are held until that provider has an allowed policy.
+  - AI extraction stays off until enabled in `/admin/scraper/settings` *and* `ANTHROPIC_API_KEY` is
+    set.
+
+**Stopping it:**
+
+- **Emergency stop** (`/admin/scraper/jobs`) pauses every queue and aborts in-flight requests.
+  Nothing resumes until an admin presses Resume.
+- **Pausing a domain or an adapter** parks its jobs instead of failing them.
+- Every admin action is written to the audit log (`/admin/scraper/audit`).
+
+**Tests and the end-to-end check.** None of these contact a real website; they use fictional
+`*.test` fixture sites.
+
+```bash
+cd backend && npm test                  # unit + integration + in-process end-to-end (needs Mongo + Redis)
+scripts/e2e-phase1.sh                   # full Docker stack on an isolated network, driven over HTTP
+```
+
 ## Not yet built
 
 Honest gaps against the blueprint, so nobody plans around something that isn't there:
@@ -111,8 +178,9 @@ Honest gaps against the blueprint, so nobody plans around something that isn't t
 - **Admin tooling (§14.1)** — duplicate-listing detection/merge, complaint handling, blog/category
   CMS, and the email/SMS/push campaign manager are not built. Claim + offer moderation queues,
   plans, users and the dashboards *are*.
-- **`audit_logs` and `support_tickets` (§11)** — these collections don't exist. Support runs over
-  email for now.
+- **`support_tickets` (§11)** — this collection doesn't exist; support runs over email for now.
+  An audit log exists for the website import robot's admin actions (`adminauditlogs`), but not
+  yet for the rest of the admin area.
 - **Foodbell deep integration (§27)** — only the hooks exist (`isFoodbellClient`, the verified
   badge, tracked order links). Menu import and dashboard publishing need a real Foodbell API.
 
@@ -142,7 +210,8 @@ Until configured, the buttons show a "not configured" notice rather than failing
 - **Background jobs** (§22): cron expires ended offers every 10 min, reconciles
   `activeOfferCount` hourly, charges promotion daily rates hourly (deduped to once per 24h),
   and syncs Google reviews nightly (batched to respect Places API quotas).
-- **Ops**: `GET /api/health` (DB state + uptime), graceful shutdown hooks, `.env.example` files.
+- **Ops**: `GET /api/health` (DB state, Redis and scraper worker status, uptime — only the DB affects
+  `status`), graceful shutdown hooks, `.env.example` files.
 - **SEO** (§17.2): `sitemap.xml` (static + town + business pages), `robots.txt` (dashboards
   disallowed), OpenGraph metadata with title template, schema.org Restaurant/Offer JSON-LD on
   business profiles.
@@ -170,9 +239,15 @@ The split is deliberate: production secrets exist **only** on the VPS, never on 
 
 # Deploying to the Ubuntu VPS
 
-The whole stack runs as four containers: **Caddy** (TLS + reverse proxy) → **web** (Next.js) and
-**api** (NestJS) → **mongo**. Caddy serves the site and proxies `/api/*` to the backend on the same
-origin, so there are no CORS preflights in production.
+The whole stack runs as six containers:
+
+- **caddy**: TLS and reverse proxy. It serves the site and proxies `/api/*` to the backend on the
+  same origin, so there are no CORS preflights in production.
+- **web**: Next.js.
+- **api**: NestJS.
+- **mongo**: the database.
+- **redis**: the website import robot's job queue.
+- **worker**: the robot's crawler. It uses the api image with a different entrypoint.
 
 **The VPS never compiles anything.** Images are built on a machine with real RAM (your Mac or
 GitHub Actions) and published to GHCR; the VPS only pulls and runs them. A 1GB VPS cannot run
@@ -293,8 +368,13 @@ images on GitHub's native amd64 runners for free. Set the repo variable `SITE_UR
 cd /srv/truoffers
 ./deploy.sh --no-git-pull            # nothing to git pull on a fresh clone
 
-docker compose exec api npm run seed:prod   # ONCE, first setup only
+docker compose exec api npm run seed:prod                # ONCE, first setup only
+docker compose exec api npm run migrate:scraper:prod     # website import robot indexes (idempotent)
 ```
+
+> **Upgrading an existing database?** Run only the migration, never the seed. If two listings share
+> a postcode and name, the migration lists them and stops. Merge or rename them, or rerun with
+> `-- --skip-duplicates` to leave the newer listing unindexed until you do.
 
 > **Careful:** `seed:prod` wipes and recreates the seeded collections. Never run it against a
 > database holding real customer data.
@@ -349,6 +429,8 @@ docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups
 | Mongo shell       | `docker compose exec mongo mongosh truoffers`        |
 | Stop everything   | `docker compose down` (data survives in volumes)     |
 | Health            | `curl https://truoffers.co.uk/api/health`            |
+| Robot worker logs | `docker compose logs -f worker` (JSON lines: runId, jobId, domain) |
+| Stop the robot    | Emergency stop in `/admin/scraper/jobs`, or `docker compose stop worker` |
 
 ### Troubleshooting
 
@@ -373,7 +455,8 @@ docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups
   and `.env` (VPS — real secrets, never committed). Production secrets never touch your laptop.
 - **Mongo publishes no ports**, by design. There's nothing to tunnel to from your laptop — use
   `docker compose exec mongo mongosh truoffers` on the box instead.
-- **Sizing**: the prebuilt containers run in roughly 400-600MB, so 1GB + 2GB swap is workable.
+- **Sizing**: the prebuilt containers run in roughly 400-600MB, plus Redis (capped at 96MB) and the
+  robot worker (capped at 256MB), so 1GB + 2GB swap is workable but tight.
   Nothing compiles on the VPS — that's the whole point of the registry flow. Don't be tempted to
   add a `build:` section back into `docker-compose.yml`; a 1GB box cannot run `tsc`/`next build`.
 - **Cron jobs run in-process** (`@nestjs/schedule`) inside the always-on `api` container — offer
