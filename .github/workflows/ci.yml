@@ -50,3 +50,13 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+
+  # Builds the api, worker and web images and drives the scraper flow against fixture websites on an
+  # isolated Docker network (scripts/e2e-phase1.sh). No real website is contacted.
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/e2e-phase1.sh

@@ -148,7 +148,7 @@ describe('scraping pipeline, end to end', () => {
     expect(stages.every((s) => s.output === undefined && s.activeKey === undefined)).toBe(true);
 
     const stored = await sites.findById(site._id).lean();
-    expect(stored).toMatchObject({ adapterId: 'generic-jsonld', adapterVersion: '1.0.0', failureCount: 0 });
+    expect(stored).toMatchObject({ adapterId: 'generic-jsonld', adapterVersion: '1.0.0', failureCount: 0, robots: { status: 'ok' } });
     expect(stored!.businesses).toHaveLength(1);
     expect(stored!.businesses[0]).toMatchObject({
       branchPath: '/',

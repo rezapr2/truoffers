@@ -286,12 +286,15 @@ describe('scraper API, end to end', () => {
         displayLabel: current!.displayLabel,
         redemptionType: current!.redemptionType,
         terms: 'Collection and delivery',
+        endsAt: '2030-09-30',
       })
       .expect(200);
     expect(await offers.findById(adminVerifiedOfferId).lean()).toMatchObject({
       managedBy: OfferManagedBy.MERCHANT,
       verification: OfferVerification.ADMIN_VERIFIED,
       status: OfferStatus.ACTIVE,
+      // A calendar day ends at 23:59:59.999 UK time: in September that is BST, one hour ahead of UTC.
+      endsAt: new Date('2030-09-30T22:59:59.999Z'),
     });
     // Imported offers don't count towards the free plan's two live offers.
     const manage = await request(http).get(`/api/businesses/${listing._id}/offers/manage`).set(as('merchant')).expect(200);

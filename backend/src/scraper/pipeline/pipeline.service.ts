@@ -245,7 +245,18 @@ export class PipelineService {
     const selection = await this.registry.select(wctx);
     const adapter = selection.adapter;
     await ctx.log(`Selected ${adapter.id}@${adapter.version}`, { considered: selection.considered });
-    await this.sites.updateOne({ _id: site._id }, { $set: { adapterId: adapter.id, adapterVersion: adapter.version } });
+    const robots = await this.robots.cachedRulesFor(new URL(homepageUrl));
+    const crawlDelayMs = robots ? this.robots.crawlDelayMs(robots) : undefined;
+    await this.sites.updateOne(
+      { _id: site._id },
+      {
+        $set: {
+          adapterId: adapter.id,
+          adapterVersion: adapter.version,
+          ...(robots ? { robots: { status: robots.status, crawlDelaySec: crawlDelayMs ? crawlDelayMs / 1000 : undefined, fetchedAt: robots.fetchedAt } } : {}),
+        },
+      },
+    );
 
     await ctx.progress(1, 3, 'Discovering pages');
     const discovery = await adapter.discover(wctx);

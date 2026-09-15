@@ -30,7 +30,11 @@ export class AppleLoginDto {
 }
 
 // Tighter limit on credential endpoints to slow brute-force attempts
-@Throttle({ default: { limit: 10, ttl: 60_000 } })
+const CREDENTIAL_LIMIT = { default: { limit: 10, ttl: 60_000 } };
+// Read-only session endpoints run on every page load, so they keep the normal site-wide limit.
+const SESSION_LIMIT = { default: { limit: 100, ttl: 60_000 } };
+
+@Throttle(CREDENTIAL_LIMIT)
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -51,6 +55,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(SESSION_LIMIT)
   @Get('providers')
   providers() {
     return {
@@ -73,6 +78,7 @@ export class AuthController {
     return this.authService.oauthLogin(profile, dto.role);
   }
 
+  @Throttle(SESSION_LIMIT)
   @Get('me')
   me(@CurrentUser('userId') userId: string) {
     return this.authService.me(userId);

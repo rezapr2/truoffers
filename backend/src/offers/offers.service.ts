@@ -25,6 +25,7 @@ import { ActorContext } from '../common/actor-context';
 import { recountActiveOffers } from '../common/offer-counts';
 import { PUBLIC_OFFER_PROJECTION, withImportNotice } from '../common/public-offer';
 import { OfferOrigin } from '../common/scraper.enums';
+import { isIsoDate, londonEndOfDay, londonStartOfDay } from '../scraper/extraction/london-time';
 import { fingerprintOfPublishedOffer } from '../scraper/lifecycle/offer-mapping';
 import { removeAsMerchant, takeOverAsMerchant } from '../scraper/lifecycle/merchant-management';
 import { CreateOfferDto, RedeemOfferDto, UpdateOfferDto } from './offers.dto';
@@ -36,6 +37,16 @@ function isDuplicateOffer(err: unknown): boolean {
 }
 
 const DUPLICATE_OFFER_MESSAGE = 'An identical offer is already live for this business';
+
+// A bare calendar day means the whole day in the UK: starts at 00:00 and ends at 23:59:59 London time.
+function offerStart(value?: string): Date | undefined {
+  if (!value) return undefined;
+  return isIsoDate(value) ? londonStartOfDay(value) : new Date(value);
+}
+function offerEnd(value?: string): Date | undefined {
+  if (!value) return undefined;
+  return isIsoDate(value) ? londonEndOfDay(value) : new Date(value);
+}
 
 @Injectable()
 export class OffersService {
@@ -107,12 +118,12 @@ export class OffersService {
       VerificationStatus.FRANCHISE_VERIFIED,
     ].includes(business.verificationStatus);
 
-    const endsAt = dto.endsAt ? new Date(dto.endsAt) : undefined;
+    const endsAt = offerEnd(dto.endsAt);
     const offer = await this.offerModel
       .create({
         ...dto,
         businessId: business._id,
-        startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
+        startsAt: offerStart(dto.startsAt),
         endsAt,
         status: autoApprove ? OfferStatus.ACTIVE : OfferStatus.PENDING,
         // Fingerprinted like imported offers, so a later scrape of the same offer is never duplicated.
@@ -139,8 +150,8 @@ export class OffersService {
     if (offer.status === OfferStatus.REMOVED) throw new BadRequestException('This offer was removed');
     Object.assign(offer, {
       ...dto,
-      startsAt: dto.startsAt ? new Date(dto.startsAt) : offer.startsAt,
-      endsAt: dto.endsAt ? new Date(dto.endsAt) : offer.endsAt,
+      startsAt: offerStart(dto.startsAt) ?? offer.startsAt,
+      endsAt: offerEnd(dto.endsAt) ?? offer.endsAt,
     });
     // Editing an imported offer makes it the merchant's: future scrapes only flag source changes.
     takeOverAsMerchant(offer, ActorContext.current());
