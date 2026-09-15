@@ -23,6 +23,7 @@ async function main() {
     // Scraper collections
     'scrapedwebsites', 'extractedoffercandidates', 'importjobs', 'providerpolicies', 'domainoptouts',
     'robotscaches', 'domaincrawlconfigs', 'adminauditlogs', 'scraperadapters', 'scrapersettings',
+    'websitefingerprints', 'authorisednetworks',
   ];
   for (const c of collections) {
     await db.collection(c).deleteMany({});

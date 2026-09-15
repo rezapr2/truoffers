@@ -1,5 +1,6 @@
 /**
- * Scraper Phase 1 migration. Idempotent; run once per environment before starting the worker.
+ * Website import robot migration (phases 1 and 2). Idempotent; run on every deploy that changes the robot,
+ * before starting the worker.
  *
  *   npm run migrate:scraper                                  (local, ts-node)
  *   docker compose exec api npm run migrate:scraper:prod     (production image)
@@ -10,7 +11,8 @@
  *    each pair is left without a normalised name (so it can't collide) until an admin merges them.
  * 3. Backfills Offer provenance defaults, content fingerprints and dedupe keys; identical live offers
  *    for one business keep a key only on the oldest and are reported.
- * 4. Creates the scraper indexes, registers the built-in adapters and the settings document.
+ * 4. Creates the scraper indexes (including Phase 2 fingerprints, authorised networks and the one-current-
+ *    version-per-adapter index), registers the code adapters and the settings document.
  */
 import 'reflect-metadata';
 import mongoose, { Model, Schema, Types } from 'mongoose';
@@ -32,6 +34,7 @@ import { ScrapedWebsite, ScrapedWebsiteSchema } from '../schemas/scraped-website
 import { ScraperAdapter, ScraperAdapterSchema } from '../schemas/scraper-adapter.schema';
 import { SCRAPER_SETTINGS_KEY, ScraperSettings, ScraperSettingsSchema } from '../schemas/scraper-settings.schema';
 import { WebsiteFingerprint, WebsiteFingerprintSchema } from '../schemas/website-fingerprint.schema';
+import { AuthorisedNetwork, AuthorisedNetworkSchema } from '../schemas/authorised-network.schema';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/truoffers';
 
@@ -150,10 +153,14 @@ async function main() {
     site: model(ScrapedWebsite.name, ScrapedWebsiteSchema),
     adapter: model(ScraperAdapter.name, ScraperAdapterSchema),
     settings: model(ScraperSettings.name, ScraperSettingsSchema),
+    fingerprint: model(WebsiteFingerprint.name, WebsiteFingerprintSchema),
+    network: model(AuthorisedNetwork.name, AuthorisedNetworkSchema),
   };
 
   const businesses = await migrateBusinesses(skipDuplicates);
   const offers = await migrateOffers();
+  // Code adapters are marked current before the one-current-version-per-key index is built.
+  await new AdapterRegistry(models.adapter, models.fingerprint).ensureRegistered();
 
   // createIndexes only adds what the schemas declare; it never drops an existing index.
   for (const [name, m] of Object.entries(models)) {
@@ -161,10 +168,9 @@ async function main() {
     console.log(`Indexes ready: ${name}`);
   }
 
-  await new AdapterRegistry(models.adapter, model(WebsiteFingerprint.name, WebsiteFingerprintSchema)).ensureRegistered();
   await models.settings.updateOne({ key: SCRAPER_SETTINGS_KEY }, { $setOnInsert: { key: SCRAPER_SETTINGS_KEY } }, { upsert: true });
 
-  console.log('\nScraper Phase 1 migration complete:', JSON.stringify({ ...businesses, ...offers }));
+  console.log('\nScraper migration complete:', JSON.stringify({ ...businesses, ...offers }));
   await mongoose.disconnect();
 }
 

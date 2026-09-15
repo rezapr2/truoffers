@@ -32,7 +32,7 @@ echo "==> Building and starting the stack"
 
 echo "==> Seeding demo data and running the scraper migration"
 "${COMPOSE[@]}" exec -T api node dist/seed/seed.js > /dev/null
-"${COMPOSE[@]}" exec -T api node dist/scripts/migrate-scraper-phase1.js
+"${COMPOSE[@]}" exec -T api node dist/scripts/migrate-scraper.js
 
 echo "==> Driving the Phase 1 flow"
 "${COMPOSE[@]}" run --rm e2e
