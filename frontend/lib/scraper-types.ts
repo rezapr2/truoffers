@@ -313,3 +313,184 @@ export interface AdapterStats {
   candidates: Partial<Record<CandidateStatus, number>>;
   approvalRate: number | null;
 }
+
+// ---------- Phase 2: fingerprints, selector adapters, networks ----------
+
+export type MarkerCategory =
+  | 'generator'
+  | 'footer_attribution'
+  | 'framework'
+  | 'script'
+  | 'stylesheet'
+  | 'asset_host'
+  | 'css_class'
+  | 'element_id'
+  | 'dom_skeleton'
+  | 'jsonld_shape'
+  | 'route_pattern'
+  | 'api_endpoint';
+
+export type MatchCategory = 'exact_match' | 'high_confidence_match' | 'possible_match' | 'no_match';
+
+export interface FingerprintMarker {
+  category: MarkerCategory;
+  value: string;
+  weight: number;
+  required: boolean;
+  negative: boolean;
+}
+
+export interface Thresholds {
+  exact: number;
+  high: number;
+  possible: number;
+}
+
+export interface FieldSelectorConfig {
+  selector: string;
+  source?: 'text' | 'attribute';
+  attribute?: string;
+  parser?: string;
+}
+
+export interface SelectorConfig {
+  pages?: { offers?: string[]; business?: string[] };
+  business?: { container?: string } & Partial<Record<'name' | 'telephone' | 'address' | 'postcode' | 'orderUrl', FieldSelectorConfig>>;
+  offers: {
+    container: string;
+    fields: { title: FieldSelectorConfig } & Partial<Record<'description' | 'terms' | 'promoCode' | 'minimumOrder' | 'expiry' | 'orderUrl', FieldSelectorConfig>>;
+  };
+}
+
+export interface Fingerprint {
+  _id: string;
+  name: string;
+  key: string;
+  version: number;
+  active: boolean;
+  providerRef?: { _id: string; name: string; status: PolicyStatus } | string | null;
+  exampleDomains: string[];
+  markers: FingerprintMarker[];
+  categoryWeights: Partial<Record<MarkerCategory, number>>;
+  thresholds: Thresholds;
+  examples: { domain: string; pages: string[]; markers: number; offersFound: { title: string; excerpt: string; pageUrl: string }[]; error?: string }[];
+  suggestedConfig?: { config: SelectorConfig | null; notes: string[] };
+  analysedAt?: string;
+  lastJobRef?: string;
+  updatedAt: string;
+  markerCount?: number;
+  matches?: Partial<Record<MatchCategory, number>>;
+  adapters?: { key: string; name: string; version: string; status: string }[];
+}
+
+export interface FingerprintDetail {
+  fingerprint: Fingerprint;
+  defaults: { categoryWeights: Record<MarkerCategory, number>; thresholds: Thresholds };
+  matchedSites: { _id: string; domain: string; authorisationStatus: AuthorisationStatus; matchScore?: number; matchCategory?: MatchCategory; adapterId?: string; adapterVersion?: string }[];
+  adapters: { _id: string; key: string; name: string; version: string; status: string; isCurrent: boolean }[];
+}
+
+export interface AdapterTestOffer {
+  title: string;
+  offerType: string;
+  promoCode?: string;
+  minimumOrder?: number;
+  endDate?: string;
+  pageUrl?: string;
+  excerpt: string;
+  fields: Record<string, { text: string; method: string }>;
+  valid: boolean;
+  errors: string[];
+  flags: string[];
+}
+
+export interface AdapterTestResults {
+  ranAt: string;
+  jobId: string;
+  summary: { domains: number; handled: number; offers: number };
+  domains: {
+    domain: string;
+    canHandle: boolean;
+    templateScore?: number;
+    reasons: string[];
+    pages?: string[];
+    offers: AdapterTestOffer[];
+    businesses: { branchPath: string; name?: string; telephone?: string; address?: string; postcode?: string }[];
+    errors: string[];
+  }[];
+}
+
+export interface AdapterVersion {
+  _id: string;
+  key: string;
+  name: string;
+  type: string;
+  version: string;
+  status: 'active' | 'draft' | 'testing' | 'approved' | 'paused' | 'withdrawn';
+  isCurrent: boolean;
+  priority: number;
+  fingerprintRef?: { _id: string; name: string; key: string } | string | null;
+  exampleDomains: string[];
+  configuration: SelectorConfig | Record<string, never>;
+  testResults?: AdapterTestResults;
+  testedAt?: string;
+  lastTestJobRef?: string;
+  basedOnVersion?: string;
+  approvedAt?: string;
+  approvedBy?: { name: string } | null;
+  withdrawnAt?: string;
+  withdrawnReason?: string;
+  pausedReason?: string;
+  createdAt: string;
+  candidates?: Partial<Record<CandidateStatus, number>>;
+  approvalRate?: number | null;
+}
+
+export interface AdapterListItem extends AdapterVersion {
+  versions: number;
+  latestVersion: string;
+  websites: number;
+}
+
+export interface AdapterDetail {
+  key: string;
+  versions: AdapterVersion[];
+  affectedWebsites: { _id: string; domain: string; adapterVersion?: string; authorisationStatus: AuthorisationStatus; lastSuccessfulCheckAt?: string; matchCategory?: MatchCategory; matchScore?: number }[];
+}
+
+export interface AuthorisedNetwork {
+  _id: string;
+  name: string;
+  sitemapUrls: string[];
+  basis: 'written_agreement' | 'terms_review';
+  agreementReference?: string;
+  basisNotes?: string;
+  providerRef?: { _id: string; name: string; status: PolicyStatus } | null;
+  active: boolean;
+  lastDiscoveredAt?: string;
+  domainsRegistered: number;
+  websites: Partial<Record<AuthorisationStatus, number>>;
+}
+
+export interface NetworkWebsite {
+  _id: string;
+  domain: string;
+  authorisationStatus: AuthorisationStatus;
+  authorisationSource: string;
+  providerRef?: { _id: string; name: string; status: PolicyStatus } | null;
+  networkRef?: { _id: string; name: string } | null;
+  fingerprintRef?: { _id: string; name: string; key: string } | null;
+  matchScore?: number;
+  matchCategory?: MatchCategory;
+  fingerprintMatchedAt?: string;
+  adapterId?: string;
+  adapterVersion?: string;
+  lastSuccessfulCheckAt?: string;
+  lastError?: string;
+  failureCount: number;
+  paused: boolean;
+}
+
+export interface NetworkView extends Paged<NetworkWebsite> {
+  groups: { key: string | null; count: number }[];
+}

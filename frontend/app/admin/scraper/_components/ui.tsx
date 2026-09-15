@@ -59,6 +59,13 @@ const STATUS_TONES: Record<string, keyof typeof TONES> = {
   review_recommended: 'info',
   manual_investigation: 'warn',
   unverified: 'neutral',
+  draft: 'neutral',
+  testing: 'info',
+  withdrawn: 'bad',
+  exact_match: 'good',
+  high_confidence_match: 'good',
+  possible_match: 'warn',
+  no_match: 'neutral',
   admin_verified: 'good',
   merchant_verified: 'good',
 };
