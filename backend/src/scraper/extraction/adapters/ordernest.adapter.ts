@@ -10,6 +10,20 @@ import { JsonLdAdapter } from './jsonld.adapter';
 
 export const PROVIDER_ADAPTER_PRIORITY = 400;
 
+const normalised = (text = '') => collapse(text).toLowerCase();
+
+// A fallback extraction is the widget's promotion if it carries the same fingerprint or promo code, or is the
+// same kind of offer and quotes the widget's headline.
+function describesSamePromotion(fallback: OfferExtraction, promo: OfferExtraction): boolean {
+  const a = fallback.offer;
+  const b = promo.offer;
+  if (a.contentFingerprint === b.contentFingerprint) return true;
+  if (a.promoCode && a.promoCode === b.promoCode) return true;
+  if (a.offerType !== b.offerType) return false;
+  const headline = normalised(b.title);
+  return normalised(a.title).includes(headline) || a.sources.some((s) => normalised(s.excerpt).includes(headline));
+}
+
 /**
  * Code adapter for OrderNest, a (fictional) ordering platform whose client sites share one template.
  * It reads OrderNest's promotion widgets directly and falls back to JSON-LD and visible text for the rest.
@@ -40,8 +54,10 @@ export class OrderNestAdapter extends GenericHtmlAdapter {
   extractFromPage(page: LoadedPage, roles: PageRole[], ctx: Pick<WebsiteContext, 'checkedAt'>): PageExtraction {
     const base = this.structured.extractFromPage(page, roles, ctx);
     const promos = this.promotionsOn(page, roles, ctx);
-    const known = new Set(promos.map((p) => p.offer.contentFingerprint));
-    return { businesses: base.businesses, offers: [...promos, ...base.offers.filter((o) => !known.has(o.offer.contentFingerprint))] };
+    // The fallback extractors read the same widgets as visible text, with different title wording, so a
+    // content fingerprint alone doesn't recognise them as the same offer.
+    const fallback = base.offers.filter((o) => !promos.some((promo) => describesSamePromotion(o, promo)));
+    return { businesses: base.businesses, offers: [...promos, ...fallback] };
   }
 
   private promotionsOn(page: LoadedPage, roles: PageRole[], ctx: Pick<WebsiteContext, 'checkedAt'>): OfferExtraction[] {

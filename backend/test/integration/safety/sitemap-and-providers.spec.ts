@@ -91,6 +91,18 @@ describe('provider detection', () => {
     expect(await detector.detectBeforeFetch('bella.test')).toBeNull();
   });
 
+  it('decides on the policy as it is now, not as cached, so an admin’s change applies to the next run', async () => {
+    expect(await detector.detectBeforeFetch('bella.ordernest.test')).toMatchObject({ status: ProviderPolicyStatus.UNKNOWN });
+    // Another process (the API) allows the provider while this detector's pattern cache is still warm.
+    await models.policies.updateOne({ name: 'OrderNest' }, { $set: { status: ProviderPolicyStatus.ALLOWED, basis: 'written_agreement', agreementReference: 'ON-1' } });
+    expect(await detector.detectBeforeFetch('bella.ordernest.test')).toMatchObject({ status: ProviderPolicyStatus.ALLOWED });
+    const $ = cheerio.load('<html><head><meta name="generator" content="OrderNest Sites 4.2"></head><body></body></html>');
+    expect(await detector.detectFromPage($)).toMatchObject({ status: ProviderPolicyStatus.ALLOWED });
+
+    await models.policies.deleteOne({ name: 'OrderNest' });
+    expect(await detector.detectBeforeFetch('bella.ordernest.test')).toBeNull();
+  });
+
   it('follows CNAME chains to the provider', async () => {
     cnames['order.kebab-king.test'] = ['kebab-king.sites.ordernest-cdn.test'];
     expect(await detector.detectBeforeFetch('order.kebab-king.test')).toMatchObject({

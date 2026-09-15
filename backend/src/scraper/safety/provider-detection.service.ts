@@ -82,13 +82,15 @@ export class ProviderDetectionService {
     const policies = await this.policies();
     for (const policy of policies) {
       const suffix = policy.detection?.hostSuffixes?.find((s) => hostMatchesDomain(hostname, s));
-      if (suffix) return this.match(policy, [`host suffix ${suffix}`]);
+      const found = suffix && (await this.match(policy, [`host suffix ${suffix}`]));
+      if (found) return found;
     }
     const chain = await this.cnameChain(hostname);
     for (const policy of policies) {
       for (const target of chain) {
         const suffix = policy.detection?.cnameSuffixes?.find((s) => hostMatchesDomain(target, s));
-        if (suffix) return this.match(policy, [`CNAME ${target}`]);
+        const found = suffix && (await this.match(policy, [`CNAME ${target}`]));
+        if (found) return found;
       }
     }
     return null;
@@ -117,7 +119,8 @@ export class ProviderDetectionService {
       for (const host of detection.assetHosts ?? []) {
         if (host && assetHosts.some((h) => hostMatchesDomain(h, host))) signals.push(`assets from ${host}`);
       }
-      if (signals.length > 0) return this.match(policy, signals);
+      const found = signals.length > 0 && (await this.match(policy, signals));
+      if (found) return found;
     }
 
     const name = this.orderingAttribution(footerText);
@@ -130,8 +133,18 @@ export class ProviderDetectionService {
     this.cache = undefined;
   }
 
-  private match(policy: PolicyLean, signals: string[]): ProviderMatch {
-    return { policyId: policy._id, name: policy.name, status: policy.status, signals };
+  /**
+   * Detection patterns come from a cache up to 30s old, but the decision uses the policy as it is now. The API
+   * and worker are separate processes, so without this a run started just after an admin allowed a provider
+   * would still see "unknown" and hold the website again, undoing the admin's decision.
+   */
+  private async match(policy: PolicyLean, signals: string[]): Promise<ProviderMatch | null> {
+    const current = await this.model.findById(policy._id).select('name status').lean<Pick<PolicyLean, '_id' | 'name' | 'status'>>();
+    if (!current) {
+      this.invalidate();
+      return null;
+    }
+    return { policyId: current._id, name: current.name, status: current.status, signals };
   }
 
   private async policies(): Promise<PolicyLean[]> {

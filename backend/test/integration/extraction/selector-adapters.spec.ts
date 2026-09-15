@@ -149,6 +149,8 @@ describe('selector adapters, the suggestion engine and adapter precedence', () =
     const garlic = offers.find((o) => /garlic bread/i.test(o.offer.title))!.offer;
     expect(garlic).toMatchObject({ offerType: 'free_item', promoCode: 'GARLIC30', adapterId: 'provider-ordernest' });
     expect(garlic.evidence.title.method).toBe('provider:provider-ordernest@1.0.0:title');
+    // The same widgets read as visible text by the fallback extractors aren't reported a second time.
+    expect(offers.map((o) => o.offer.title)).toEqual(['25% off pizzas on Mondays', 'Free garlic bread over £30']);
     expect((await adapter.canHandle(contextFor('saffron-spice.test'))).canHandle).toBe(false);
   });
 
