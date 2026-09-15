@@ -135,7 +135,7 @@ export function findFreeItem(text: string): TextMatch<string> | null {
     m[1].trim(),
   );
   const free = first(
-    /\bfree\s+((?:(?:can|bottle|portion|bag|side|serving|tub|pot|slice|box)\s+of\s+)?(?!(?:delivery|collection|wi-?fi|parking|from|range|to|of|for|with|on|when|and|or|entry|gift|trial|shipping)\b)[a-z0-9][a-z0-9' .&-]{1,40}?)(?=\s+(?:with|on|when|for|if|worth|every|per)\b|[.!,;:()]|$)/i,
+    /\bfree\s+((?:(?:can|bottle|portion|bag|side|serving|tub|pot|slice|box)\s+of\s+)?(?!(?:delivery|collection|wi-?fi|parking|from|range|to|of|for|with|on|when|and|or|entry|gift|trial|shipping)\b)[a-z0-9][a-z0-9' .&-]{1,40}?)(?=\s+(?:with|on|when|for|if|worth|every|per|over|above)\b|[.!,;:()]|$)/i,
     text,
     (m) => {
       const before = text.slice(Math.max(0, (m.index ?? 0) - 20), m.index);

@@ -142,6 +142,8 @@ export class PipelineService {
         return this.matchBusinesses(ctx);
       case ImportJobType.DEDUPLICATE_OFFERS:
         return this.deduplicate(ctx);
+      default:
+        throw new StageAbortedError(`${type} is not a website import stage`);
     }
   }
 
@@ -192,8 +194,8 @@ export class PipelineService {
     };
   }
 
-  private adapterFor(analyse: Record<string, any> | undefined): BuiltinAdapter {
-    const adapter = analyse?.adapterId ? this.registry.byId(analyse.adapterId) : undefined;
+  private async adapterFor(analyse: Record<string, any> | undefined): Promise<BuiltinAdapter> {
+    const adapter = analyse?.adapterId ? await this.registry.resolve(analyse.adapterId, analyse.adapterVersion) : undefined;
     if (!adapter) throw new StageAbortedError('The adapter chosen for this run is no longer available');
     return adapter;
   }
@@ -365,7 +367,7 @@ export class PipelineService {
     const outputs = await this.outputs(ctx);
     const analyse = outputs[ImportJobType.ANALYSE_SEED_WEBSITE] as AnalyseOutput | undefined;
     const plan = (outputs[ImportJobType.DISCOVER_OFFER_PAGES]?.plan ?? analyse?.plan ?? []) as DiscoveredPage[];
-    const adapter = this.adapterFor(analyse);
+    const adapter = await this.adapterFor(analyse);
     await this.gate.assertSiteCrawlable(site.domain, adapter.id);
 
     const partial = (ctx.job.output?.partial ?? {}) as Partial<PageExtractionOutput>;

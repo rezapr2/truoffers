@@ -38,7 +38,22 @@ export enum ImportJobType {
   EXTRACT_OFFERS = 'extract_offers',
   MATCH_BUSINESS = 'match_business',
   DEDUPLICATE_OFFERS = 'deduplicate_offers',
+  // Phase 2
+  DISCOVER_AUTHORISED_DOMAINS = 'discover_authorised_domains',
+  CREATE_FINGERPRINT = 'create_fingerprint',
+  MATCH_FINGERPRINT = 'match_fingerprint',
+  TEST_ADAPTER = 'test_adapter',
 }
+
+// The six stages of a website import run, in order.
+export const IMPORT_RUN_STAGES = [
+  ImportJobType.ANALYSE_SEED_WEBSITE,
+  ImportJobType.DISCOVER_OFFER_PAGES,
+  ImportJobType.EXTRACT_BUSINESS,
+  ImportJobType.EXTRACT_OFFERS,
+  ImportJobType.MATCH_BUSINESS,
+  ImportJobType.DEDUPLICATE_OFFERS,
+];
 
 export enum ImportJobStatus {
   QUEUED = 'queued',
@@ -100,6 +115,8 @@ export enum AuthorisationSource {
   PROVIDER_CLIENT_LIST = 'provider_client_list',
   DISCOVERED_LINK = 'discovered_link',
   DISCOVERED_APPROVED = 'discovered_approved',
+  // Listed in the sitemap of an authorised network (e.g. a provider's client directory).
+  NETWORK_SITEMAP = 'network_sitemap',
 }
 
 export enum ProviderPolicyStatus {
@@ -138,11 +155,46 @@ export const RESOLVED_BRANCH_STATUSES = [BranchMatchStatus.AUTO_MATCHED, BranchM
 export enum ScraperAdapterType {
   BUILTIN_JSONLD = 'builtin_jsonld',
   BUILTIN_HTML = 'builtin_html',
+  // Admin-built CSS selector configuration tied to a website fingerprint.
+  SELECTOR = 'selector',
+  // Code adapter written for one ordering provider's templates.
+  PROVIDER = 'provider',
 }
 
 export enum ScraperAdapterStatus {
+  // Code adapters (built-in, provider) run while active.
   ACTIVE = 'active',
+  // Selector adapter lifecycle: draft -> testing -> approved; any runnable adapter can be paused;
+  // a rolled-back version is withdrawn and never runs again.
+  DRAFT = 'draft',
+  TESTING = 'testing',
+  APPROVED = 'approved',
   PAUSED = 'paused',
+  WITHDRAWN = 'withdrawn',
+}
+
+export const RUNNABLE_ADAPTER_STATUSES = [ScraperAdapterStatus.ACTIVE, ScraperAdapterStatus.APPROVED, ScraperAdapterStatus.TESTING];
+
+export enum MarkerCategory {
+  GENERATOR = 'generator',
+  FOOTER_ATTRIBUTION = 'footer_attribution',
+  FRAMEWORK = 'framework',
+  SCRIPT = 'script',
+  STYLESHEET = 'stylesheet',
+  ASSET_HOST = 'asset_host',
+  CSS_CLASS = 'css_class',
+  ELEMENT_ID = 'element_id',
+  DOM_SKELETON = 'dom_skeleton',
+  JSONLD_SHAPE = 'jsonld_shape',
+  ROUTE_PATTERN = 'route_pattern',
+  API_ENDPOINT = 'api_endpoint',
+}
+
+export enum FingerprintMatchCategory {
+  EXACT = 'exact_match',
+  HIGH_CONFIDENCE = 'high_confidence_match',
+  POSSIBLE = 'possible_match',
+  NONE = 'no_match',
 }
 
 export enum ActorKind {
@@ -185,4 +237,19 @@ export enum AuditAction {
   SETTINGS_UPDATED = 'settings.updated',
   OFFER_MERCHANT_CONFIRMED = 'offer.merchant_confirmed',
   OFFER_REMOVED = 'offer.removed',
+  // Phase 2
+  FINGERPRINT_CREATED = 'fingerprint.created',
+  FINGERPRINT_UPDATED = 'fingerprint.updated',
+  FINGERPRINT_MATCH_REQUESTED = 'fingerprint.match_requested',
+  ADAPTER_CREATED = 'adapter.created',
+  ADAPTER_VERSION_CREATED = 'adapter.version_created',
+  ADAPTER_UPDATED = 'adapter.updated',
+  ADAPTER_TEST_REQUESTED = 'adapter.test_requested',
+  ADAPTER_APPROVED = 'adapter.approved',
+  ADAPTER_ROLLED_BACK = 'adapter.rolled_back',
+  ADAPTER_RERUN_REQUESTED = 'adapter.rerun_requested',
+  NETWORK_CREATED = 'network.created',
+  NETWORK_UPDATED = 'network.updated',
+  NETWORK_DISCOVERY_REQUESTED = 'network.discovery_requested',
+  WEBSITES_BULK_ACTION = 'websites.bulk_action',
 }

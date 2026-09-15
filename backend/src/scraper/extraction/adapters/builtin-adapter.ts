@@ -31,7 +31,13 @@ const BUSINESS_FIELDS = ['name', 'telephone', 'address', 'postcode', 'town', 'we
 
 // Where a better source for the same business field wins when pages disagree.
 const METHOD_RANK = (method = '') =>
-  method.startsWith('jsonld:') ? 3 : method === 'html:tel_link' || method === 'html:address_block' ? 2 : 1;
+  method.startsWith('selector:') || method.startsWith('provider:')
+    ? 4
+    : method.startsWith('jsonld:')
+      ? 3
+      : method === 'html:tel_link' || method === 'html:address_block'
+        ? 2
+        : 1;
 
 function mergeInto(target: ExtractedBusiness, incoming: ExtractedBusiness) {
   for (const field of BUSINESS_FIELDS) {

@@ -31,6 +31,7 @@ import { RobotsCache, RobotsCacheSchema } from '../schemas/robots-cache.schema';
 import { ScrapedWebsite, ScrapedWebsiteSchema } from '../schemas/scraped-website.schema';
 import { ScraperAdapter, ScraperAdapterSchema } from '../schemas/scraper-adapter.schema';
 import { SCRAPER_SETTINGS_KEY, ScraperSettings, ScraperSettingsSchema } from '../schemas/scraper-settings.schema';
+import { WebsiteFingerprint, WebsiteFingerprintSchema } from '../schemas/website-fingerprint.schema';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/truoffers';
 
@@ -160,7 +161,7 @@ async function main() {
     console.log(`Indexes ready: ${name}`);
   }
 
-  await new AdapterRegistry(models.adapter).ensureRegistered();
+  await new AdapterRegistry(models.adapter, model(WebsiteFingerprint.name, WebsiteFingerprintSchema)).ensureRegistered();
   await models.settings.updateOne({ key: SCRAPER_SETTINGS_KEY }, { $setOnInsert: { key: SCRAPER_SETTINGS_KEY } }, { upsert: true });
 
   console.log('\nScraper Phase 1 migration complete:', JSON.stringify({ ...businesses, ...offers }));

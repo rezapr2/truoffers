@@ -14,6 +14,8 @@ import { RobotsCache, RobotsCacheSchema } from '../../src/schemas/robots-cache.s
 import { ScrapedWebsite, ScrapedWebsiteSchema } from '../../src/schemas/scraped-website.schema';
 import { ScraperAdapter, ScraperAdapterSchema } from '../../src/schemas/scraper-adapter.schema';
 import { ScraperSettings, ScraperSettingsSchema } from '../../src/schemas/scraper-settings.schema';
+import { AuthorisedNetwork, AuthorisedNetworkSchema } from '../../src/schemas/authorised-network.schema';
+import { WebsiteFingerprint, WebsiteFingerprintSchema } from '../../src/schemas/website-fingerprint.schema';
 
 // No explicit type argument on mongoose.model: that overload makes tsc structurally compare the
 // Schema generics against each class, which never finishes.
@@ -36,6 +38,8 @@ export function testModels() {
     sites: model<ScrapedWebsite>(ScrapedWebsite.name, ScrapedWebsiteSchema),
     adapters: model<ScraperAdapter>(ScraperAdapter.name, ScraperAdapterSchema),
     settings: model<ScraperSettings>(ScraperSettings.name, ScraperSettingsSchema),
+    fingerprints: model<WebsiteFingerprint>(WebsiteFingerprint.name, WebsiteFingerprintSchema),
+    networks: model<AuthorisedNetwork>(AuthorisedNetwork.name, AuthorisedNetworkSchema),
   };
 }
 

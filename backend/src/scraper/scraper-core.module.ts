@@ -15,6 +15,8 @@ import { RobotsCache, RobotsCacheSchema } from '../schemas/robots-cache.schema';
 import { ScrapedWebsite, ScrapedWebsiteSchema } from '../schemas/scraped-website.schema';
 import { ScraperAdapter, ScraperAdapterSchema } from '../schemas/scraper-adapter.schema';
 import { ScraperSettings, ScraperSettingsSchema } from '../schemas/scraper-settings.schema';
+import { AuthorisedNetwork, AuthorisedNetworkSchema } from '../schemas/authorised-network.schema';
+import { WebsiteFingerprint, WebsiteFingerprintSchema } from '../schemas/website-fingerprint.schema';
 import { AuditService } from './audit/audit.service';
 import { RedisShutdown, redisClientProvider } from './infra/redis';
 import { ImportJobsService } from './queue/import-jobs.service';
@@ -37,6 +39,8 @@ export const SCRAPER_MODELS = MongooseModule.forFeature([
   { name: ScrapedWebsite.name, schema: ScrapedWebsiteSchema },
   { name: ScraperAdapter.name, schema: ScraperAdapterSchema },
   { name: ScraperSettings.name, schema: ScraperSettingsSchema },
+  { name: WebsiteFingerprint.name, schema: WebsiteFingerprintSchema },
+  { name: AuthorisedNetwork.name, schema: AuthorisedNetworkSchema },
 ]);
 
 // Shared by the API and the worker: models, Redis, queues, run control, settings and the audit log.

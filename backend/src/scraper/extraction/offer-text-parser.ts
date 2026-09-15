@@ -62,6 +62,14 @@ export function hasBenefit(text: string): boolean {
   return detectBenefits(collapse(text), true).length > 0;
 }
 
+// What an offer gives, independent of wording: "20% off all orders" and "Get 20% off online" share one.
+export function benefitSignature(text: string): string | null {
+  const [benefit] = detectBenefits(collapse(text), true);
+  if (!benefit) return null;
+  const f = benefit.fields;
+  return [benefit.offerType, f.discountPercentage, f.discountAmount, f.promotionalPrice, f.originalPrice].join('|');
+}
+
 function detectBenefits(text: string, offerContext: boolean): Benefit[] {
   const found: Benefit[] = [];
   const add = (b: Benefit | null) => {

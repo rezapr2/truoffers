@@ -16,6 +16,10 @@ export const QUEUE_FOR_JOB: Record<ImportJobType, (typeof WORK_QUEUES)[number]> 
   [ImportJobType.EXTRACT_OFFERS]: SCRAPER_QUEUES.fetch,
   [ImportJobType.MATCH_BUSINESS]: SCRAPER_QUEUES.process,
   [ImportJobType.DEDUPLICATE_OFFERS]: SCRAPER_QUEUES.process,
+  [ImportJobType.DISCOVER_AUTHORISED_DOMAINS]: SCRAPER_QUEUES.fetch,
+  [ImportJobType.CREATE_FINGERPRINT]: SCRAPER_QUEUES.fetch,
+  [ImportJobType.MATCH_FINGERPRINT]: SCRAPER_QUEUES.fetch,
+  [ImportJobType.TEST_ADAPTER]: SCRAPER_QUEUES.fetch,
 };
 
 export const QUEUE_CONCURRENCY: Record<(typeof WORK_QUEUES)[number], number> = {

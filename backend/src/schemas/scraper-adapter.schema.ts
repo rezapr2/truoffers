@@ -54,7 +54,37 @@ export class ScraperAdapter {
 
   @Prop({ type: Date })
   approvedAt?: Date;
+
+  // Phase 2: versioned selector adapters. Versions are immutable once tested; exactly one is current per key.
+  @Prop({ default: true })
+  isCurrent: boolean;
+
+  @Prop({ type: Types.ObjectId, ref: 'WebsiteFingerprint' })
+  fingerprintRef?: Types.ObjectId;
+
+  @Prop()
+  basedOnVersion?: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  createdBy?: Types.ObjectId;
+
+  @Prop({ type: Date })
+  testedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
+  lastTestJobRef?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  withdrawnBy?: Types.ObjectId;
+
+  @Prop({ type: Date })
+  withdrawnAt?: Date;
+
+  @Prop()
+  withdrawnReason?: string;
 }
 
 export const ScraperAdapterSchema = SchemaFactory.createForClass(ScraperAdapter);
 ScraperAdapterSchema.index({ key: 1, version: 1 }, { unique: true });
+// At most one current version per adapter key.
+ScraperAdapterSchema.index({ key: 1 }, { unique: true, partialFilterExpression: { isCurrent: true } });

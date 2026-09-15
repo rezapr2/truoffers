@@ -140,7 +140,8 @@ export class CrawlGateService {
       throw new CrawlDeniedError('domain_paused', `${siteDomain} is paused${policy.pausedReason ? `: ${policy.pausedReason}` : ''}`);
     }
     if (adapterKey) {
-      const paused = await this.adapters.exists({ key: adapterKey, status: ScraperAdapterStatus.PAUSED });
+      // The current version decides: pausing an adapter pauses the version sites are using.
+      const paused = await this.adapters.exists({ key: adapterKey, status: ScraperAdapterStatus.PAUSED, isCurrent: { $ne: false } });
       if (paused) throw new CrawlDeniedError('adapter_paused', `Adapter ${adapterKey} is paused`);
     }
     return site;

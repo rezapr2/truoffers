@@ -22,7 +22,7 @@ describe('built-in adapters on fixture sites', () => {
   beforeAll(async () => {
     server = await startFixtureServer();
     h = await createSafetyHarness({ fixtureHosts: SITES });
-    registry = new AdapterRegistry(h.models.adapters as any);
+    registry = new AdapterRegistry(h.models.adapters as any, h.models.fingerprints as any);
   });
   afterAll(async () => {
     await h.close();
@@ -71,7 +71,7 @@ describe('built-in adapters on fixture sites', () => {
     it('prefers JSON-LD when the site has structured data', async () => {
       const selection = await registry.select(contextFor('pizza-palace.test'));
       expect(selection.adapter).toBeInstanceOf(JsonLdAdapter);
-      expect(selection.considered.map((c) => c.id)).toEqual(['generic-jsonld', 'generic-html']);
+      expect(selection.considered.map((c) => c.id)).toEqual(['provider-ordernest', 'generic-jsonld', 'generic-html']);
     });
 
     it('falls back to generic HTML without structured data', async () => {
@@ -83,8 +83,8 @@ describe('built-in adapters on fixture sites', () => {
     it('never selects a paused adapter', async () => {
       await h.models.adapters.updateOne({ key: 'generic-jsonld' }, { status: ScraperAdapterStatus.PAUSED });
       const selection = await registry.select(contextFor('pizza-palace.test'));
-      expect(selection.adapter).toBeInstanceOf(GenericHtmlAdapter);
-      expect(selection.considered.map((c) => c.id)).toEqual(['generic-html']);
+      expect(selection.adapter.id).toBe('generic-html');
+      expect(selection.considered.map((c) => c.id)).toEqual(['provider-ordernest', 'generic-html']);
     });
   });
 

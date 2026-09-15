@@ -4,6 +4,8 @@ import {
   AuthorisationSource,
   BranchMatchStatus,
   DomainAuthorisationStatus,
+  FingerprintMatchCategory,
+  MarkerCategory,
   RobotsStatus,
 } from '../common/scraper.enums';
 import type { FieldEvidence } from '../scraper/extraction/adapter.types';
@@ -92,6 +94,14 @@ export class RobotsInfo {
 }
 export const RobotsInfoSchema = SchemaFactory.createForClass(RobotsInfo);
 
+// Structural traits read from the site's homepage, kept so fingerprints can be matched without refetching.
+@Schema({ _id: false })
+export class SiteMarkerRecord {
+  @Prop({ type: String, enum: Object.values(MarkerCategory), required: true }) category: MarkerCategory;
+  @Prop({ required: true }) value: string;
+}
+export const SiteMarkerRecordSchema = SchemaFactory.createForClass(SiteMarkerRecord);
+
 @Schema({ timestamps: true })
 export class ScrapedWebsite {
   // Normalised host: lowercase, punycode, no "www." — one document per domain.
@@ -164,6 +174,28 @@ export class ScrapedWebsite {
 
   @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
   lastRunRef?: Types.ObjectId;
+
+  // Phase 2: template fingerprinting and authorised networks.
+  @Prop({ type: [SiteMarkerRecordSchema], default: undefined })
+  siteMarkers?: SiteMarkerRecord[];
+
+  @Prop({ type: Date })
+  markersExtractedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'WebsiteFingerprint', index: true })
+  fingerprintRef?: Types.ObjectId;
+
+  @Prop()
+  matchScore?: number;
+
+  @Prop({ type: String, enum: Object.values(FingerprintMatchCategory) })
+  matchCategory?: FingerprintMatchCategory;
+
+  @Prop({ type: Date })
+  fingerprintMatchedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'AuthorisedNetwork', index: true })
+  networkRef?: Types.ObjectId;
 }
 
 export const ScrapedWebsiteSchema = SchemaFactory.createForClass(ScrapedWebsite);

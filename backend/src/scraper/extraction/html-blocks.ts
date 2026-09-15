@@ -1,7 +1,7 @@
 import type { CheerioAPI } from 'cheerio';
 import type { AnyNode, Element } from 'domhandler';
 import { OFFER_CONTEXT } from './offer-patterns';
-import { hasBenefit } from './offer-text-parser';
+import { benefitSignature, hasBenefit } from './offer-text-parser';
 import { collapse } from './text';
 
 const BLOCK_TAGS = new Set([
@@ -71,13 +71,34 @@ export function offerTextBlocks($: CheerioAPI, options: { pageIsOffers: boolean 
     candidates.push(el);
   }
 
-  const candidatesUnder = new Map<Element, number>();
+  // A card often states its offer twice: a heading ("20% off all orders") and a description ("Get 20% off
+  // online"). A heading and a body leaf with the same benefit count as one offer, so the card becomes
+  // the context (with its code and minimum order) and only the heading is emitted.
+  const signatureOf = new Map<Element, string>();
+  const isHeading = (el: Element) => /^h[1-6]$/.test(el.tagName) || /title|heading|headline/i.test(el.attribs?.class ?? '');
+  for (const leaf of candidates) signatureOf.set(leaf, benefitSignature(text(leaf)) ?? `text:${text(leaf)}`);
+
+  const leavesUnder = new Map<Element, Element[]>();
   for (const leaf of candidates) {
     let node = leaf.parent;
     for (let depth = 0; isElement(node) && depth < MAX_CONTEXT_DEPTH; depth++, node = node.parent) {
-      candidatesUnder.set(node, (candidatesUnder.get(node) ?? 0) + 1);
+      leavesUnder.set(node, [...(leavesUnder.get(node) ?? []), leaf]);
     }
   }
+  const offersUnder = (node: Element) => {
+    const groups = new Map<string, { headings: number; bodies: number }>();
+    for (const leaf of leavesUnder.get(node) ?? []) {
+      const group = groups.get(signatureOf.get(leaf)!) ?? { headings: 0, bodies: 0 };
+      if (isHeading(leaf)) group.headings += 1;
+      else group.bodies += 1;
+      groups.set(signatureOf.get(leaf)!, group);
+    }
+    let count = 0;
+    for (const group of groups.values()) count += group.headings > 0 && group.bodies > 0 ? Math.max(group.headings, group.bodies) : group.headings + group.bodies;
+    return count;
+  };
+  const candidatesUnder = new Map<Element, number>([...leavesUnder.keys()].map((node) => [node, offersUnder(node)]));
+  const emitted = new Set<string>();
 
   const seen = new Set<string>();
   const blocks: OfferTextBlock[] = [];
@@ -106,9 +127,19 @@ export function offerTextBlocks($: CheerioAPI, options: { pageIsOffers: boolean 
       .toArray()
       .filter(isElement)
       .map((h) => text(h))
-      .find((h) => h && h.length <= 80 && !lowerLeaf.includes(h.toLowerCase()) && !h.toLowerCase().includes(lowerLeaf));
+      // A bold promo code ("<strong>SPICE20</strong>") is not a heading.
+      .find((h) => h && h.length <= 80 && !/^[A-Z0-9][A-Z0-9_-]{2,19}$/.test(h) && !lowerLeaf.includes(h.toLowerCase()) && !h.toLowerCase().includes(lowerLeaf));
     heading ??= nearestPrecedingHeading(container, text);
     if (heading && OFFER_CONTEXT.test(heading)) offerContext = true;
+
+    // The body line repeating a heading's benefit inside the same card is already covered by the heading.
+    const cardKey = (el: Element) => `${signatureOf.get(leaf)}|${$(container).index()}|${text(container)}|${isHeading(el) ? 'h' : 'b'}`;
+    if (container !== leaf) {
+      const partner = (leavesUnder.get(container) ?? []).find((other) => other !== leaf && signatureOf.get(other) === signatureOf.get(leaf) && isHeading(other) !== isHeading(leaf));
+      if (partner && !isHeading(leaf)) continue;
+      if (emitted.has(cardKey(leaf))) continue;
+      emitted.add(cardKey(leaf));
+    }
 
     blocks.push({ text: leafText, containerText: text(container), heading, offerContext });
   }
