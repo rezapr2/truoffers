@@ -9,6 +9,7 @@ import VerifiedBadge from '@/components/VerifiedBadge';
 import FollowButton from '@/components/FollowButton';
 import OfferFlipCard from '@/components/OfferFlipCard';
 import BusinessJsonLd from '@/components/BusinessJsonLd';
+import ImportedSourceNotice from '@/components/ImportedSourceNotice';
 import ClaimBanner from './ClaimBanner';
 
 interface MenuItem {
@@ -128,6 +129,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
         </div>
       </div>
 
+      <ImportedSourceNotice imported={business.imported} businessSlug={business.slug} className="mb-5" />
       <ClaimBanner business={business} />
 
       {/* Tabs */}

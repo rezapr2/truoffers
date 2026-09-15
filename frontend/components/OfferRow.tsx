@@ -3,13 +3,15 @@
 import Link from 'next/link';
 import type { Offer, Business } from '@/lib/types';
 import VerifiedBadge from './VerifiedBadge';
+import ImportedSourceNotice from './ImportedSourceNotice';
+import { endsLabel as formatEnds } from '@/lib/dates';
 
 export default function OfferRow({ offer }: { offer: Offer }) {
   const business =
     typeof offer.businessId === 'object' ? (offer.businessId as Partial<Business>) : offer.business || {};
 
   const endsLabel = offer.endsAt
-    ? `Ends ${new Date(offer.endsAt).toLocaleDateString('en-GB', { weekday: 'long' })}`
+    ? formatEnds(offer.endsAt)
     : offer.maxRedemptions > 0
       ? 'New customers'
       : 'Weekly offer';
@@ -27,6 +29,7 @@ export default function OfferRow({ offer }: { offer: Offer }) {
         <div className="text-[12px] md:text-[13px] font-semibold text-muted truncate">
           {business.town ? `${business.town} ${business.postcodeArea ?? ''}` : ''} · {offer.title}
         </div>
+        <ImportedSourceNotice imported={offer.imported} variant="compact" className="block truncate" />
       </div>
       <div className="hidden md:block text-[13px] font-bold text-primary">{endsLabel}</div>
       <Link

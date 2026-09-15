@@ -7,6 +7,8 @@ import { track } from '@/lib/analytics';
 import type { Offer, Business } from '@/lib/types';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import FollowButton from '@/components/FollowButton';
+import ImportedSourceNotice from '@/components/ImportedSourceNotice';
+import { ukDate } from '@/lib/dates';
 
 export default function OfferDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -70,6 +72,8 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
+      <ImportedSourceNotice imported={offer.imported} offerId={offer._id} className="mb-6" />
+
       <div className="grid md:grid-cols-[1fr_320px] gap-5">
         {/* Redemption */}
         <div className="bg-card rounded-3xl p-7">
@@ -111,7 +115,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
             {offer.endsAt && (
               <div>
                 <dt className="inline font-extrabold">Valid until: </dt>
-                <dd className="inline">{new Date(offer.endsAt).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</dd>
+                <dd className="inline">{ukDate(offer.endsAt, { weekday: 'long', day: 'numeric', month: 'long' })}</dd>
               </div>
             )}
             {offer.maxRedemptions > 0 && (

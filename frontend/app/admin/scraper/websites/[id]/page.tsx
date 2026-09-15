@@ -1,0 +1,159 @@
+'use client';
+
+import Link from 'next/link';
+import { use, useCallback, useEffect, useState } from 'react';
+import { api } from '@/lib/api';
+import type { WebsiteDetail } from '@/lib/scraper-types';
+import BranchDecision from '../../_components/BranchDecision';
+import { useOverview } from '../../_components/overview';
+import { btn, Card, ErrorNote, formatDate, humanise, inputClass, SectionTitle, StatusPill, useAction } from '../../_components/ui';
+
+export default function WebsiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const { refresh } = useOverview();
+  const [data, setData] = useState<WebsiteDetail | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [config, setConfig] = useState({ rateLimitMs: '', pageCap: '' });
+  const { busy, error, run } = useAction();
+
+  const load = useCallback(() => {
+    void api<WebsiteDetail>(`/admin/scraper/websites/${id}`)
+      .then((detail) => {
+        setData(detail);
+        setConfig({ rateLimitMs: String(detail.config?.rateLimitMs ?? ''), pageCap: String(detail.config?.pageCap ?? '') });
+      })
+      .catch(() => setNotFound(true));
+  }, [id]);
+
+  useEffect(load, [load]);
+
+  if (notFound) return <Card>Website not found.</Card>;
+  if (!data) return <div className="py-16 text-center text-muted font-bold">Loading…</div>;
+  const { site } = data;
+  const provider = typeof site.providerRef === 'object' ? site.providerRef : null;
+  const paused = data.config?.paused;
+
+  async function act(path: string, method: string, body?: unknown) {
+    const ok = await run(() => api(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }));
+    if (ok !== undefined) {
+      load();
+      refresh();
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Card>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="font-display text-2xl font-extrabold break-all">{site.domain}</h2>
+              <StatusPill status={site.authorisationStatus} />
+              {paused && <StatusPill status="paused" label="crawling paused" />}
+            </div>
+            <a href={site.seedUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary break-all">
+              {site.seedUrl}
+            </a>
+            <dl className="mt-3 text-[13px] font-semibold text-ink-soft grid sm:grid-cols-2 gap-x-8 gap-y-1">
+              <div>Source: {humanise(site.authorisationSource)}{site.discoveredFrom ? ` (from ${site.discoveredFrom})` : ''}</div>
+              <div>Provider: {provider ? `${provider.name} · ${provider.status}` : 'none detected'}</div>
+              <div>Adapter: {site.adapterId ? `${site.adapterId} ${site.adapterVersion}` : '—'}</div>
+              <div>robots.txt: {site.robots?.status ?? '—'}{site.robots?.crawlDelaySec ? ` · crawl delay ${site.robots.crawlDelaySec}s` : ''}</div>
+              <div>Last checked: {formatDate(site.lastSuccessfulCheckAt)}</div>
+              <div>Failures: {site.failureCount}{site.lastError ? ` · ${site.lastError}` : ''}</div>
+              {site.providerSignals.length > 0 && <div className="sm:col-span-2">Provider signals: {site.providerSignals.join(', ')}</div>}
+              {site.authorisationNote && <div className="sm:col-span-2">Note: {site.authorisationNote}</div>}
+            </dl>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {site.authorisationStatus === 'authorised' && (
+              <button disabled={busy} className={btn.dark} onClick={() => act(`/admin/scraper/websites/${id}/analyse`, 'POST')}>
+                Analyse now
+              </button>
+            )}
+            {site.authorisationStatus === 'pending_authorisation' && (
+              <>
+                <button disabled={busy} className={btn.good} onClick={() => act(`/admin/scraper/websites/${id}/authorise`, 'PATCH', { decision: 'approve' })}>
+                  Authorise
+                </button>
+                <button disabled={busy} className={btn.danger} onClick={() => act(`/admin/scraper/websites/${id}/authorise`, 'PATCH', { decision: 'deny' })}>
+                  Deny
+                </button>
+              </>
+            )}
+            <button
+              disabled={busy}
+              className={btn.outline}
+              onClick={() => {
+                const reason = paused ? undefined : prompt('Why pause crawling this website? (optional)') ?? undefined;
+                void act(`/admin/scraper/websites/${id}/pause`, 'PATCH', { paused: !paused, reason });
+              }}
+            >
+              {paused ? 'Resume crawling' : 'Pause crawling'}
+            </button>
+            <Link href={`/admin/scraper/candidates?websiteId=${id}`} className={btn.outline}>
+              Candidates ({Object.values(data.candidates).reduce((a, b) => a + (b ?? 0), 0)})
+            </Link>
+          </div>
+        </div>
+        <div className="mt-4"><ErrorNote error={error} /></div>
+      </Card>
+
+      <Card>
+        <SectionTitle>Crawl limits for this domain</SectionTitle>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act(`/admin/scraper/websites/${id}/crawl-config`, 'PATCH', {
+              rateLimitMs: config.rateLimitMs ? Number(config.rateLimitMs) : undefined,
+              pageCap: config.pageCap ? Number(config.pageCap) : undefined,
+            });
+          }}
+          className="flex gap-3 flex-wrap items-end"
+        >
+          <label className="flex flex-col gap-1">
+            <span className="text-[12px] font-extrabold">Milliseconds between requests</span>
+            <input type="number" min={250} value={config.rateLimitMs} onChange={(e) => setConfig({ ...config, rateLimitMs: e.target.value })} placeholder="default" className={`${inputClass} w-44`} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[12px] font-extrabold">Pages per run</span>
+            <input type="number" min={1} max={1000} value={config.pageCap} onChange={(e) => setConfig({ ...config, pageCap: e.target.value })} placeholder="default" className={`${inputClass} w-32`} />
+          </label>
+          <button disabled={busy} className={btn.dark}>Save</button>
+          {data.config?.blockedPaths?.length ? (
+            <span className="text-[12px] font-semibold text-muted">Blocked paths: {data.config.blockedPaths.join(', ')}</span>
+          ) : null}
+        </form>
+      </Card>
+
+      <Card>
+        <SectionTitle>Branches ({site.businesses.length})</SectionTitle>
+        <div className="flex flex-col gap-3">
+          {site.businesses.map((branch) => (
+            <BranchDecision key={branch.branchPath} websiteId={site._id} branch={branch} onDone={() => { load(); refresh(); }} />
+          ))}
+          {site.businesses.length === 0 && <p className="text-sm font-semibold text-muted">No business details extracted yet.</p>}
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle aside={<Link href="/admin/scraper/jobs" className="text-sm font-bold text-primary">All jobs →</Link>}>Runs</SectionTitle>
+        <div className="flex flex-col gap-3">
+          {data.runs.map((runGroup) => (
+            <div key={runGroup.runId} className="border border-line rounded-xl px-4 py-3">
+              <div className="text-[12px] font-bold text-muted mb-2">Run {runGroup.runId.slice(-6)} · {formatDate(runGroup.stages[0]?.createdAt)}</div>
+              <div className="flex gap-2 flex-wrap">
+                {runGroup.stages.map((stage) => (
+                  <span key={stage._id} className="inline-flex items-center gap-1.5 text-[12px] font-bold">
+                    {stage.type.replace(/_/g, ' ')} <StatusPill status={stage.status} />
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+          {data.runs.length === 0 && <p className="text-sm font-semibold text-muted">No runs yet.</p>}
+        </div>
+      </Card>
+    </div>
+  );
+}

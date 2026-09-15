@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { api, setToken, getToken } from './api';
+import { api, ApiError, setToken, getToken } from './api';
 import type { User } from './types';
 
 interface AuthState {
@@ -46,8 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const me = await api<User>('/auth/me');
       setUser(me);
-    } catch {
-      setToken(null);
+    } catch (err) {
+      // Only a rejected token ends the session; a rate limit or network blip shouldn't log anyone out.
+      if (err instanceof ApiError && err.status === 401) setToken(null);
       setUser(null);
     } finally {
       setLoading(false);

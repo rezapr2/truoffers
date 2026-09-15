@@ -23,8 +23,10 @@ export async function api<T = unknown>(
   path: string,
   options: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
+  // FormData bodies (file uploads) need the browser to set the multipart boundary itself.
+  const isForm = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isForm ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string>),
   };
   const token = getToken();

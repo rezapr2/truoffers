@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
@@ -85,7 +86,15 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 md:px-10 py-8">
-      <h1 className="font-display text-3xl font-extrabold tracking-tight mb-8">Admin panel</h1>
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-8">
+        <h1 className="font-display text-3xl font-extrabold tracking-tight">Admin panel</h1>
+        <Link
+          href="/admin/scraper"
+          className="bg-ink text-surface text-sm font-bold px-5 py-2.5 rounded-full hover:bg-primary transition-colors"
+        >
+          Website import robot →
+        </Link>
+      </div>
 
       <div className="flex gap-2 mb-7 flex-wrap">
         {TABS.map((t) => (

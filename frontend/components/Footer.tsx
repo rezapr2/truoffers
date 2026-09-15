@@ -36,6 +36,7 @@ export default function Footer() {
             <Link href="/privacy" className="hover:text-primary">Privacy</Link>
             <Link href="/terms" className="hover:text-primary">Terms</Link>
             <Link href="/contact" className="hover:text-primary">Contact</Link>
+            <Link href="/bot" className="hover:text-primary">TruOffersBot</Link>
           </span>
         </div>
       </div>

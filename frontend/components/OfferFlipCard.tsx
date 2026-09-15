@@ -6,6 +6,8 @@ import type { Offer, Business } from '@/lib/types';
 import { track } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import VerifiedBadge from './VerifiedBadge';
+import ImportedSourceNotice from './ImportedSourceNotice';
+import { endsLabel as formatEnds, ukDate } from '@/lib/dates';
 
 function offerBusiness(offer: Offer): Partial<Business> {
   if (offer.business) return offer.business;
@@ -71,7 +73,7 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
   }
 
   const endsLabel = offer.endsAt
-    ? `Ends ${new Date(offer.endsAt).toLocaleDateString('en-GB', { weekday: 'long' })}`
+    ? formatEnds(offer.endsAt)
     : offer.maxRedemptions > 0
       ? `First ${offer.maxRedemptions} customers`
       : 'Ongoing offer';
@@ -86,11 +88,14 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="font-display text-3xl font-extrabold text-primary">{offer.displayLabel}</div>
-            {offer.sponsored && (
-              <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted bg-page px-2 py-1 rounded-full">
-                Sponsored
-              </span>
-            )}
+            <div className="flex gap-1.5">
+              {offer.sponsored && (
+                <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted bg-page px-2 py-1 rounded-full">
+                  Sponsored
+                </span>
+              )}
+              <ImportedSourceNotice imported={offer.imported} variant="pill" />
+            </div>
           </div>
           <div className="mt-2 text-base font-extrabold">
             {business.name}{' '}
@@ -136,6 +141,14 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
             {offer.terms || offer.description}
             {offer.minOrder > 0 ? ` · Min order £${offer.minOrder}` : ''}
           </div>
+          {offer.imported && (
+            <div className="mt-1 text-[11px] font-semibold text-peach-2/70 truncate">
+              {offer.imported.verification === 'merchant_verified' ? 'Confirmed by the business' : `Imported from ${offer.imported.domain}`}
+              {offer.imported.lastCheckedAt && offer.imported.verification !== 'merchant_verified'
+                ? ` · checked ${ukDate(offer.imported.lastCheckedAt)}`
+                : ''}
+            </div>
+          )}
           <div className="mt-auto flex gap-2 flex-wrap">
             {(offer.redemptionUrl || business.orderUrl) && (
               <a

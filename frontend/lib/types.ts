@@ -12,6 +12,21 @@ export interface ReviewsCache {
   count: number;
 }
 
+// Where an imported offer or listing came from. Public pages show it with a removal link.
+export interface ImportNotice {
+  domain: string;
+  lastCheckedAt?: string;
+  verification?: 'unverified' | 'admin_verified' | 'merchant_verified';
+  managedBy?: 'scraper_managed' | 'merchant_managed';
+}
+
+export interface OfferSource {
+  url: string;
+  pageTitle?: string;
+  excerpt: string;
+  checkedAt: string;
+}
+
 export interface Business {
   _id: string;
   name: string;
@@ -42,6 +57,7 @@ export interface Business {
   distanceMiles?: number | null;
   sponsored?: boolean;
   location?: { type: string; coordinates: [number, number] }; // [lng, lat]
+  imported?: ImportNotice | null;
 }
 
 export interface Offer {
@@ -72,6 +88,13 @@ export interface Offer {
   orderClicks: number;
   createdAt: string;
   sponsored?: boolean;
+  origin?: 'merchant' | 'scraper';
+  verification?: 'unverified' | 'admin_verified' | 'merchant_verified';
+  managedBy?: 'scraper_managed' | 'merchant_managed';
+  sourceChanged?: boolean;
+  sources?: OfferSource[];
+  lastCheckedAt?: string;
+  imported?: ImportNotice | null;
 }
 
 export interface Wallet {
