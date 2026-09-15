@@ -134,6 +134,43 @@ admin UI ─▶ API (review, publish, opt-outs) ─▶ MongoDB ◀─ structured
 5. **Removal requests** (`/removal-request`) opt the domain out and unpublish its imported offers
    immediately. Acknowledge them at `/admin/scraper/policies`.
 
+**Many websites on one template.** Takeaway sites are often built by the same web studio or
+ordering provider. Instead of relying on generic extraction for each, build one selector adapter
+for the template:
+
+1. **Register a network** (optional) at `/admin/scraper/network`. Enter a studio or provider's
+   client sitemap and the basis for using it: a written agreement reference, or notes from a terms
+   review. *Discover* registers the websites that sitemap lists as authorised, up to 1,000 per run.
+   - Opted-out websites and never-crawl domains are skipped.
+   - A listed website that was only waiting for authorisation is authorised.
+   - Websites held for provider review stay held.
+   - Websites the robot only found as links stay pending.
+2. **Build an adapter** at `/admin/scraper/adapters/new`.
+   1. Pick two or more authorised websites that share the template.
+   2. The worker reads a few pages from each and suggests a **template fingerprint**. The
+      fingerprint is built from traits the sites share (generator tag, footer attribution, asset
+      paths, CSS classes, page skeleton) and never from business content.
+   3. Review which traits are required, and the CSS selectors suggested for offers and business
+      details.
+   4. Test on the examples. This is a dry run: it shows what each field would contain and never
+      creates candidates.
+   5. Approve.
+   6. Match the fingerprint across authorised websites and run extraction on the exact and
+      high-confidence matches.
+3. **Manage adapters** at `/admin/scraper/adapters`. Versions are immutable once tested.
+   - *New version* copies a version as a draft to edit and test.
+   - *Roll back* withdraws the current version and makes the previous approved one current. Its
+     open candidates are marked `needs_reextraction`, and *Re-run* re-extracts the affected websites.
+   - *Pause* stops an adapter without withdrawing it.
+   - Templates and their match scores are at `/admin/scraper/fingerprints`.
+
+A selector adapter only runs on a website whose fingerprint match is at least **high confidence**;
+a version under test only runs on its example websites. Matching needs evidence from at least
+three kinds of trait, so a shared CDN or a common CSS framework alone never matches. Adapters use
+CSS selectors and named parsers only (text, money, percent, date, promo code, phone, postcode, URL);
+there's no way to enter a regular expression. When several adapters could handle a page, the order
+is provider adapter, selector adapter, JSON-LD, then generic HTML.
+
 **Safety controls, all enforced in code:**
 
 - **Pages it will fetch:**
@@ -164,7 +201,11 @@ admin UI ─▶ API (review, publish, opt-outs) ─▶ MongoDB ◀─ structured
 ```bash
 cd backend && npm test                  # unit + integration + in-process end-to-end (needs Mongo + Redis)
 scripts/e2e-phase1.sh                   # full Docker stack on an isolated network, driven over HTTP
+scripts/e2e-phase2.sh                   # the same stack: network discovery, adapter builder, rollback
 ```
+
+After upgrading, run `npm run migrate:scraper` (or `migrate:scraper:prod` in the container) once.
+It is idempotent: it registers the built-in adapters and creates the indexes for every phase.
 
 ## Not yet built
 

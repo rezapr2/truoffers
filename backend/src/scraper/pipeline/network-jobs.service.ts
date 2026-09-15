@@ -33,6 +33,7 @@ import { RobotsService } from '../safety/robots.service';
 import { SafeFetchService } from '../safety/safe-fetch.service';
 import { SitemapService } from '../safety/sitemap.service';
 import { registrableDomainOf, siteDomainOf } from '../safety/url';
+import { OPTED_OUT_MATCH_FIELDS } from '../scraper.constants';
 import { PageLoader } from './page-loader';
 import { StageAbortedError, StageContext, StageOutcome } from './pipeline.service';
 
@@ -176,7 +177,10 @@ export class NetworkJobsService {
       }
     }
     if (analysed.length < 2) {
-      await this.fingerprints.updateOne({ _id: fingerprint._id }, { $set: { examples, analysedAt: new Date(), lastJobRef: ctx.job._id } });
+      await this.fingerprints.updateOne(
+        { _id: fingerprint._id },
+        { $set: { examples, analysedAt: new Date(), lastJobRef: ctx.job._id }, $unset: { excerptsRedactedAt: 1 } },
+      );
       throw new StageAbortedError(`Only ${analysed.length} of ${fingerprint.exampleDomains.length} examples could be analysed; a fingerprint needs two`);
     }
 
@@ -193,6 +197,7 @@ export class NetworkJobsService {
           analysedAt: new Date(),
           lastJobRef: ctx.job._id,
         },
+        $unset: { excerptsRedactedAt: 1 },
       },
     );
     await ctx.log(`Fingerprint suggested from ${analysed.length} examples`, { markers: suggestion.markers.length, selectorNotes: selectors.notes });
@@ -211,6 +216,12 @@ export class NetworkJobsService {
   private async matchFingerprint(ctx: StageContext): Promise<StageOutcome> {
     const site = await this.sites.findById(this.payload(ctx, 'websiteId')).lean<SiteLean>();
     if (!site) throw new StageAbortedError('The website record no longer exists');
+    // Stored traits would let an opted-out site be matched without a request; it's dropped from matching instead.
+    if (site.authorisationStatus === DomainAuthorisationStatus.OPTED_OUT || (await this.domains.activeOptOutFor(site.domain))) {
+      await this.sites.updateOne({ _id: site._id }, { $unset: OPTED_OUT_MATCH_FIELDS });
+      await ctx.log(`${site.domain} has opted out and is not matched`);
+      return { resultCounts: { fingerprints: 0, matched: 0, skippedOptedOut: 1 } };
+    }
 
     let markers = site.siteMarkers as SiteMarker[] | undefined;
     const fresh = site.markersExtractedAt && Date.now() - new Date(site.markersExtractedAt).getTime() < NETWORK_LIMITS.markersFreshMs;

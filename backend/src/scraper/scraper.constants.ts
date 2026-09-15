@@ -66,6 +66,16 @@ export const RETENTION = {
   jobLogLines: 500,
 } as const;
 
+// Template traits and fingerprint match results removed from a website when it opts out.
+export const OPTED_OUT_MATCH_FIELDS = {
+  siteMarkers: 1,
+  markersExtractedAt: 1,
+  fingerprintRef: 1,
+  matchScore: 1,
+  matchCategory: 1,
+  fingerprintMatchedAt: 1,
+} as const;
+
 export const AI_LIMITS = {
   maxPagesPerRun: 3,
   maxBlockChars: 4_000,

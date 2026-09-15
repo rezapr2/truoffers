@@ -11,6 +11,8 @@ import { ScrapedWebsite, ScrapedWebsiteDocument } from '../../schemas/scraped-we
 import { AuditService } from '../audit/audit.service';
 import { OfferLifecycleService } from '../lifecycle/offer-lifecycle.service';
 import { RunsService } from '../queue/runs.service';
+import { RetentionService } from '../retention/retention.service';
+import { OPTED_OUT_MATCH_FIELDS } from '../scraper.constants';
 import { siteDomainOf } from '../safety/url';
 
 export interface NewOptOut {
@@ -41,6 +43,7 @@ export class OptOutsService {
     private readonly lifecycle: OfferLifecycleService,
     private readonly runs: RunsService,
     private readonly audit: AuditService,
+    private readonly retention: RetentionService,
   ) {}
 
   async create(input: NewOptOut) {
@@ -69,11 +72,15 @@ export class OptOutsService {
     const sites = await this.sites.find({ domain: new RegExp(`(^|\\.)${escapeRegex(domain)}$`) }).select('_id domain').lean();
     const siteIds = sites.map((s) => s._id);
     if (siteIds.length) {
-      await this.sites.updateMany({ _id: { $in: siteIds } }, { $set: { authorisationStatus: DomainAuthorisationStatus.OPTED_OUT } });
+      await this.sites.updateMany(
+        { _id: { $in: siteIds } },
+        { $set: { authorisationStatus: DomainAuthorisationStatus.OPTED_OUT }, $unset: OPTED_OUT_MATCH_FIELDS },
+      );
       const active = await this.jobs.distinct('runId', { scrapedWebsiteRef: { $in: siteIds }, status: { $in: ACTIVE_IMPORT_JOB_STATUSES } });
       for (const runId of active) await this.runs.cancelRun(String(runId));
     }
     const removal = await this.lifecycle.removeImportedOffersForSites(siteIds, input.source === OptOutSource.PUBLIC_FORM ? 'Removal requested' : 'Opted out');
+    const builderOutput = await this.retention.redactTemplateExamplesFor(sites.map((s) => s.domain));
 
     // Listings that exist only because of the import are hidden until an admin reviews them.
     const hidden = await this.businesses.updateMany(
@@ -85,7 +92,7 @@ export class OptOutsService {
       action: input.source === OptOutSource.PUBLIC_FORM ? AuditAction.REMOVAL_REQUESTED : AuditAction.OPT_OUT_ADDED,
       targetType: 'DomainOptOut',
       targetId: optOut._id,
-      after: { domain, websites: sites.map((s) => s.domain), offersRemoved: removal.removed, listingsHidden: hidden.modifiedCount },
+      after: { domain, websites: sites.map((s) => s.domain), offersRemoved: removal.removed, listingsHidden: hidden.modifiedCount, ...builderOutput },
       note: input.reason,
     });
     return { optOut, websites: sites.length, offersRemoved: removal.removed, listingsHidden: hidden.modifiedCount };

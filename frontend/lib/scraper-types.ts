@@ -376,6 +376,7 @@ export interface Fingerprint {
   examples: { domain: string; pages: string[]; markers: number; offersFound: { title: string; excerpt: string; pageUrl: string }[]; error?: string }[];
   suggestedConfig?: { config: SelectorConfig | null; notes: string[] };
   analysedAt?: string;
+  excerptsRedactedAt?: string;
   lastJobRef?: string;
   updatedAt: string;
   markerCount?: number;
@@ -408,6 +409,8 @@ export interface AdapterTestResults {
   ranAt: string;
   jobId: string;
   summary: { domains: number; handled: number; offers: number };
+  // Set once retention has removed page text from every domain below.
+  redactedAt?: string;
   domains: {
     domain: string;
     canHandle: boolean;
@@ -417,6 +420,8 @@ export interface AdapterTestResults {
     offers: AdapterTestOffer[];
     businesses: { branchPath: string; name?: string; telephone?: string; address?: string; postcode?: string }[];
     errors: string[];
+    // The website opted out, or retention ended: excerpts, field text and branch details were removed.
+    excerptsRedacted?: boolean;
   }[];
 }
 

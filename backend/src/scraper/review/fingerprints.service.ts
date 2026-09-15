@@ -156,7 +156,7 @@ export class FingerprintsService {
   async requestMatch(input: { websiteIds?: string[]; allAuthorised?: boolean; refetch?: boolean }, userId: string) {
     const filter = input.allAuthorised
       ? { authorisationStatus: DomainAuthorisationStatus.AUTHORISED }
-      : { _id: { $in: (input.websiteIds ?? []).filter((id) => Types.ObjectId.isValid(id)) } };
+      : { _id: { $in: (input.websiteIds ?? []).filter((id) => Types.ObjectId.isValid(id)) }, authorisationStatus: { $ne: DomainAuthorisationStatus.OPTED_OUT } };
     const sites = await this.sites.find(filter).select('_id domain').limit(MAX_MATCH_REQUEST).lean();
     if (sites.length === 0) throw new BadRequestException('No websites to match');
     let queued = 0;

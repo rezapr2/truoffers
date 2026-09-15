@@ -262,4 +262,39 @@ describe('website network, fingerprints and selector adapters, end to end', () =
       expect(actions.has(action)).toBe(true);
     }
   });
+
+  it('removes an opted-out example website’s text from the fingerprint analysis and adapter test results', async () => {
+    const excerptsFor = async (domain: string) => {
+      const fingerprint = (await request(http).get(`/api/admin/scraper/fingerprints/${fingerprintId}`).set(admin()).expect(200)).body.fingerprint;
+      const tested = (await adapters.findOne({ key: adapterKey, version: '1' }).lean())!.testResults as { domains: { domain: string; offers: { excerpt: string }[]; businesses: object[] }[] };
+      const entry = tested.domains.find((d) => d.domain === domain)!;
+      return {
+        example: fingerprint.examples.find((e: { domain: string }) => e.domain === domain).offersFound.map((o: { excerpt: string }) => o.excerpt),
+        tested: entry.offers.map((o) => o.excerpt),
+        businesses: entry.businesses,
+      };
+    };
+    expect((await excerptsFor('lotus-garden.test')).example.every((text: string) => text.length > 0)).toBe(true);
+
+    const optOut = await request(http).post('/api/admin/scraper/opt-outs').set(admin()).send({ domain: 'lotus-garden.test', reason: 'Owner asked' }).expect(201);
+    expect(optOut.body.websites).toBe(1);
+
+    const lotus = await excerptsFor('lotus-garden.test');
+    expect(lotus.example.length).toBeGreaterThan(0);
+    expect(lotus.example.every((text: string) => text === '')).toBe(true);
+    expect(lotus.tested.every((text) => text === '')).toBe(true);
+    expect(lotus.businesses.every((b) => Object.keys(b).every((k) => k === 'branchPath'))).toBe(true);
+    const spice = await excerptsFor('saffron-spice.test');
+    expect(spice.example.every((text: string) => text.length > 0)).toBe(true);
+    expect(spice.tested.every((text) => text.length > 0)).toBe(true);
+
+    const entry = await audit.findOne({ action: AuditAction.OPT_OUT_ADDED }).sort({ createdAt: -1 }).lean();
+    expect(entry!.after).toMatchObject({ domain: 'lotus-garden.test', fingerprintsRedacted: 1, adapterTestsRedacted: 1 });
+
+    // Its template traits are gone too, and asking to match it again queues nothing.
+    const optedOut = await site('lotus-garden.test');
+    expect(optedOut!.siteMarkers).toBeUndefined();
+    expect(optedOut!.fingerprintRef).toBeUndefined();
+    await request(http).post('/api/admin/scraper/fingerprints/match').set(admin()).send({ websiteIds: [String(optedOut!._id)] }).expect(400);
+  });
 });

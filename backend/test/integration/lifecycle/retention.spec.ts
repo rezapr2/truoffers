@@ -29,7 +29,7 @@ describe('data retention (docs/data-protection.md)', () => {
     await connectTestMongo();
     models = testModels();
     await syncTestIndexes(models);
-    retention = new RetentionService(models.candidates as any, models.offers as any, models.jobs as any);
+    retention = new RetentionService(models.candidates as any, models.offers as any, models.jobs as any, models.fingerprints as any, models.adapters as any);
   });
   afterAll(disconnectTestMongo);
   beforeEach(resetTestMongo);
@@ -97,7 +97,7 @@ describe('data retention (docs/data-protection.md)', () => {
     await models.jobs.collection.updateOne({ _id: staleJob._id }, { $set: { updatedAt: new Date(now.getTime() - 8 * DAY) } });
 
     const result = await retention.run(now);
-    expect(result).toEqual({ candidatesRedacted: 1, offersRedacted: 2, staleRunOutputsCleared: 1 });
+    expect(result).toEqual({ candidatesRedacted: 1, offersRedacted: 2, staleRunOutputsCleared: 1, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
 
     const redactedCandidate = await models.candidates.findById(rejectedLongAgo._id).lean();
     expect(redactedCandidate!.sources[0]).toMatchObject({ url: 'https://pizza-palace.test/offers', excerpt: '' });
@@ -119,6 +119,91 @@ describe('data retention (docs/data-protection.md)', () => {
     }
     expect((await models.jobs.findById(staleJob._id).lean())!.output).toBeUndefined();
 
-    expect(await retention.run(now)).toEqual({ candidatesRedacted: 0, offersRedacted: 0, staleRunOutputsCleared: 0 });
+    expect(await retention.run(now)).toEqual({ candidatesRedacted: 0, offersRedacted: 0, staleRunOutputsCleared: 0, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
+  });
+
+  describe('adapter builder output', () => {
+    const example = (domain: string) => ({
+      domain,
+      pages: [`https://${domain}/offers`],
+      markers: 42,
+      offersFound: [{ title: '20% off collection', excerpt: `20% off collection orders over £20 at ${domain}`, pageUrl: `https://${domain}/offers` }],
+    });
+    const tested = (domain: string) => ({
+      domain,
+      canHandle: true,
+      offers: [
+        {
+          title: '20% off collection',
+          discountPercentage: 20,
+          excerpt: '20% off collection orders over £20',
+          fields: { discountPercentage: { text: '20% off', method: 'selector:saffron@1:discount' } },
+          valid: true,
+        },
+      ],
+      businesses: [{ branchPath: '/', name: 'Saffron Spice', telephone: '+441130000000', address: '1 High Street', postcode: 'LS1 1AA' }],
+      errors: [],
+    });
+    const fingerprint = (key: string, analysedAt: Date) =>
+      models.fingerprints.create({ name: key, key, exampleDomains: ['saffron-spice.test', 'lotus-garden.test'], examples: [example('saffron-spice.test'), example('lotus-garden.test')], analysedAt });
+    const adapterVersion = (version: string, ranAt: Date) =>
+      models.adapters.create({
+        key: 'saffron-theme',
+        name: 'Saffron Theme',
+        type: 'selector',
+        version,
+        priority: 300,
+        status: 'draft',
+        isCurrent: version === '1',
+        exampleDomains: ['saffron-spice.test', 'lotus-garden.test'],
+        testResults: { ranAt, jobId: `job-${version}`, summary: { domains: 2, handled: 2, offers: 2 }, domains: [tested('saffron-spice.test'), tested('lotus-garden.test')] },
+      });
+
+    it('removes excerpts and branch contact details 90 days after the analysis or test, keeping counts and outcomes', async () => {
+      const oldFingerprint = await fingerprint('saffron-old', new Date(now.getTime() - 91 * DAY));
+      const recentFingerprint = await fingerprint('saffron-recent', new Date(now.getTime() - 30 * DAY));
+      const oldTest = await adapterVersion('1', new Date(now.getTime() - 91 * DAY));
+      const recentTest = await adapterVersion('2', new Date(now.getTime() - 5 * DAY));
+
+      expect(await retention.run(now)).toMatchObject({ fingerprintExamplesRedacted: 1, adapterTestResultsRedacted: 1 });
+
+      const redacted = await models.fingerprints.findById(oldFingerprint._id).lean();
+      expect(redacted!.excerptsRedactedAt).toEqual(now);
+      expect(redacted!.examples.map((e) => e.offersFound[0])).toEqual([
+        { title: '20% off collection', excerpt: '', pageUrl: 'https://saffron-spice.test/offers' },
+        { title: '20% off collection', excerpt: '', pageUrl: 'https://lotus-garden.test/offers' },
+      ]);
+      expect(redacted!.examples[0].markers).toBe(42);
+      expect((await models.fingerprints.findById(recentFingerprint._id).lean())!.examples[0].offersFound[0].excerpt).not.toBe('');
+
+      const results = (await models.adapters.findById(oldTest._id).lean())!.testResults as any;
+      expect(results.redactedAt).toEqual(now);
+      expect(results.summary).toEqual({ domains: 2, handled: 2, offers: 2 });
+      expect(results.domains[0].offers[0]).toMatchObject({ title: '20% off collection', discountPercentage: 20, excerpt: '', valid: true });
+      expect(results.domains[0].offers[0].fields.discountPercentage).toEqual({ method: 'selector:saffron@1:discount', text: '' });
+      expect(results.domains[0].businesses).toEqual([{ branchPath: '/' }]);
+      expect(((await models.adapters.findById(recentTest._id).lean())!.testResults as any).domains[0].offers[0].excerpt).not.toBe('');
+
+      expect(await retention.run(now)).toMatchObject({ fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
+    });
+
+    it('redacts only an opted-out website’s examples straight away', async () => {
+      const recent = await fingerprint('saffron', new Date(now.getTime() - DAY));
+      const test = await adapterVersion('1', new Date(now.getTime() - DAY));
+
+      expect(await retention.redactTemplateExamplesFor(['saffron-spice.test'])).toEqual({ fingerprintsRedacted: 1, adapterTestsRedacted: 1 });
+
+      const examples = (await models.fingerprints.findById(recent._id).lean())!.examples;
+      expect(examples.find((e) => e.domain === 'saffron-spice.test')!.offersFound[0].excerpt).toBe('');
+      expect(examples.find((e) => e.domain === 'lotus-garden.test')!.offersFound[0].excerpt).not.toBe('');
+      const domains = ((await models.adapters.findById(test._id).lean())!.testResults as any).domains;
+      expect(domains[0]).toMatchObject({ domain: 'saffron-spice.test', excerptsRedacted: true, businesses: [{ branchPath: '/' }] });
+      expect(domains[1].businesses[0].telephone).toBe('+441130000000');
+      // Only nightly retention marks the whole record; the opted-out domain alone doesn't end retention for the rest.
+      expect((await models.fingerprints.findById(recent._id).lean())!.excerptsRedactedAt).toBeUndefined();
+
+      expect(await retention.redactTemplateExamplesFor(['saffron-spice.test'])).toEqual({ fingerprintsRedacted: 0, adapterTestsRedacted: 0 });
+      expect(await retention.redactTemplateExamplesFor([])).toEqual({ fingerprintsRedacted: 0, adapterTestsRedacted: 0 });
+    });
   });
 });

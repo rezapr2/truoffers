@@ -89,4 +89,25 @@ describe('match_fingerprint job', () => {
     expect(other!.fingerprintRef).toBeUndefined();
     expect(other!.providerRef).toBeUndefined();
   });
+
+  it('never scores an opted-out website from its stored traits, and drops what it had', async () => {
+    const fingerprint = await h.models.fingerprints.create({ name: 'OrderNest template', key: 'ordernest', markers: TEMPLATE.map((m) => ({ ...m, weight: 1 })) });
+    await h.authorise('luigis.example.test', {
+      siteMarkers: TEMPLATE,
+      markersExtractedAt: new Date(),
+      fingerprintRef: fingerprint._id,
+      matchScore: 100,
+      matchCategory: FingerprintMatchCategory.EXACT,
+    });
+    const luigis = await h.models.sites.findOne({ domain: 'luigis.example.test' });
+    await h.models.optOuts.create({ domain: 'example.test', activeKey: 'example.test', source: 'admin' });
+
+    const outcome = await jobs.run(ImportJobType.MATCH_FINGERPRINT, context({ websiteId: String(luigis!._id) }));
+    expect(outcome.resultCounts).toEqual({ fingerprints: 0, matched: 0, skippedOptedOut: 1 });
+    const after = await h.models.sites.findById(luigis!._id).lean();
+    expect(after).toMatchObject({ authorisationStatus: DomainAuthorisationStatus.AUTHORISED });
+    for (const field of ['siteMarkers', 'markersExtractedAt', 'fingerprintRef', 'matchScore', 'matchCategory'] as const) {
+      expect(after![field]).toBeUndefined();
+    }
+  });
 });

@@ -87,6 +87,10 @@ export class WebsiteFingerprint {
   @Prop({ type: Date })
   analysedAt?: Date;
 
+  // Set when retention removed the offer excerpts from `examples`; cleared by the next analysis.
+  @Prop({ type: Date })
+  excerptsRedactedAt?: Date;
+
   @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
   lastJobRef?: Types.ObjectId;
 
