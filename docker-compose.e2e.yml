@@ -1,6 +1,7 @@
 # Local end-to-end run of the whole stack against fictional fixture websites. Never deployed.
 #
 #   scripts/e2e-phase1.sh
+#   scripts/e2e-phase2.sh
 #
 # Every service sits on an internal network with no route to the internet: the worker can reach
 # only the fixture sites (*.test names, which can never exist publicly), and nothing real is contacted.
@@ -17,7 +18,7 @@ services:
     environment:
       # SCRAPER_FIXTURE_HOSTS is refused when NODE_ENV=production.
       NODE_ENV: e2e
-      SCRAPER_FIXTURE_HOSTS: pizza-palace.test,curry-house.test,kebab-king.test,noindex.test,robots-blocked.test,ordernest-bella.test,spa-only.test
+      SCRAPER_FIXTURE_HOSTS: pizza-palace.test,curry-house.test,kebab-king.test,noindex.test,robots-blocked.test,ordernest-bella.test,spa-only.test,directory.saffronweb.test,saffron-spice.test,lotus-garden.test,kings-grill.test,dragon-wok.test,panda-noodles.test,luigis.ordernest.test
       ANTHROPIC_API_KEY: ""
 
   web:
@@ -46,6 +47,13 @@ services:
           - robots-blocked.test
           - ordernest-bella.test
           - spa-only.test
+          - directory.saffronweb.test
+          - saffron-spice.test
+          - lotus-garden.test
+          - kings-grill.test
+          - dragon-wok.test
+          - panda-noodles.test
+          - luigis.ordernest.test
 
   e2e:
     image: node:22-alpine
@@ -56,6 +64,7 @@ services:
     environment:
       API_URL: http://api:4000/api
       WEB_URL: http://web:3000
+    # The phase scripts pass the flow to run: node phase1.mjs, node phase2.mjs.
     command: ["node", "phase1.mjs"]
 
 networks:

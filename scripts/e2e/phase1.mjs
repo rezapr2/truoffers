@@ -1,53 +1,13 @@
 // Drives the scraper Phase 1 flow against the Docker E2E stack (see scripts/e2e-phase1.sh).
 // Runs inside the isolated compose network; talks to the API and web containers only.
 import assert from 'node:assert/strict';
+import { call, log, login, waitForHealthyStack, waitForRun, WEB } from './client.mjs';
 
-const API = process.env.API_URL ?? 'http://api:4000/api';
-const WEB = process.env.WEB_URL ?? 'http://web:3000';
-const PASSWORD = 'Password123!';
-
-let step = 0;
-const log = (message) => console.log(`    ${String(++step).padStart(2, '0')}. ${message}`);
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function call(method, path, { token, body, expect = [200, 201, 202] } = {}) {
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : undefined;
-  const allowed = Array.isArray(expect) ? expect : [expect];
-  if (!allowed.includes(res.status)) {
-    throw new Error(`${method} ${path} returned ${res.status} (expected ${allowed.join('/')}): ${text.slice(0, 500)}`);
-  }
-  return data;
-}
-
-async function waitFor(description, check, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  let last;
-  while (Date.now() < deadline) {
-    try {
-      last = await check();
-      if (last) return last;
-    } catch (err) {
-      last = err.message;
-    }
-    await sleep(1_000);
-  }
-  throw new Error(`Timed out waiting for ${description}: ${JSON.stringify(last)}`);
-}
-
-const health = await waitFor('the API, Redis and a worker', async () => {
-  const body = await call('GET', '/health');
-  return body.status === 'ok' && body.redis === 'connected' && body.worker === 'running' && body;
-}, 120_000);
+const health = await waitForHealthyStack();
 log(`API healthy with ${health.workers} worker(s)`);
 
-const admin = (await call('POST', '/auth/login', { body: { email: 'admin@truoffers.co.uk', password: PASSWORD } })).accessToken;
-const owner = (await call('POST', '/auth/login', { body: { email: 'owner@bellanapoli.co.uk', password: PASSWORD } })).accessToken;
+const admin = await login('admin@truoffers.co.uk');
+const owner = await login('owner@bellanapoli.co.uk');
 await call('GET', '/admin/scraper/candidates', { token: owner, expect: 403 });
 log('Signed in; merchants are kept out of the scraper admin');
 
@@ -67,12 +27,7 @@ assert.equal(intake[0].outcome, 'queued', JSON.stringify(intake[0]));
 assert.deepEqual(intake.slice(1).map((r) => r.outcome), ['rejected', 'rejected']);
 log('Submitted the website; marketplace and Google URLs were refused');
 
-const run = await waitFor('the crawl to finish', async () => {
-  const body = await call('GET', `/admin/scraper/jobs/runs/${intake[0].runId}`, { token: admin });
-  const failed = body.stages.find((s) => ['failed', 'dead_lettered', 'cancelled'].includes(s.status));
-  if (failed) throw new Error(`Stage ${failed.type} ${failed.status}: ${JSON.stringify(failed.errorLog)}`);
-  return body.stages.some((s) => s.type === 'deduplicate_offers' && s.status === 'completed') && body;
-}, 180_000);
+const run = await waitForRun(admin, intake[0].runId, 'the crawl to finish');
 log(`Crawl finished: ${run.stages.map((s) => s.type).join(' → ')}`);
 
 const website = await call('GET', `/admin/scraper/websites/${intake[0].websiteId}`, { token: admin });
