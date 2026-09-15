@@ -18,7 +18,6 @@ import { Role } from '../../common/enums';
 import { AuditAction, AuthorisationSource, CandidateStatus, DomainAuthorisationStatus, OptOutSource } from '../../common/scraper.enums';
 import { AuditService } from '../audit/audit.service';
 import { RunsService } from '../queue/runs.service';
-import { AdaptersService } from '../review/adapters.service';
 import { CandidatesService } from '../review/candidates.service';
 import { JobMonitoringService } from '../review/job-monitoring.service';
 import { OptOutsService } from '../review/opt-outs.service';
@@ -301,7 +300,6 @@ export class AdminScraperController {
   constructor(
     private readonly settings: ScraperSettingsService,
     private readonly audit: AuditService,
-    private readonly adapters: AdaptersService,
     private readonly websites: WebsitesService,
     private readonly candidates: CandidatesService,
     private readonly optOuts: OptOutsService,
@@ -358,13 +356,4 @@ export class AdminScraperController {
     return this.audit.list({ action, targetType, targetId, before: before ? new Date(before) : undefined });
   }
 
-  @Get('adapters')
-  listAdapters() {
-    return this.adapters.list();
-  }
-
-  @Patch('adapters/:key')
-  pauseAdapter(@Param('key') key: string, @Body() dto: PauseDto) {
-    return this.adapters.setPaused(key, dto.paused, dto.reason);
-  }
 }

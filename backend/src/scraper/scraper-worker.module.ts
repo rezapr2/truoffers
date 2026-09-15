@@ -3,6 +3,7 @@ import { AdapterRegistry } from './extraction/adapter-registry.service';
 import { AnthropicAiOfferExtractor } from './extraction/ai/anthropic-offer-extractor';
 import { NullAiOfferExtractor } from './extraction/ai/ai-offer-extractor';
 import { BusinessMatcherService } from './matching/business-matcher.service';
+import { NetworkJobsService } from './pipeline/network-jobs.service';
 import { PipelineService } from './pipeline/pipeline.service';
 import { ScraperWorkerService } from './queue/scraper-worker.service';
 import { StageRunner } from './queue/stage-runner.service';
@@ -41,6 +42,7 @@ import { AI_OFFER_EXTRACTOR, CNAME_RESOLVER, HOST_RESOLVER, NETWORK_POLICY } fro
     AdapterRegistry,
     BusinessMatcherService,
     PipelineService,
+    NetworkJobsService,
     StageRunner,
     ScraperWorkerService,
   ],

@@ -45,7 +45,7 @@ const SELECTOR_CACHE_MS = 15_000;
 export class AdapterRegistry implements OnModuleInit {
   private readonly logger = new Logger(AdapterRegistry.name);
   private readonly codeAdapters: BuiltinAdapter[] = [new OrderNestAdapter(), new JsonLdAdapter(), new GenericHtmlAdapter()];
-  private selectorCache?: { at: number; adapters: SelectorAdapter[] };
+  private selectorCache?: { at: number; stamp: string; adapters: SelectorAdapter[] };
 
   constructor(
     @InjectModel(ScraperAdapter.name) private readonly model: Model<ScraperAdapterDocument>,
@@ -102,8 +102,18 @@ export class AdapterRegistry implements OnModuleInit {
     });
   }
 
+  // Cheap change detector: the newest edit to any selector adapter or fingerprint.
+  private async stamp(): Promise<string> {
+    const [adapter, fingerprint] = await Promise.all([
+      this.model.findOne({ type: ScraperAdapterType.SELECTOR }).sort({ updatedAt: -1 }).select('updatedAt').lean<{ updatedAt?: Date }>(),
+      this.fingerprints.findOne().sort({ updatedAt: -1 }).select('updatedAt').lean<{ updatedAt?: Date }>(),
+    ]);
+    return `${adapter?.updatedAt?.getTime() ?? 0}|${fingerprint?.updatedAt?.getTime() ?? 0}`;
+  }
+
   async selectorAdapters(): Promise<SelectorAdapter[]> {
-    if (this.selectorCache && Date.now() - this.selectorCache.at < SELECTOR_CACHE_MS) return this.selectorCache.adapters;
+    const stamp = await this.stamp();
+    if (this.selectorCache && this.selectorCache.stamp === stamp && Date.now() - this.selectorCache.at < SELECTOR_CACHE_MS) return this.selectorCache.adapters;
     const records = await this.model
       .find({ type: ScraperAdapterType.SELECTOR, isCurrent: true, status: { $in: [ScraperAdapterStatus.APPROVED, ScraperAdapterStatus.TESTING] } })
       .lean<AdapterLean[]>();
@@ -116,7 +126,7 @@ export class AdapterRegistry implements OnModuleInit {
         this.logger.warn((err as Error).message);
       }
     }
-    this.selectorCache = { at: Date.now(), adapters };
+    this.selectorCache = { at: Date.now(), stamp, adapters };
     return adapters;
   }
 

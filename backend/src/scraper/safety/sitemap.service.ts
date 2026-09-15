@@ -30,6 +30,31 @@ export class SitemapService {
   });
 
   async collectUrls(sitemapUrls: string[], siteDomain: string, fetchDocument: SitemapFetcher): Promise<string[]> {
+    return this.walk(sitemapUrls, siteDomain, fetchDocument, (loc) => this.sameSite(loc, siteDomain));
+  }
+
+  /**
+   * The websites an authorised network's sitemap lists (e.g. a provider's client directory): one origin per
+   * site domain, at most `maxSites`. Sitemap indexes are still only followed on the sitemap's own host.
+   */
+  async collectListedSites(sitemapUrls: string[], sitemapDomain: string, fetchDocument: SitemapFetcher, maxSites: number): Promise<{ domain: string; seedUrl: string }[]> {
+    const sites = new Map<string, string>();
+    await this.walk(sitemapUrls, sitemapDomain, fetchDocument, (loc) => {
+      if (sites.size >= maxSites) return false;
+      try {
+        const url = new URL(loc);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+        const domain = siteDomainOf(url.hostname);
+        if (domain !== sitemapDomain && !sites.has(domain)) sites.set(domain, `${url.protocol}//${url.host}/`);
+      } catch {
+        /* skip malformed entries */
+      }
+      return false;
+    });
+    return [...sites.entries()].map(([domain, seedUrl]) => ({ domain, seedUrl }));
+  }
+
+  private async walk(sitemapUrls: string[], siteDomain: string, fetchDocument: SitemapFetcher, accept: (loc: string) => boolean): Promise<string[]> {
     const found = new Set<string>();
     const seenDocuments = new Set<string>();
     const queue = sitemapUrls.map((url) => ({ url, depth: 0 }));
@@ -63,7 +88,7 @@ export class SitemapService {
       for (const entry of asArray(parsed.urlset?.url)) {
         if (found.size >= SITEMAP_LIMITS.maxUrls) break;
         const loc = locOf(entry);
-        if (!loc || !this.sameSite(loc, siteDomain)) continue;
+        if (!loc || !accept(loc)) continue;
         try {
           found.add(normaliseUrl(loc));
         } catch {

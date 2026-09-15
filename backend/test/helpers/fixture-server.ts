@@ -69,9 +69,9 @@ export async function startFixtureServer(): Promise<FixtureServer> {
     }
     const extension = path.extname(file);
     res.writeHead(200, { 'Content-Type': CONTENT_TYPES[extension] ?? 'application/octet-stream' });
-    // Fixture files write same-site absolute URLs as {{origin}}; fill in the real host and port.
+    // Fixture files write same-site absolute URLs as {{origin}}, and other fixture hosts as http://host:{{port}}.
     const body = ['.html', '.xml', '.txt', '.json'].includes(extension)
-      ? readFileSync(file, 'utf8').replaceAll('{{origin}}', `http://${host}:${port}`)
+      ? readFileSync(file, 'utf8').replaceAll('{{origin}}', `http://${host}:${port}`).replaceAll(':{{port}}', `:${port}`)
       : readFileSync(file);
     res.end(body);
   });

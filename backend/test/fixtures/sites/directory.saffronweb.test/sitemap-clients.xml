@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Saffron Web Studio's published client directory (fictional). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://saffron-spice.test:{{port}}/</loc></url>
+  <url><loc>http://saffron-spice.test:{{port}}/offers</loc></url>
+  <url><loc>http://lotus-garden.test:{{port}}/</loc></url>
+  <url><loc>http://kings-grill.test:{{port}}/</loc></url>
+  <url><loc>http://dragon-wok.test:{{port}}/</loc></url>
+  <url><loc>https://www.just-eat.co.uk/restaurants-kings-grill-sheffield</loc></url>
+  <url><loc>{{origin}}/about</loc></url>
+</urlset>

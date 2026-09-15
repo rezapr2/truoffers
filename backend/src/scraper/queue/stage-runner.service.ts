@@ -7,6 +7,7 @@ import { OfferLifecycleViolation } from '../../schemas/offer-lifecycle.guard';
 import type { ImportJobDocument } from '../../schemas/import-job.schema';
 import { ScrapedWebsite, ScrapedWebsiteDocument } from '../../schemas/scraped-website.schema';
 import { NoAdapterAvailableError } from '../extraction/adapter-registry.service';
+import { NetworkJobsService } from '../pipeline/network-jobs.service';
 import { PipelineService, StageAbortedError, StageContext, StageOutcome } from '../pipeline/pipeline.service';
 import { CrawlDeniedError, PARKING_DENIALS } from '../safety/crawl-gate.service';
 import { FetchAbortedError, FetchDeniedError, FetchFailedError } from '../safety/errors';
@@ -48,6 +49,7 @@ export class StageRunner {
     private readonly jobs: ImportJobsService,
     private readonly queue: ScraperQueueService,
     private readonly pipeline: PipelineService,
+    private readonly networkJobs: NetworkJobsService,
     private readonly control: ScraperControlService,
     @InjectModel(ScrapedWebsite.name) private readonly sites: Model<ScrapedWebsiteDocument>,
   ) {}
@@ -92,7 +94,9 @@ export class StageRunner {
         },
         checkpoint: (partial) => this.jobs.checkpoint(importJob._id, partial),
       };
-      const outcome = await this.pipeline.run(importJob.type, ctx);
+      const outcome = this.networkJobs.handles(importJob.type)
+        ? await this.networkJobs.run(importJob.type, ctx)
+        : await this.pipeline.run(importJob.type, ctx);
       await this.finish(running, outcome);
     } catch (err) {
       await this.handleError(job, token, importJob, err as Error, controller);

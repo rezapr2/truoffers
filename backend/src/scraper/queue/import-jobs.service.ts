@@ -11,7 +11,7 @@ export interface NewRun {
   type: ImportJobType;
   normalisedUrl: string;
   domain: string;
-  scrapedWebsiteId: Types.ObjectId;
+  scrapedWebsiteId?: Types.ObjectId;
   submittedBy?: string;
   batchId?: string;
   payload?: Record<string, unknown>;

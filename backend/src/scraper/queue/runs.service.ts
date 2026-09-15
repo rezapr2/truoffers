@@ -40,6 +40,23 @@ export class RunsService {
     return { job, created };
   }
 
+  /**
+   * A single-job run that isn't a website import (fingerprint analysis, adapter test, network discovery).
+   * `key` identifies what it works on, so the same work is never queued twice at once.
+   */
+  async startJob(options: { type: ImportJobType; key: string; label: string; payload: Record<string, unknown>; submittedBy?: string; scrapedWebsiteId?: Types.ObjectId }) {
+    const { job, created } = await this.jobs.createRun({
+      type: options.type,
+      normalisedUrl: options.key,
+      domain: options.label,
+      scrapedWebsiteId: options.scrapedWebsiteId,
+      submittedBy: options.submittedBy,
+      payload: options.payload,
+    });
+    if (created) await this.queue.enqueue(job);
+    return { job, created };
+  }
+
   async cancelRun(runId: string, userId?: string): Promise<{ cancelled: number; removed: number }> {
     const id = new Types.ObjectId(runId);
     await this.control.cancelRun(runId);

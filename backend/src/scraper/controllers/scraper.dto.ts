@@ -5,12 +5,14 @@ import {
   Equals,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsEmail,
   IsEnum,
   IsIn,
   IsInt,
   IsMongoId,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Matches,
@@ -25,8 +27,10 @@ import {
   CandidateStatus,
   ConfidenceBand,
   DomainAuthorisationStatus,
+  FingerprintMatchCategory,
   ImportJobStatus,
   ImportJobType,
+  MarkerCategory,
   OFFER_TYPES,
   OfferVerification,
   ProviderPolicyBasis,
@@ -211,5 +215,89 @@ export class RemovalRequestDto {
 }
 
 export class MerchantRejectDto {
+  @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
+// ---------- Phase 2: fingerprints, adapters, networks ----------
+
+export class FingerprintMarkerDto {
+  @IsEnum(MarkerCategory) category: MarkerCategory;
+  @IsString() @MinLength(1) @MaxLength(120) value: string;
+  @IsOptional() @IsNumber() @Min(0) @Max(10) weight?: number;
+  @IsOptional() @IsBoolean() required?: boolean;
+  @IsOptional() @IsBoolean() negative?: boolean;
+}
+
+export class ThresholdsDto {
+  @IsInt() @Min(1) @Max(100) exact: number;
+  @IsInt() @Min(1) @Max(100) high: number;
+  @IsInt() @Min(1) @Max(100) possible: number;
+}
+
+export class CreateFingerprintDto {
+  @IsString() @MinLength(2) @MaxLength(80) name: string;
+  @IsArray() @ArrayMinSize(2) @ArrayMaxSize(10) @IsMongoId({ each: true }) exampleWebsiteIds: string[];
+  @IsOptional() @IsMongoId() providerId?: string;
+}
+
+export class UpdateFingerprintDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) name?: string;
+  @IsOptional() @IsBoolean() active?: boolean;
+  @IsOptional() @IsMongoId() providerId?: string | null;
+  @IsOptional() @IsArray() @ArrayMaxSize(400) @ValidateNested({ each: true }) @Type(() => FingerprintMarkerDto) markers?: FingerprintMarkerDto[];
+  @IsOptional() @IsObject() categoryWeights?: Partial<Record<MarkerCategory, number>>;
+  @IsOptional() @ValidateNested() @Type(() => ThresholdsDto) thresholds?: ThresholdsDto;
+}
+
+export class MatchFingerprintsDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(500) @IsMongoId({ each: true }) websiteIds?: string[];
+  @IsOptional() @IsBoolean() allAuthorised?: boolean;
+  @IsOptional() @IsBoolean() refetch?: boolean;
+}
+
+export class CreateAdapterDto {
+  @IsString() @MinLength(2) @MaxLength(80) name: string;
+  @IsMongoId() fingerprintId: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10) @IsString({ each: true }) exampleDomains: string[];
+  @IsObject() configuration: Record<string, unknown>;
+}
+
+export class UpdateAdapterVersionDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) name?: string;
+  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10) @IsString({ each: true }) exampleDomains?: string[];
+  @IsOptional() @IsObject() configuration?: Record<string, unknown>;
+}
+
+export class RerunAdapterDto {
+  @IsOptional() @IsString() @MaxLength(20) version?: string;
+}
+
+export class NetworkDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) name?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(2048, { each: true }) sitemapUrls?: string[];
+  @IsOptional() @IsEnum(ProviderPolicyBasis) basis?: ProviderPolicyBasis;
+  @IsOptional() @IsString() @MaxLength(200) agreementReference?: string | null;
+  @IsOptional() @IsString() @MaxLength(2000) basisNotes?: string | null;
+  @IsOptional() @IsMongoId() providerId?: string | null;
+  @IsOptional() @IsBoolean() active?: boolean;
+}
+
+export class NetworkWebsitesQuery extends PageQuery {
+  @IsOptional() @IsMongoId() providerId?: string;
+  @IsOptional() @IsString() @MaxLength(80) adapterKey?: string;
+  @IsOptional() @IsMongoId() fingerprintId?: string;
+  @IsOptional() @IsMongoId() networkId?: string;
+  @IsOptional() @IsEnum(FingerprintMatchCategory) matchCategory?: FingerprintMatchCategory;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(100) minScore?: number;
+  @IsOptional() @IsEnum(DomainAuthorisationStatus) status?: DomainAuthorisationStatus;
+  @IsOptional() @IsDateString() checkedBefore?: string;
+  @IsOptional() @Transform(toBoolean) @IsBoolean() hasErrors?: boolean;
+  @IsOptional() @IsString() @MaxLength(100) q?: string;
+  @IsOptional() @IsIn(['fingerprint', 'provider', 'adapter']) groupBy?: 'fingerprint' | 'provider' | 'adapter';
+}
+
+export class BulkWebsitesDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @IsMongoId({ each: true }) websiteIds: string[];
+  @IsIn(['authorise', 'run', 'pause', 'resume', 'opt_out', 'match_fingerprint']) action: 'authorise' | 'run' | 'pause' | 'resume' | 'opt_out' | 'match_fingerprint';
   @IsOptional() @IsString() @MaxLength(500) reason?: string;
 }
