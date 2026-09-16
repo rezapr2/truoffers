@@ -29,7 +29,7 @@ describe('data retention (docs/data-protection.md)', () => {
     await connectTestMongo();
     models = testModels();
     await syncTestIndexes(models);
-    retention = new RetentionService(models.candidates as any, models.offers as any, models.jobs as any, models.fingerprints as any, models.adapters as any, models.revisions as any);
+    retention = new RetentionService(models.candidates as any, models.offers as any, models.jobs as any, models.fingerprints as any, models.adapters as any, models.revisions as any, models.invitations as any);
   });
   afterAll(disconnectTestMongo);
   beforeEach(resetTestMongo);
@@ -97,7 +97,7 @@ describe('data retention (docs/data-protection.md)', () => {
     await models.jobs.collection.updateOne({ _id: staleJob._id }, { $set: { updatedAt: new Date(now.getTime() - 8 * DAY) } });
 
     const result = await retention.run(now);
-    expect(result).toEqual({ candidatesRedacted: 1, offersRedacted: 2, revisionsRedacted: 0, staleRunOutputsCleared: 1, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
+    expect(result).toEqual({ candidatesRedacted: 1, offersRedacted: 2, revisionsRedacted: 0, invitationsDeleted: 0, staleRunOutputsCleared: 1, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
 
     const redactedCandidate = await models.candidates.findById(rejectedLongAgo._id).lean();
     expect(redactedCandidate!.sources[0]).toMatchObject({ url: 'https://pizza-palace.test/offers', excerpt: '' });
@@ -119,7 +119,23 @@ describe('data retention (docs/data-protection.md)', () => {
     }
     expect((await models.jobs.findById(staleJob._id).lean())!.output).toBeUndefined();
 
-    expect(await retention.run(now)).toEqual({ candidatesRedacted: 0, offersRedacted: 0, revisionsRedacted: 0, staleRunOutputsCleared: 0, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
+    expect(await retention.run(now)).toEqual({ candidatesRedacted: 0, offersRedacted: 0, revisionsRedacted: 0, invitationsDeleted: 0, staleRunOutputsCleared: 0, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
+  });
+
+  it('deletes claim invitations and their contact notes a year after the link stopped working', async () => {
+    const day = (n: number) => new Date(now.getTime() + n * DAY);
+    const invitation = (hint: string, fields: Record<string, unknown>) =>
+      models.invitations.create({ businessRef: new Types.ObjectId(), tokenHash: hint, tokenHint: hint, expiresAt: day(10), contacts: [{ channel: 'phone', at: day(-400), note: 'Spoke to the owner' }], ...fields });
+    const expiredLongAgo = await invitation('old', { expiresAt: day(-366) });
+    const claimedLongAgo = await invitation('claimed', { expiresAt: day(-300), claimedAt: day(-370) });
+    const revokedRecently = await invitation('revoked', { expiresAt: day(-300), revokedAt: day(-100) });
+    const live = await invitation('live', {});
+
+    expect(await retention.run(now)).toMatchObject({ invitationsDeleted: 2 });
+    expect(await models.invitations.exists({ _id: expiredLongAgo._id })).toBeNull();
+    expect(await models.invitations.exists({ _id: claimedLongAgo._id })).toBeNull();
+    expect(await models.invitations.exists({ _id: revokedRecently._id })).not.toBeNull();
+    expect(await models.invitations.exists({ _id: live._id })).not.toBeNull();
   });
 
   describe('adapter builder output', () => {

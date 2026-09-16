@@ -2,6 +2,7 @@
 #
 #   scripts/e2e-phase1.sh
 #   scripts/e2e-phase2.sh
+#   scripts/e2e-phase3.sh   (also starts the render worker)
 #
 # Every service sits on an internal network with no route to the internet: the worker can reach
 # only the fixture sites (*.test names, which can never exist publicly), and nothing real is contacted.
@@ -18,8 +19,18 @@ services:
     environment:
       # SCRAPER_FIXTURE_HOSTS is refused when NODE_ENV=production.
       NODE_ENV: e2e
-      SCRAPER_FIXTURE_HOSTS: pizza-palace.test,curry-house.test,kebab-king.test,noindex.test,robots-blocked.test,ordernest-bella.test,spa-only.test,directory.saffronweb.test,saffron-spice.test,lotus-garden.test,kings-grill.test,dragon-wok.test,panda-noodles.test,luigis.ordernest.test
+      SCRAPER_FIXTURE_HOSTS: &fixture-hosts pizza-palace.test,curry-house.test,kebab-king.test,noindex.test,robots-blocked.test,ordernest-bella.test,spa-only.test,directory.saffronweb.test,saffron-spice.test,lotus-garden.test,kings-grill.test,dragon-wok.test,panda-noodles.test,luigis.ordernest.test,deals-diner.test
       ANTHROPIC_API_KEY: ""
+
+  render-worker:
+    image: truoffers-render:e2e
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.render
+    environment:
+      NODE_ENV: e2e
+      SCRAPER_FIXTURE_HOSTS: *fixture-hosts
+      SITE_URL: http://web:3000
 
   web:
     image: truoffers-web:e2e
@@ -37,6 +48,8 @@ services:
     volumes:
       - ./backend/test/fixtures/sites:/sites:ro
       - ./scripts/e2e/fixtures.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Phase 3: a website whose offers the E2E flow changes between checks.
+      - dynamic-site:/sites/deals-diner.test:ro
     networks:
       default:
         aliases:
@@ -54,6 +67,7 @@ services:
           - dragon-wok.test
           - panda-noodles.test
           - luigis.ordernest.test
+          - deals-diner.test
 
   e2e:
     image: node:22-alpine
@@ -61,11 +75,15 @@ services:
     working_dir: /e2e
     volumes:
       - ./scripts/e2e:/e2e:ro
+      - dynamic-site:/dynamic/deals-diner.test
     environment:
       API_URL: http://api:4000/api
       WEB_URL: http://web:3000
     # The phase scripts pass the flow to run: node phase1.mjs, node phase2.mjs.
     command: ["node", "phase1.mjs"]
+
+volumes:
+  dynamic-site:
 
 networks:
   default:

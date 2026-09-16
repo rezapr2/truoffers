@@ -36,6 +36,21 @@ ordering provider, together with the basis for using it (a written agreement ref
 from a terms review). Websites listed in that sitemap become authorised. Websites the robot only
 finds as links still wait for an administrator, and opted-out websites are never re-authorised.
 
+**Keeping listings accurate.** Published imported offers are checked again on a schedule: daily,
+every 6 hours near their end date, and weekly for websites with nothing published. Offers the
+robot can no longer find are hidden straight away. Changed terms wait for an administrator. Offers a
+business manages are never changed by a recheck; the business is only told that its website
+changed.
+
+**JavaScript-only websites.** Where an administrator has enabled it, a website whose offers only
+appear after JavaScript runs is opened in a headless browser, using the same identity and
+permission checks. Images, media, fonts and analytics or advertising services are never loaded.
+Only the page text needed for evidence is kept, exactly as for ordinary pages.
+
+**Claim invitations.** Administrators can generate an invitation for a takeaway to claim its
+listing. TruOffers never sends it. The administrator sends it themselves and records that they
+did.
+
 ## Lawful basis
 
 **Legitimate interests** (UK GDPR Art. 6(1)(f)). Summary of the assessment:
@@ -59,6 +74,10 @@ sole trader or partnership, or where contact details identify a person.
 | Adapter builder output: offer excerpts (up to 300 characters) and, in test results, the branch name, phone, address and postcode each example website showed | Example websites an administrator picked | `WebsiteFingerprint.examples`; `ScraperAdapter.testResults` |
 | Template traits (class names, asset paths, generator and attribution text, page skeleton, URL patterns) | Each website's pages | `ScrapedWebsite.siteMarkers`; `WebsiteFingerprint.markers`. Not personal data: business names, phone numbers and addresses are never used as traits |
 | Authorised network: name, sitemap URLs, basis and agreement reference | Entered by an administrator | `AuthorisedNetwork` |
+| Changes a recheck found on a published offer: the terms before and after, with supporting excerpts | The same pages | `OfferRevision`, kept as the offer's revision history |
+| Recheck state: when an offer was last seen and how many checks missed it | Rechecks | `Offer.lastSeenAt`, `absentChecks` |
+| Claim invitation: the business, a hash of the link, who generated it, when it expires or was used | Entered by an administrator | `MerchantClaimInvitation` |
+| Notes an administrator keeps about contacting a business (channel, date, free text that may name a person) | Entered by an administrator | `MerchantClaimInvitation.contacts` |
 | Removal requester's name (optional) and email address | The public removal form | `DomainOptOut.requestedBy` |
 | Administrator actions (who, what, when, IP address) | The admin tools | `AdminAuditLog` |
 
@@ -79,6 +98,11 @@ The robot does not collect:
   pages show only the source domain and the date it was last checked.
 - **Adapter tests create nothing.** Testing an adapter on its example websites stores a summary for
   the administrator; it never creates candidates or offers.
+- **Rendering loads as little as possible.** Rendering happens only when the ordinary page has no
+  offers, and covers at most 3 pages. Images, media and fonts are never loaded, and analytics and
+  advertising services are never contacted, so the robot never appears in the business's analytics.
+- **Claim links are never stored.** Only a hash is kept. The messages an administrator copies are
+  generated on the spot and not saved.
 - **Template matching reuses what it has.** Matching a website against templates reuses traits read
   in the last 24 hours instead of fetching the site again.
 
@@ -91,6 +115,9 @@ The robot does not collect:
 | Excerpts for a domain that opted out or was the subject of a removal request | Redacted immediately |
 | Adapter builder output (template analysis examples, adapter test results) | 90 days after the analysis or test ran, then redacted. Branch contact details in test results are deleted at the same time. A new analysis or test replaces it |
 | Adapter builder output for a website that opted out or was the subject of a removal request | Redacted immediately, for that website only |
+| Excerpts on revisions that were applied, discarded or closed | 90 days after the decision, then redacted |
+| Revisions and their excerpts for a domain that opted out or was the subject of a removal request | Pending ones closed and excerpts redacted immediately |
+| Claim invitations and contact notes | Deleted a year after the link expired, was used or was replaced |
 | Job run records | 180 days (TTL index) |
 | Intermediate run data (stage hand-over between queue jobs) | Deleted when the run ends; a nightly job clears runs that never finished |
 | Opt-out records and requester emails | While the opt-out is in force, so the domain stays excluded |
@@ -100,6 +127,14 @@ Redaction keeps the record (URL, page title, check date) but deletes the excerpt
 builder output it keeps the counts, offer titles, parsed values and field methods, and deletes the
 excerpts, the text behind each field and branch contact details. The retention job runs nightly at
 03:00 (`RetentionService`).
+
+## Outreach and PECR
+
+Claim invitations are for administrators to send themselves. The admin page reminds them that
+marketing by email, text or WhatsApp to sole traders is covered by PECR. They must check there is a
+lawful basis and include an opt-out before sending. No code path in TruOffers sends email, SMS or
+WhatsApp messages; an automated test checks that no messaging client is present. Every invitation,
+replaced invitation and recorded contact is in the audit log.
 
 ## AI processing
 
@@ -130,9 +165,11 @@ administrator:
 3. Open candidates from the domain are closed, and their excerpts are redacted.
 4. If the website was an example for a template or an adapter test, its excerpts and branch
    contact details are removed from that analysis and those test results.
-5. Listings created from that website that no business has claimed are hidden (`suspended`) until
+5. Changes waiting for review on its offers are closed, and their excerpts are redacted. The website
+   is no longer rechecked.
+6. Listings created from that website that no business has claimed are hidden (`suspended`) until
    an administrator reviews them.
-6. Administrators see the request in the unacknowledged opt-out queue.
+7. Administrators see the request in the unacknowledged opt-out queue.
 
 An opted-out website stays excluded from template matching and network discovery: a network
 sitemap that lists it doesn't authorise it again.
@@ -161,6 +198,9 @@ administrators. Useful places to look:
   - more than 5 redirects;
   - responses over 2 MB, or compressed more than 20:1.
 - DNS answers are validated and then pinned for each request, which prevents DNS rebinding.
+- The headless browser connects only through a local proxy that applies the same checks to every
+  request it makes, including each step of a redirect. It runs in its own container with no extra
+  privileges and a memory limit, and it stops when a website shows a challenge or login page.
 - Publishing, verifying and handing offers to merchants can only happen in an administrator's or
   merchant's request. The database layer rejects these changes from the worker or scheduled jobs.
 - Every administrative decision is recorded in an append-only audit log.

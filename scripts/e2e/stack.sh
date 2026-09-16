@@ -23,9 +23,10 @@ e2e_cleanup() {
 }
 trap e2e_cleanup EXIT
 
+# e2e_start [extra service...]: e.g. render-worker for Phase 3.
 e2e_start() {
   echo "==> Building and starting the stack"
-  "${COMPOSE[@]}" up -d --build --wait mongo redis api worker fixtures web
+  "${COMPOSE[@]}" up -d --build --wait mongo redis api worker fixtures web "$@"
 
   echo "==> Seeding demo data and running the scraper migration"
   "${COMPOSE[@]}" exec -T api node dist/seed/seed.js > /dev/null

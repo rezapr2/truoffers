@@ -62,6 +62,8 @@ export const MATCH_THRESHOLDS = {
 
 export const RETENTION = {
   excerptDays: 90,
+  // Claim invitations and the contact notes on them, counted from when the link stopped working.
+  invitationDays: 365,
   runHistoryDays: 180,
   jobLogLines: 500,
 } as const;

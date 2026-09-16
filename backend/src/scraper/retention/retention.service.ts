@@ -11,6 +11,7 @@ import {
 } from '../../schemas/extracted-offer-candidate.schema';
 import { ImportJob, ImportJobDocument } from '../../schemas/import-job.schema';
 import { RETENTION_COMPONENT } from '../../schemas/offer-lifecycle.guard';
+import { MerchantClaimInvitation, MerchantClaimInvitationDocument } from '../../schemas/merchant-claim-invitation.schema';
 import { OfferRevision, OfferRevisionDocument } from '../../schemas/offer-revision.schema';
 import { Offer, OfferDocument } from '../../schemas/offer.schema';
 import { ScraperAdapter, ScraperAdapterDocument } from '../../schemas/scraper-adapter.schema';
@@ -42,6 +43,7 @@ export class RetentionService {
     @InjectModel(WebsiteFingerprint.name) private readonly fingerprints: Model<WebsiteFingerprintDocument>,
     @InjectModel(ScraperAdapter.name) private readonly adapters: Model<ScraperAdapterDocument>,
     @InjectModel(OfferRevision.name) private readonly revisions: Model<OfferRevisionDocument>,
+    @InjectModel(MerchantClaimInvitation.name) private readonly invitations: Model<MerchantClaimInvitationDocument>,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
@@ -126,6 +128,17 @@ export class RetentionService {
       await this.revisions.updateOne({ _id: revision._id }, { $set: { sources: redact(revision), evidence: {}, excerptsRedactedAt: now } });
     }
 
+    // Claim invitations, with the notes admins kept about contacting the business, go a year after the link
+    // stopped working. Hashed tokens only: the link itself was never stored.
+    const invitationCutoff = new Date(now.getTime() - RETENTION.invitationDays * DAY_MS);
+    const invitations = await this.invitations.deleteMany({
+      $or: [
+        { expiresAt: { $lte: invitationCutoff } },
+        { claimedAt: { $lte: invitationCutoff } },
+        { revokedAt: { $lte: invitationCutoff } },
+      ],
+    });
+
     // Stage hand-over data is cleared when a run ends; this catches runs that never finished.
     const staleOutputs = await this.jobs.updateMany(
       { updatedAt: { $lte: new Date(now.getTime() - STALE_RUN_OUTPUT_MS) }, $or: [{ output: { $exists: true } }, { payload: { $exists: true } }] },
@@ -155,6 +168,7 @@ export class RetentionService {
       candidatesRedacted: candidates.length,
       offersRedacted: offers.length,
       revisionsRedacted: revisions.length,
+      invitationsDeleted: invitations.deletedCount,
       staleRunOutputsCleared: staleOutputs.modifiedCount,
       fingerprintExamplesRedacted: fingerprints.length,
       adapterTestResultsRedacted: adapters.length,

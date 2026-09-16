@@ -24,6 +24,7 @@ function model<T>(name: string, schema: Schema<any>): Model<T> {
 }
 
 // Mongoose models bound to the default (test) connection, for constructing services without Nest.
+import { MerchantClaimInvitation, MerchantClaimInvitationSchema } from '../../src/schemas/merchant-claim-invitation.schema';
 import { OfferRevision, OfferRevisionSchema } from '../../src/schemas/offer-revision.schema';
 
 export function testModels() {
@@ -43,6 +44,7 @@ export function testModels() {
     fingerprints: model<WebsiteFingerprint>(WebsiteFingerprint.name, WebsiteFingerprintSchema),
     networks: model<AuthorisedNetwork>(AuthorisedNetwork.name, AuthorisedNetworkSchema),
     revisions: model<OfferRevision>(OfferRevision.name, OfferRevisionSchema),
+    invitations: model<MerchantClaimInvitation>(MerchantClaimInvitation.name, MerchantClaimInvitationSchema),
   };
 }
 

@@ -122,8 +122,8 @@ admin UI ─▶ API (review, publish, opt-outs) ─▶ MongoDB ◀─ structured
 1. **Submit websites** at `/admin/scraper/websites`: paste URLs, upload a CSV, or import a
    provider's client list (only for a provider with an *allowed* policy and a written agreement
    reference).
-2. **Watch the run** at `/admin/scraper/jobs`. Each website goes through six stages: analyse,
-   discover, business, offers, match, dedupe.
+2. **Watch the run** at `/admin/scraper/jobs`. Each website goes through seven stages: analyse,
+   discover, business, offers, match, dedupe and recheck (plus render, for JavaScript-only sites).
 3. **Review** at `/admin/scraper/candidates`.
    - Compare the extracted offer with the source excerpts and the confidence breakdown.
    - Then edit, approve (unverified or admin-verified), reject, merge, or send it to the business
@@ -171,6 +171,62 @@ CSS selectors and named parsers only (text, money, percent, date, promo code, ph
 there's no way to enter a regular expression. When several adapters could handle a page, the order
 is provider adapter, selector adapter, JSON-LD, then generic HTML.
 
+**Keeping imports current.** Every completed run ends with a *recheck* step that applies what it
+found to the offers already published from that website:
+
+- **Found again:** the offer's *last checked* date is refreshed.
+- **Not on a page the robot read** (or the page now returns 404): the offer is hidden at once and
+  shows as *checking availability*. If the next check finds it, it is published again
+  automatically. If it is missing twice in a row, it waits for an admin under **Imported offers →
+  Expiry review**.
+- **Different terms:** the published offer stays live and the change waits under **Imported
+  offers → Changed terms**. There you see a before/after diff and choose to apply it (unverified or
+  verified) or keep the published version. A discarded change isn't proposed again, and every
+  decision stays in the offer's revision history.
+- **The business manages the offer:** the robot never changes it. The business only sees that its
+  website now says something different, and can update the offer or keep it.
+- A check that couldn't read a page counts for nothing, so a slow website never hides offers.
+
+Websites are checked on a schedule (`recheck_offer` runs through the worker):
+
+| Website state | Next check |
+|---|---|
+| Has published offers | Every 24 hours |
+| An offer ends within 48 hours | Every 6 hours |
+| Nothing published | Weekly |
+| Last check failed | After 1h, 4h, 16h, 64h, then weekly |
+| Opted out, or held for provider review | Never |
+
+A website's page or an adapter's page can set a different interval. Offers past their end date
+are expired by `review_stale_offer`.
+
+**JavaScript-only websites.** Some takeaway sites put their offers on the page with JavaScript, so
+the static HTML has none. With **Render JavaScript-only websites** enabled in scraper settings, such
+a run renders up to 3 pages in Chromium and reads the result with the same adapter. Rendering
+happens in a separate **render worker** (`Dockerfile.render`), because the browser needs about 1 GB
+of memory:
+
+- Every connection the browser makes, including each redirect hop, goes through a validating proxy
+  with the same SSRF and never-crawl checks as normal fetching.
+- The website's own URLs also go through robots.txt, blocked paths and the rate limit.
+- Images, media, fonts and analytics hosts are never loaded.
+- A bot challenge, CAPTCHA or login page stops the render, and the website is left alone for a week.
+- The browser restarts above 512 MB. Cancelling a run or pressing the emergency stop closes its
+  pages at once.
+
+Without a render worker running, rendering is simply never queued.
+
+**Claim invitations.** **Claim invitations** (`/admin/scraper/outreach`) lists takeaways whose
+imported offers are live but whose listing nobody has claimed. *Generate invitation* gives you a
+claim link (valid for 30 days), a QR code, an email, a WhatsApp message and a phone script, all
+using the approved wording.
+
+- **Nothing is sent by TruOffers**; you copy the message and send it yourself, after checking PECR.
+- The link opens the claim page with the business already selected. The owner still verifies as
+  usual.
+- *Record contact* notes how you reached them.
+- A new invitation replaces the old link, and an approved claim marks the invitation used.
+
 **Safety controls, all enforced in code:**
 
 - **Pages it will fetch:**
@@ -202,7 +258,11 @@ is provider adapter, selector adapter, JSON-LD, then generic HTML.
 cd backend && npm test                  # unit + integration + in-process end-to-end (needs Mongo + Redis)
 scripts/e2e-phase1.sh                   # full Docker stack on an isolated network, driven over HTTP
 scripts/e2e-phase2.sh                   # the same stack: network discovery, adapter builder, rollback
+scripts/e2e-phase3.sh                   # the same stack plus a render worker: rechecks, revisions, rendering, invitations
 ```
+
+The rendering tests need Chromium. The render worker image installs it; for local tests, run
+`npx playwright-core install chromium` in `backend/` once.
 
 After upgrading, run `npm run migrate:scraper` (or `migrate:scraper:prod` in the container) once.
 It is idempotent: it registers the built-in adapters and creates the indexes for every phase.
@@ -472,6 +532,7 @@ docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups
 | Health            | `curl https://truoffers.co.uk/api/health`            |
 | Robot worker logs | `docker compose logs -f worker` (JSON lines: runId, jobId, domain) |
 | Stop the robot    | Emergency stop in `/admin/scraper/jobs`, or `docker compose stop worker` |
+| Start rendering   | Needs a VPS with at least 2 GB: add `COMPOSE_PROFILES=render` to `.env`, then `./deploy.sh` |
 
 ### Troubleshooting
 
