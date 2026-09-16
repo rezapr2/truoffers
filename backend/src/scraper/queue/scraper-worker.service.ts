@@ -4,12 +4,20 @@ import type Redis from 'ioredis';
 import { hostname } from 'node:os';
 import { bullConnectionOptions } from '../infra/redis';
 import { REDIS_CLIENT } from '../scraper.tokens';
-import { QUEUE_CONCURRENCY, StageJobData, WORK_QUEUES, WORKER_HEARTBEAT_PREFIX, WORKER_HEARTBEAT_TTL_SECONDS } from './queue.constants';
+import {
+  isRenderWorker,
+  QUEUE_CONCURRENCY,
+  queuesForRole,
+  RENDER_WORKER_HEARTBEAT_PREFIX,
+  StageJobData,
+  WORKER_HEARTBEAT_PREFIX,
+  WORKER_HEARTBEAT_TTL_SECONDS,
+} from './queue.constants';
 import { ScraperControlService } from './scraper-control.service';
 import { StageRunner } from './stage-runner.service';
 
-export function heartbeatKey(host = hostname(), pid = process.pid) {
-  return `${WORKER_HEARTBEAT_PREFIX}${host}:${pid}`;
+export function heartbeatKey(host = hostname(), pid = process.pid, render = isRenderWorker()) {
+  return `${render ? RENDER_WORKER_HEARTBEAT_PREFIX : WORKER_HEARTBEAT_PREFIX}${host}:${pid}`;
 }
 
 // Consumes the scraper queues. Only the worker process includes this provider.
@@ -31,7 +39,8 @@ export class ScraperWorkerService implements OnApplicationBootstrap, OnApplicati
       if (message.type === 'halt') this.runner.abortAll();
       if (message.type === 'cancel_run') this.runner.abortRun(message.runId);
     });
-    for (const name of WORK_QUEUES) {
+    const queues = queuesForRole();
+    for (const name of queues) {
       const worker = new Worker<StageJobData>(name, (job, token) => this.runner.process(job, token), {
         connection: bullConnectionOptions(),
         concurrency: QUEUE_CONCURRENCY[name],
@@ -41,7 +50,7 @@ export class ScraperWorkerService implements OnApplicationBootstrap, OnApplicati
     }
     await this.beat();
     this.heartbeat = setInterval(() => void this.beat(), 10_000);
-    this.logger.log(`Consuming ${WORK_QUEUES.join(', ')}`);
+    this.logger.log(`Consuming ${queues.join(', ')}`);
   }
 
   private async beat() {

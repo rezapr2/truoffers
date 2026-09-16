@@ -4,7 +4,7 @@ import type { Types } from 'mongoose';
 import type { ImportJobDocument } from '../../schemas/import-job.schema';
 import { bullConnectionOptions } from '../infra/redis';
 import { JOB_RETRY } from '../scraper.constants';
-import { QUEUE_FOR_JOB, SCRAPER_QUEUES, StageJobData, WORK_QUEUES } from './queue.constants';
+import { QUEUE_FOR_JOB, SCRAPER_QUEUES, STAGE_QUEUES, StageJobData } from './queue.constants';
 import { ImportJobsService } from './import-jobs.service';
 
 export type QueueCounts = Record<string, { waiting: number; active: number; delayed: number; failed: number; completed: number; paused: number }>;
@@ -64,21 +64,21 @@ export class ScraperQueueService implements OnApplicationShutdown {
   }
 
   async pauseAll(): Promise<void> {
-    await Promise.all(WORK_QUEUES.map((name) => this.queue(name).pause()));
+    await Promise.all(STAGE_QUEUES.map((name) => this.queue(name).pause()));
   }
 
   async resumeAll(): Promise<void> {
-    await Promise.all(WORK_QUEUES.map((name) => this.queue(name).resume()));
+    await Promise.all(STAGE_QUEUES.map((name) => this.queue(name).resume()));
   }
 
   async isPaused(): Promise<boolean> {
-    const states = await Promise.all(WORK_QUEUES.map((name) => this.queue(name).isPaused()));
+    const states = await Promise.all(STAGE_QUEUES.map((name) => this.queue(name).isPaused()));
     return states.some(Boolean);
   }
 
   async counts(): Promise<QueueCounts> {
     const result: QueueCounts = {};
-    for (const name of [...WORK_QUEUES, SCRAPER_QUEUES.deadLetter]) {
+    for (const name of [...STAGE_QUEUES, SCRAPER_QUEUES.deadLetter]) {
       const queue = name === SCRAPER_QUEUES.deadLetter ? this.deadLetterQueue() : this.queue(name);
       const counts = await queue.getJobCounts('waiting', 'active', 'delayed', 'failed', 'completed', 'paused');
       result[name] = {
@@ -96,7 +96,7 @@ export class ScraperQueueService implements OnApplicationShutdown {
   // Waiting and delayed jobs of a cancelled run are removed; running ones stop at their next checkpoint.
   async removePending(runId: Types.ObjectId): Promise<number> {
     let removed = 0;
-    for (const name of WORK_QUEUES) {
+    for (const name of STAGE_QUEUES) {
       const jobs = await this.queue(name).getJobs(['waiting', 'delayed', 'paused', 'prioritized']);
       for (const job of jobs) {
         if (job?.data?.runId === String(runId)) {

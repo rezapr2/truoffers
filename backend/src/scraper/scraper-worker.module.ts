@@ -3,6 +3,7 @@ import { AdapterRegistry } from './extraction/adapter-registry.service';
 import { AnthropicAiOfferExtractor } from './extraction/ai/anthropic-offer-extractor';
 import { NullAiOfferExtractor } from './extraction/ai/ai-offer-extractor';
 import { RecheckService } from './lifecycle/recheck.service';
+import { RenderService } from './render/render.service';
 import { BusinessMatcherService } from './matching/business-matcher.service';
 import { NetworkJobsService } from './pipeline/network-jobs.service';
 import { PipelineService } from './pipeline/pipeline.service';
@@ -44,12 +45,13 @@ import { AI_OFFER_EXTRACTOR, CNAME_RESOLVER, HOST_RESOLVER, NETWORK_POLICY } fro
     AdapterRegistry,
     BusinessMatcherService,
     RecheckService,
+    RenderService,
     PipelineService,
     NetworkJobsService,
     StageRunner,
     ScraperWorkerService,
     RecheckSchedulerService,
   ],
-  exports: [StageRunner, PipelineService, RecheckService, RecheckSchedulerService],
+  exports: [StageRunner, PipelineService, RecheckService, RecheckSchedulerService, RenderService],
 })
 export class ScraperWorkerModule {}

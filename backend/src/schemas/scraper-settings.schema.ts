@@ -16,6 +16,10 @@ export class ScraperSettings {
   @Prop({ default: false })
   aiExtractionEnabled: boolean;
 
+  // Spec §5: Chromium rendering, used only where the static adapters found no offers. Needs a render worker.
+  @Prop({ default: false })
+  renderingEnabled: boolean;
+
   @Prop({ default: CRAWL_DEFAULTS.rateLimitMs, min: 250 })
   defaultRateLimitMs: number;
 

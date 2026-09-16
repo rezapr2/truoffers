@@ -105,6 +105,42 @@ services:
       retries: 3
       start_period: 60s
 
+  render-worker:
+    # Chromium rendering for websites whose offers only appear after JavaScript runs (spec §5). It needs about
+    # 1 GB of memory, more than the 1 GB VPS has spare, so it only starts with:
+    #   docker compose --profile render up -d
+    # Without it the robot simply never renders; an admin also has to enable rendering in scraper settings.
+    profiles: [render]
+    image: ${REGISTRY:-ghcr.io/rezapr2}/truoffers-render:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["node", "dist/main-worker"]
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/truoffers
+      REDIS_URL: redis://redis:6379
+      SITE_URL: ${SITE_URL:?set SITE_URL in .env}
+      # Consume only the scraper-render queue.
+      SCRAPER_QUEUE_ROLE: render
+      NODE_OPTIONS: --max-old-space-size=256
+    # The browser is restarted above 512 MB; this is the hard backstop.
+    mem_limit: 1g
+    pids_limit: 512
+    shm_size: 256m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "dist/worker-healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   web:
     # NEXT_PUBLIC_* values are baked into this image at BUILD time, so the
     # public SITE_URL must be set when building, not here.

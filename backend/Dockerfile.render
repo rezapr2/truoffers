@@ -1,0 +1,37 @@
+# Render worker (spec §5, Phase 3): the same code as the API and crawling worker, plus Chromium, consuming only
+# the scraper-render queue. Built separately because the browser adds several hundred megabytes and needs
+# at least 1 GB of memory at runtime; the API and crawling worker images stay small.
+#
+# Chromium runs without its own sandbox (Playwright's default in containers). Isolation comes from the
+# container: non-root user, no capabilities, no privilege escalation, a memory and process limit, and a
+# validating proxy that every browser request goes through (src/scraper/render/validating-proxy.ts).
+
+# ---- build ----
+FROM node:22-bookworm-slim AS builder
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# ---- run ----
+FROM node:22-bookworm-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    SCRAPER_QUEUE_ROLE=render
+
+COPY package*.json ./
+# Chromium only, at the revision the pinned playwright-core expects, with the system libraries it needs.
+RUN npm ci --omit=dev \
+ && npx playwright-core install --with-deps --only-shell chromium \
+ && npm cache clean --force \
+ && rm -rf /var/lib/apt/lists/* \
+ && chown -R node:node /ms-playwright
+
+COPY --from=builder /app/dist ./dist
+
+USER node
+CMD ["node", "dist/main-worker"]

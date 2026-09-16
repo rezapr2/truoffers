@@ -48,6 +48,8 @@ export enum ImportJobType {
   RECHECK_OFFER = 'recheck_offer',
   // Scheduled: expires imported offers whose end date has passed.
   REVIEW_STALE_OFFER = 'review_stale_offer',
+  // Renders a website's pages with Chromium when the static adapters found no offers.
+  RENDER_PAGES = 'render_pages',
 }
 
 // The stages of a website import run, in order. Every completed run is a check of the website.
@@ -60,6 +62,9 @@ export const IMPORT_RUN_STAGES = [
   ImportJobType.DEDUPLICATE_OFFERS,
   ImportJobType.RECHECK_OFFER,
 ];
+
+// Stages that make up a check of one website, including the optional rendering step.
+export const WEBSITE_CHECK_STAGES = [...IMPORT_RUN_STAGES, ImportJobType.RENDER_PAGES];
 
 export enum ImportJobStatus {
   QUEUED = 'queued',

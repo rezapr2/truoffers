@@ -38,6 +38,7 @@ if [[ -z "${SITE_URL:-}" ]]; then
 fi
 
 API_IMAGE="${REGISTRY}/truoffers-api"
+RENDER_IMAGE="${REGISTRY}/truoffers-render"
 WEB_IMAGE="${REGISTRY}/truoffers-web"
 # A content-addressed tag alongside :latest, so a bad deploy can be rolled back
 # to a known-good build: IMAGE_TAG=sha-<short> ./deploy.sh
@@ -68,6 +69,14 @@ docker buildx build "${BUILD_FLAGS[@]}" \
   -t "${API_IMAGE}:${SHA_TAG}" \
   ./backend
 
+echo "==> Building render worker image (API code plus Chromium)"
+docker buildx build "${BUILD_FLAGS[@]}" \
+  --platform "$PLATFORM" \
+  -f ./backend/Dockerfile.render \
+  -t "${RENDER_IMAGE}:${IMAGE_TAG}" \
+  -t "${RENDER_IMAGE}:${SHA_TAG}" \
+  ./backend
+
 echo "==> Building web image (SITE_URL=${SITE_URL} baked in)"
 docker buildx build "${BUILD_FLAGS[@]}" \
   --platform "$PLATFORM" \
@@ -81,7 +90,7 @@ docker buildx build "${BUILD_FLAGS[@]}" \
 
 if $LOCAL_ONLY; then
   echo "==> Built locally. Images:"
-  docker images --format "  {{.Repository}}:{{.Tag}}  {{.Size}}" | grep truoffers | head -4
+  docker images --format "  {{.Repository}}:{{.Tag}}  {{.Size}}" | grep truoffers | head -6
 else
   echo "==> Pushed. On the VPS now run:  ./deploy.sh"
   echo "    Rollback to this exact build:  IMAGE_TAG=${SHA_TAG} ./deploy.sh"

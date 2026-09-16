@@ -336,7 +336,7 @@ export class AdminScraperController {
   // aiAvailable: whether this deployment has an API key, so the setting can actually take effect.
   @Get('settings')
   async getSettings() {
-    return { ...(await this.settings.get()), aiAvailable: !!process.env.ANTHROPIC_API_KEY };
+    return { ...(await this.settings.get()), aiAvailable: !!process.env.ANTHROPIC_API_KEY, renderWorkers: await this.monitoring.renderWorkers() };
   }
 
   @Patch('settings')

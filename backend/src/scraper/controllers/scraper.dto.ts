@@ -200,6 +200,7 @@ export class ListJobsQuery extends PageQuery {
 
 export class UpdateSettingsDto {
   @IsOptional() @IsBoolean() aiExtractionEnabled?: boolean;
+  @IsOptional() @IsBoolean() renderingEnabled?: boolean;
   @IsOptional() @IsInt() @Min(250) @Max(60_000) defaultRateLimitMs?: number;
   @IsOptional() @IsInt() @Min(1) @Max(1000) defaultPageCap?: number;
   @IsOptional() @IsArray() @ArrayMaxSize(200) @IsString({ each: true }) extraNeverCrawlDomains?: string[];

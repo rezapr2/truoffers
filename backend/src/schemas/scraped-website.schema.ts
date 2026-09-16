@@ -172,6 +172,10 @@ export class ScrapedWebsite {
   @Prop({ type: Date })
   nextCheckAt?: Date;
 
+  // Set when a render found a challenge, CAPTCHA or login wall (spec §3); cleared when one succeeds.
+  @Prop({ type: Date })
+  renderBlockedAt?: Date;
+
   @Prop({ type: SchemaTypes.ObjectId, ref: 'ImportJob' })
   lastRunRef?: Types.ObjectId;
 

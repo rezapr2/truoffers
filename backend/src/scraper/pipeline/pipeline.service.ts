@@ -54,10 +54,17 @@ import { DomainRateLimiter } from '../safety/rate-limiter.service';
 import { RobotsService } from '../safety/robots.service';
 import { SafeFetchService } from '../safety/safe-fetch.service';
 import { SitemapService } from '../safety/sitemap.service';
-import { normaliseUrl, pageKey, siteDomainOf } from '../safety/url';
+import { normaliseUrl, pageKey, registrableDomainOf, siteDomainOf } from '../safety/url';
 import { AI_LIMITS, INTAKE_LIMITS, RETENTION } from '../scraper.constants';
 import { AI_OFFER_EXTRACTOR } from '../scraper.tokens';
 import { computeConfidence } from '../scoring/confidence';
+import { RENDER } from '../render/render.constants';
+import { BlockedBySiteError, RenderService } from '../render/render.service';
+import { RENDER_WORKER_HEARTBEAT_PREFIX } from '../queue/queue.constants';
+import { REDIS_CLIENT } from '../scraper.tokens';
+import type Redis from 'ioredis';
+import { neverCrawlReason } from '../safety/never-crawl';
+import { CrawlDeniedError } from '../safety/crawl-gate.service';
 import { PageLoader } from './page-loader';
 
 export interface StageContext {
@@ -132,6 +139,8 @@ export class PipelineService {
     private readonly registry: AdapterRegistry,
     private readonly matcher: BusinessMatcherService,
     private readonly recheck: RecheckService,
+    private readonly renderer: RenderService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
     @Inject(AI_OFFER_EXTRACTOR) private readonly ai: AiOfferExtractor,
   ) {}
 
@@ -149,6 +158,8 @@ export class PipelineService {
         return this.matchBusinesses(ctx);
       case ImportJobType.DEDUPLICATE_OFFERS:
         return this.deduplicate(ctx);
+      case ImportJobType.RENDER_PAGES:
+        return this.renderPages(ctx);
       case ImportJobType.RECHECK_OFFER:
         return this.applyCheck(ctx);
       default:
@@ -412,6 +423,16 @@ export class PipelineService {
     }
     await ctx.progress(targets.length, targets.length, 'Pages read');
 
+    // Spec §5: a site whose offers only exist after JavaScript runs is rendered before anything else is tried.
+    if (next === ImportJobType.MATCH_BUSINESS && this.staticOffersIn(outputs, out) === 0 && (await this.renderingAvailable())) {
+      await ctx.log('No offers in the static HTML: queueing a Chromium render');
+      return {
+        output: out as unknown as Record<string, unknown>,
+        resultCounts: { pagesFetched: loader.fetchedCount, pagesSkipped: loader.skipped.size, businesses: out.businesses.length, offers: 0 },
+        next: ImportJobType.RENDER_PAGES,
+      };
+    }
+
     let aiCounts: Record<string, number> = {};
     if (next === ImportJobType.MATCH_BUSINESS) aiCounts = await this.aiFallback(ctx, outputs, out, adapter);
 
@@ -420,6 +441,22 @@ export class PipelineService {
       resultCounts: { pagesFetched: loader.fetchedCount, pagesSkipped: loader.skipped.size, businesses: out.businesses.length, offers: out.offers.length, ...aiCounts },
       next,
     };
+  }
+
+  private staticOffersIn(outputs: RunOutputs, current: PageExtractionOutput): number {
+    const earlier = [outputs[ImportJobType.ANALYSE_SEED_WEBSITE], outputs[ImportJobType.EXTRACT_BUSINESS]] as (PageExtractionOutput | undefined)[];
+    return current.offers.length + earlier.reduce((n, o) => n + (o?.offers?.length ?? 0), 0);
+  }
+
+  // Rendering needs an admin to have enabled it and a render worker to be running (only its image has Chromium).
+  private async renderingAvailable(): Promise<boolean> {
+    if (!(await this.settings.get()).renderingEnabled) return false;
+    try {
+      const workers = await this.redis.keys(`${RENDER_WORKER_HEARTBEAT_PREFIX}*`);
+      return workers.length > 0;
+    } catch {
+      return false;
+    }
   }
 
   // Only when the static adapters found no offers anywhere on the site, and only if an admin enabled it.
@@ -450,13 +487,95 @@ export class PipelineService {
     return { aiPages: pages.length, aiOffers: found, aiFieldsDropped: dropped };
   }
 
+  // One navigation at a time per domain, at the domain's rate limit; a page's own assets aren't throttled.
+  private async throttleRendered(hop: URL, signal: AbortSignal): Promise<void> {
+    const policy = await this.gate.crawlPolicyFor(hop.hostname);
+    await this.rateLimiter.acquire(DomainRateLimiter.key(registrableDomainOf(hop.hostname)), policy.rateLimitMs, { signal });
+  }
+
+  // ---------- render_pages ----------
+
+  /**
+   * Spec §3/§5: renders the site's offer pages with Chromium and reads the result with the same adapter.
+   * Runs in a render worker; every request the browser makes goes through the same permission checks.
+   */
+  private async renderPages(ctx: StageContext): Promise<StageOutcome> {
+    const site = await this.site(ctx);
+    const outputs = await this.outputs(ctx);
+    const analyse = outputs[ImportJobType.ANALYSE_SEED_WEBSITE] as AnalyseOutput | undefined;
+    const plan = (outputs[ImportJobType.DISCOVER_OFFER_PAGES]?.plan ?? analyse?.plan ?? []) as DiscoveredPage[];
+    const adapter = await this.adapterFor(analyse);
+    await this.gate.assertSiteCrawlable(site.domain, adapter.id);
+
+    const targets = plan
+      .filter((p) => p.roles.some((role) => role === 'offers' || role === 'home' || role === 'menu'))
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, RENDER.pagesPerRun);
+    const out: PageExtractionOutput = { processedUrls: [], readPages: [], gonePages: [], businesses: [], offers: [] };
+    if (targets.length === 0) return { output: out as unknown as Record<string, unknown>, resultCounts: { rendered: 0 }, next: ImportJobType.MATCH_BUSINESS };
+
+    const gateContext = {
+      runId: String(ctx.job.runId),
+      siteDomain: site.domain,
+      adapterKey: adapter.id,
+      signal: ctx.signal,
+    };
+    const settings = await this.settings.get();
+    let rendered;
+    try {
+      rendered = await this.renderer.render({
+        siteDomain: site.domain,
+        urls: targets.map((p) => p.url),
+        signal: ctx.signal,
+        log: (message, data) => void ctx.log(message, data),
+        // Host-level, for everything the browser connects to, including redirect hops it follows itself.
+        assertHostAllowed: async (url) => {
+          const blocked = neverCrawlReason(url.hostname, settings.extraNeverCrawlDomains);
+          if (blocked) throw new CrawlDeniedError('never_crawl', blocked);
+        },
+        // Full URLs, for the website's own pages: robots.txt, blocked paths, authorisation and the rate limit.
+        assertUrlAllowed: async (url, navigation) => {
+          await this.gate.assertRequestAllowed(url, {
+            ...gateContext,
+            checkRobots: true,
+            throttle: navigation ? (hop) => this.throttleRendered(hop, ctx.signal) : undefined,
+          });
+        },
+      });
+    } catch (err) {
+      if (err instanceof BlockedBySiteError) {
+        // Spec §3: a challenge or login wall stops the job and the site is left alone for a while.
+        await this.sites.updateOne(
+          { _id: site._id },
+          { $set: { renderBlockedAt: new Date(), lastError: err.message, nextCheckAt: new Date(Date.now() + RENDER.blockedBackoffHours * 60 * 60 * 1000) } },
+        );
+        return { held: err.message };
+      }
+      throw err;
+    }
+
+    const loader = this.loader(ctx, site.domain, adapter.id);
+    const wctx = this.websiteContext(site, ctx, loader, analyse!.homepageUrl, plan);
+    for (const page of rendered.pages) {
+      const roles = plan.find((p) => pageKey(p.url) === pageKey(page.url))?.roles ?? classifyPage(new URL(page.finalUrl));
+      this.collect(out, pageKey(page.url), page, roles.length ? roles : ['offers'], adapter, wctx, false);
+    }
+    await ctx.log(`Rendered ${rendered.pages.length} page(s): ${out.offers.length} offer(s), ${rendered.blockedRequests} request(s) blocked`);
+    if (rendered.pages.length) await this.sites.updateOne({ _id: site._id }, { $unset: { renderBlockedAt: 1 } });
+    return {
+      output: out as unknown as Record<string, unknown>,
+      resultCounts: { rendered: rendered.pages.length, offers: out.offers.length, blockedRequests: rendered.blockedRequests, browserMemoryMb: rendered.memoryMb },
+      next: ImportJobType.MATCH_BUSINESS,
+    };
+  }
+
   // ---------- match_business ----------
 
   private async matchBusinesses(ctx: StageContext): Promise<StageOutcome> {
     const site = await this.site(ctx);
     const outputs = await this.outputs(ctx);
     const found = mergeBusinesses(
-      [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.EXTRACT_BUSINESS, ImportJobType.EXTRACT_OFFERS].flatMap(
+      [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.EXTRACT_BUSINESS, ImportJobType.EXTRACT_OFFERS, ImportJobType.RENDER_PAGES].flatMap(
         (type) => (outputs[type]?.businesses as ExtractedBusiness[] | undefined) ?? [],
       ),
     ).slice(0, INTAKE_LIMITS.maxBranchesPerSite);
@@ -530,7 +649,7 @@ export class PipelineService {
     if (!site) throw new StageAbortedError('The website record no longer exists');
     const outputs = await this.outputs(ctx);
     const analyse = outputs[ImportJobType.ANALYSE_SEED_WEBSITE] as AnalyseOutput | undefined;
-    const extractions = [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.EXTRACT_BUSINESS, ImportJobType.EXTRACT_OFFERS].flatMap(
+    const extractions = [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.EXTRACT_BUSINESS, ImportJobType.EXTRACT_OFFERS, ImportJobType.RENDER_PAGES].flatMap(
       (type) => (outputs[type]?.offers as OfferExtraction[] | undefined) ?? [],
     );
     const merged = mergeRunExtractions(extractions);
@@ -686,7 +805,7 @@ export class PipelineService {
   private async applyCheck(ctx: StageContext): Promise<StageOutcome> {
     const site = await this.site(ctx);
     const outputs = await this.outputs(ctx);
-    const pageStages = [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.EXTRACT_BUSINESS, ImportJobType.EXTRACT_OFFERS].map(
+    const pageStages = [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.EXTRACT_BUSINESS, ImportJobType.EXTRACT_OFFERS, ImportJobType.RENDER_PAGES].map(
       (type) => outputs[type] as Partial<PageExtractionOutput> | undefined,
     );
     const dedupe = outputs[ImportJobType.DEDUPLICATE_OFFERS] as { seenOfferIds?: string[]; revisedOfferIds?: string[] } | undefined;

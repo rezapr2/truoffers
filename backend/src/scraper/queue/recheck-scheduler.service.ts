@@ -4,7 +4,7 @@ import { ImportJobType } from '../../common/scraper.enums';
 import { bullConnectionOptions } from '../infra/redis';
 import { RecheckService } from '../lifecycle/recheck.service';
 import { RECHECK } from '../scraper.constants';
-import { SCHEDULE_JOBS, SCRAPER_QUEUES } from './queue.constants';
+import { isRenderWorker, SCHEDULE_JOBS, SCRAPER_QUEUES } from './queue.constants';
 import { RunsService } from './runs.service';
 import { ScraperControlService } from './scraper-control.service';
 
@@ -26,6 +26,7 @@ export class RecheckSchedulerService implements OnApplicationBootstrap, OnApplic
   ) {}
 
   async onApplicationBootstrap() {
+    if (isRenderWorker()) return;
     this.queue = new Queue(SCRAPER_QUEUES.schedule, { connection: bullConnectionOptions() });
     this.queue.on('error', (err) => this.logger.warn(`Queue ${SCRAPER_QUEUES.schedule}: ${err.message}`));
     const opts = { removeOnComplete: { count: 50 }, removeOnFail: { count: 200 } };

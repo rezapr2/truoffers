@@ -296,6 +296,8 @@ export interface ScraperOverview {
 export interface ScraperSettings {
   aiExtractionEnabled: boolean;
   aiAvailable: boolean;
+  renderingEnabled?: boolean;
+  renderWorkers: number;
   defaultRateLimitMs: number;
   defaultPageCap: number;
   extraNeverCrawlDomains: string[];

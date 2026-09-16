@@ -21,6 +21,7 @@ import {
   OfferOrigin,
   OfferVerification,
 } from '../../src/common/scraper.enums';
+import { SCRAPER_QUEUES } from '../../src/scraper/queue/queue.constants';
 import { ScraperQueueService } from '../../src/scraper/queue/scraper-queue.service';
 import { fixtureNetworkPolicy } from '../../src/scraper/safety/ssrf-policy';
 import { ScraperWorkerModule } from '../../src/scraper/scraper-worker.module';
@@ -134,7 +135,9 @@ describe('scraper API, end to end', () => {
   it('updates settings with an audit entry and validates them', async () => {
     await request(http).patch('/api/admin/scraper/settings').set(as('admin')).send({ defaultRateLimitMs: 100 }).expect(400);
     const res = await request(http).patch('/api/admin/scraper/settings').set(as('admin')).send({ defaultRateLimitMs: 250 }).expect(200);
-    expect(res.body).toMatchObject({ defaultRateLimitMs: 250, aiExtractionEnabled: false });
+    expect(res.body).toMatchObject({ defaultRateLimitMs: 250, aiExtractionEnabled: false, renderingEnabled: false });
+    const current = await request(http).get('/api/admin/scraper/settings').set(as('admin')).expect(200);
+    expect(current.body).toMatchObject({ renderWorkers: 0 });
     expect(await auditActions()).toContain(AuditAction.SETTINGS_UPDATED);
   });
 
@@ -368,9 +371,13 @@ describe('scraper API, end to end', () => {
 
     const stopped = await request(http).post('/api/admin/scraper/jobs/emergency-stop').set(as('admin')).expect(201);
     expect(stopped.body).toMatchObject({ halted: true, paused: true });
-    expect(await app.get(ScraperQueueService).isPaused()).toBe(true);
+    const queues = app.get(ScraperQueueService);
+    expect(await queues.isPaused()).toBe(true);
+    // Rendering stops too: Chromium pages are closed by the halt message and no new render starts.
+    expect(await queues.queue(SCRAPER_QUEUES.render).isPaused()).toBe(true);
     const resumed = await request(http).post('/api/admin/scraper/jobs/resume').set(as('admin')).expect(201);
     expect(resumed.body).toMatchObject({ halted: false, paused: false });
+    expect(await queues.queue(SCRAPER_QUEUES.render).isPaused()).toBe(false);
 
     const adapters = await request(http).get('/api/admin/scraper/adapters').set(as('admin')).expect(200);
     expect(adapters.body.map((a: { key: string }) => a.key)).toEqual(expect.arrayContaining(['generic-jsonld', 'generic-html']));

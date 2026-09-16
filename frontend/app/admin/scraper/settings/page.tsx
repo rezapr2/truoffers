@@ -7,7 +7,7 @@ import { btn, Card, ErrorNote, formatDate, inputClass, SectionTitle, StatusPill,
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<ScraperSettings | null>(null);
-  const [draft, setDraft] = useState({ aiExtractionEnabled: false, defaultRateLimitMs: 2000, defaultPageCap: 50, extraNeverCrawlDomains: '' });
+  const [draft, setDraft] = useState({ aiExtractionEnabled: false, renderingEnabled: false, defaultRateLimitMs: 2000, defaultPageCap: 50, extraNeverCrawlDomains: '' });
   const [adapters, setAdapters] = useState<AdapterStats[]>([]);
   const [saved, setSaved] = useState(false);
   const { busy, error, run } = useAction();
@@ -17,6 +17,7 @@ export default function SettingsPage() {
       setSettings(s);
       setDraft({
         aiExtractionEnabled: s.aiExtractionEnabled,
+        renderingEnabled: s.renderingEnabled ?? false,
         defaultRateLimitMs: s.defaultRateLimitMs,
         defaultPageCap: s.defaultPageCap,
         extraNeverCrawlDomains: s.extraNeverCrawlDomains.join('\n'),
@@ -34,6 +35,7 @@ export default function SettingsPage() {
         method: 'PATCH',
         body: JSON.stringify({
           aiExtractionEnabled: draft.aiExtractionEnabled,
+          renderingEnabled: draft.renderingEnabled,
           defaultRateLimitMs: Number(draft.defaultRateLimitMs),
           defaultPageCap: Number(draft.defaultPageCap),
           extraNeverCrawlDomains: draft.extraNeverCrawlDomains.split('\n').map((d) => d.trim()).filter(Boolean),
@@ -77,6 +79,25 @@ export default function SettingsPage() {
                 When the standard extractors find no offers on a website, send offer-relevant text from up to 3 pages to Claude. Every date,
                 price and code it returns must appear word for word on the page, and results still go to review.
                 {!settings.aiAvailable && ' Unavailable: ANTHROPIC_API_KEY is not configured on this server.'}
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 accent-primary"
+              checked={draft.renderingEnabled}
+              onChange={(e) => setDraft({ ...draft, renderingEnabled: e.target.checked })}
+            />
+            <span>
+              <span className="font-extrabold">Render JavaScript-only websites</span>
+              <span className="block text-[13px] font-semibold text-muted">
+                When a website’s offers only appear after JavaScript runs, open up to 3 of its pages in Chromium. Images, fonts and
+                trackers are never loaded, and every request passes the same permission checks. The AI fallback is skipped for a
+                website that was rendered.
+                {settings.renderWorkers > 0
+                  ? ` ${settings.renderWorkers} render worker${settings.renderWorkers === 1 ? '' : 's'} running.`
+                  : ' No render worker is running, so nothing will be rendered until one is started (it needs about 1 GB of memory).'}
               </span>
             </span>
           </label>

@@ -49,6 +49,7 @@
     "mongoose": "^8.9.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "playwright-core": "1.62.0",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "robots-parser": "^3.0.1",

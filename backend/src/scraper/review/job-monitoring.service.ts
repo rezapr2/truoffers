@@ -4,7 +4,7 @@ import type Redis from 'ioredis';
 import { Model, Types } from 'mongoose';
 import { ImportJobStatus, ImportJobType } from '../../common/scraper.enums';
 import { ImportJob, ImportJobDocument } from '../../schemas/import-job.schema';
-import { WORKER_HEARTBEAT_PREFIX } from '../queue/queue.constants';
+import { RENDER_WORKER_HEARTBEAT_PREFIX, WORKER_HEARTBEAT_PREFIX } from '../queue/queue.constants';
 import { ScraperControlService } from '../queue/scraper-control.service';
 import { ScraperQueueService } from '../queue/scraper-queue.service';
 import { REDIS_CLIENT } from '../scraper.tokens';
@@ -47,12 +47,18 @@ export class JobMonitoringService {
     return job;
   }
 
+  // Render workers carry Chromium; without one, rendering is never queued.
+  async renderWorkers(): Promise<number> {
+    return (await this.redis.keys(`${RENDER_WORKER_HEARTBEAT_PREFIX}*`)).length;
+  }
+
   async status() {
-    const [counts, halted, paused, workerKeys, statusCounts] = await Promise.all([
+    const [counts, halted, paused, workerKeys, renderWorkers, statusCounts] = await Promise.all([
       this.queue.counts(),
       this.control.isHalted(),
       this.queue.isPaused(),
       this.redis.keys(`${WORKER_HEARTBEAT_PREFIX}*`),
+      this.renderWorkers(),
       this.jobs.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
     ]);
     const workers = await Promise.all(
@@ -63,6 +69,7 @@ export class JobMonitoringService {
       paused,
       queues: counts,
       workers,
+      renderWorkers,
       jobs: Object.fromEntries(statusCounts.map((s) => [s._id, s.count])),
     };
   }

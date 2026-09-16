@@ -28,8 +28,14 @@ jobs:
         include:
           - name: api
             context: ./backend
+            file: ./backend/Dockerfile
+          # Chromium rendering worker (Phase 3); runs only where the host has the memory for it.
+          - name: render
+            context: ./backend
+            file: ./backend/Dockerfile.render
           - name: web
             context: ./frontend
+            file: ./frontend/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +56,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           platforms: linux/amd64
           push: true
           tags: |

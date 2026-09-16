@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { DelayedError, Job, UnrecoverableError } from 'bullmq';
 import { Model } from 'mongoose';
-import { IMPORT_RUN_STAGES, ImportJobStatus, ImportJobType } from '../../common/scraper.enums';
+import { ImportJobStatus, ImportJobType, WEBSITE_CHECK_STAGES } from '../../common/scraper.enums';
 import { OfferLifecycleViolation } from '../../schemas/offer-lifecycle.guard';
 import type { ImportJobDocument } from '../../schemas/import-job.schema';
 import { ScrapedWebsite, ScrapedWebsiteDocument } from '../../schemas/scraped-website.schema';
@@ -188,7 +188,7 @@ export class StageRunner {
         { $set: { lastFailedCheckAt: new Date(), lastError: err.message }, $inc: { failureCount: 1 } },
       );
       // A failed check of the website is tried again with backoff (spec §10).
-      if (IMPORT_RUN_STAGES.includes(importJob.type)) await this.recheck.scheduleAfterFailure(importJob.scrapedWebsiteRef);
+      if (WEBSITE_CHECK_STAGES.includes(importJob.type)) await this.recheck.scheduleAfterFailure(importJob.scrapedWebsiteRef);
     }
     if (retryable) await this.queue.deadLetterJob(importJob, err.message);
     throw new UnrecoverableError(err.message);
