@@ -12,6 +12,7 @@ import { deriveBusinessIdentity } from '../../src/common/business-identity';
 import { OfferStatus, Role, VerificationStatus } from '../../src/common/enums';
 import {
   AuditAction,
+  IMPORT_RUN_STAGES,
   CandidateStatus,
   DomainAuthorisationStatus,
   ImportJobStatus,
@@ -114,7 +115,7 @@ describe('scraper API, end to end', () => {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const stages = await jobs.find({ runId: new Types.ObjectId(runId) }).lean();
-      const done = stages.some((s) => s.type === ImportJobType.DEDUPLICATE_OFFERS && s.status === ImportJobStatus.COMPLETED);
+      const done = stages.some((s) => s.type === ImportJobType.RECHECK_OFFER && s.status === ImportJobStatus.COMPLETED);
       const failed = stages.find((s) => [ImportJobStatus.FAILED, ImportJobStatus.DEAD_LETTERED, ImportJobStatus.CANCELLED].includes(s.status));
       if (done) return stages;
       if (failed || Date.now() > deadline) throw new Error(`Run did not complete: ${JSON.stringify(stages.map((s) => [s.type, s.status, s.errorLog]))}`);
@@ -173,7 +174,7 @@ describe('scraper API, end to end', () => {
 
     await waitForRun(runId);
     const run = await request(http).get(`/api/admin/scraper/jobs/runs/${runId}`).set(as('admin')).expect(200);
-    expect(run.body.stages).toHaveLength(6);
+    expect(run.body.stages).toHaveLength(IMPORT_RUN_STAGES.length);
     expect(run.body.stages.every((s: ImportJob) => s.status === ImportJobStatus.COMPLETED)).toBe(true);
 
     // Links to other sites are recorded for authorisation, never crawled.

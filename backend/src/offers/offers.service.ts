@@ -61,7 +61,7 @@ export class OffersService {
   async listPublic(params: { businessId?: string; limit?: number }) {
     const now = new Date();
     const filter: any = {
-      status: OfferStatus.ACTIVE,
+      status: { $in: PUBLIC_OFFER_STATUSES },
       $or: [{ endsAt: null }, { endsAt: { $gte: now } }],
     };
     if (params.businessId) {
@@ -91,8 +91,25 @@ export class OffersService {
           .lean()
       : null;
     const business = offer?.businessId as unknown as { status?: BusinessStatus } | null | undefined;
-    if (!offer || business?.status !== BusinessStatus.ACTIVE) throw new NotFoundException('Offer not found');
+    if (!offer || business?.status !== BusinessStatus.ACTIVE) return this.checkingAvailability(id);
     return withImportNotice(offer);
+  }
+
+  /**
+   * Spec §9: an imported offer a recheck could not find is hidden at once, and its link says it is being
+   * checked rather than 404ing. Nothing of the offer itself is shown while that is going on.
+   */
+  private async checkingAvailability(id: string): Promise<never | { _id: Types.ObjectId; availability: 'checking'; business: unknown }> {
+    const offer = Types.ObjectId.isValid(id)
+      ? await this.offerModel
+          .findOne({ _id: id, status: OfferStatus.POSSIBLY_REMOVED, origin: OfferOrigin.SCRAPER })
+          .select('_id businessId')
+          .populate('businessId', 'name slug town status')
+          .lean()
+      : null;
+    const business = offer?.businessId as unknown as { status?: BusinessStatus } | undefined;
+    if (!offer || business?.status !== BusinessStatus.ACTIVE) throw new NotFoundException('Offer not found');
+    return { _id: offer._id, availability: 'checking', business: offer.businessId };
   }
 
   async listForBusiness(businessId: string, user: { userId: string; role: Role }) {
@@ -206,7 +223,7 @@ export class OffersService {
   // Redemption per blueprint section 9
   async redeem(offerId: string, dto: RedeemOfferDto, userId?: string) {
     const offer = await this.offerModel.findById(offerId);
-    if (!offer || offer.status !== OfferStatus.ACTIVE) {
+    if (!offer || !PUBLIC_OFFER_STATUSES.includes(offer.status)) {
       throw new NotFoundException('Offer not available');
     }
     if (offer.endsAt && offer.endsAt < new Date()) {

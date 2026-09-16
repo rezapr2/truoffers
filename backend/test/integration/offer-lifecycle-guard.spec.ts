@@ -95,6 +95,81 @@ describe('offer lifecycle guard', () => {
     });
   });
 
+  // Spec §9: a recheck may republish an offer an admin already approved, and nothing else.
+  describe('the recheck component', () => {
+    const recheck: Actor = { kind: ActorKind.SYSTEM, component: 'recheck' };
+    const imported = (status: OfferStatus) =>
+      ActorContext.run(admin, () =>
+        OfferModel.create(baseOffer({ origin: OfferOrigin.SCRAPER, managedBy: OfferManagedBy.SCRAPER, status, verification: OfferVerification.ADMIN_VERIFIED })),
+      );
+    const pinned = (id: Types.ObjectId, from: OfferStatus) => ({ _id: id, status: from, origin: OfferOrigin.SCRAPER, managedBy: OfferManagedBy.SCRAPER });
+
+    it('republishes an offer it had hidden, and holds a published one while a revision waits', async () => {
+      const hidden = await imported(OfferStatus.POSSIBLY_REMOVED);
+      await ActorContext.run(recheck, async () => {
+        await OfferModel.updateOne(pinned(hidden._id, OfferStatus.POSSIBLY_REMOVED), { $set: { status: OfferStatus.ACTIVE, absentChecks: 0 } });
+      });
+      expect((await OfferModel.findById(hidden._id).lean())?.status).toBe(OfferStatus.ACTIVE);
+
+      await ActorContext.run(recheck, async () => {
+        await OfferModel.updateOne(pinned(hidden._id, OfferStatus.ACTIVE), { $set: { status: OfferStatus.REVISION_PENDING } });
+      });
+      expect((await OfferModel.findById(hidden._id).lean())?.status).toBe(OfferStatus.REVISION_PENDING);
+    });
+
+    it('cannot publish an offer that was never approved, however the update is written', async () => {
+      const draft = await OfferModel.create(baseOffer({ origin: OfferOrigin.SCRAPER, managedBy: OfferManagedBy.SCRAPER, status: OfferStatus.PENDING }));
+      // No status pinned in the filter: the update can't prove what it is republishing.
+      await expect(
+        ActorContext.run(recheck, async () => {
+          await OfferModel.updateOne({ _id: draft._id }, { $set: { status: OfferStatus.ACTIVE } });
+        }),
+      ).rejects.toThrow(/may not publish an imported offer/);
+      // Pinned to a status that was never public.
+      await expect(
+        ActorContext.run(recheck, async () => {
+          await OfferModel.updateOne(pinned(draft._id, OfferStatus.PENDING), { $set: { status: OfferStatus.ACTIVE } });
+        }),
+      ).rejects.toThrow(/may not publish an imported offer/);
+      // Hiding an unpublished offer first, to republish it later, is refused too.
+      await expect(
+        ActorContext.run(recheck, async () => {
+          await OfferModel.updateOne(pinned(draft._id, OfferStatus.PENDING), { $set: { status: OfferStatus.POSSIBLY_REMOVED } });
+        }),
+      ).rejects.toThrow(/may mark only a published offer possibly_removed/);
+      await expect(
+        ActorContext.run(recheck, async () => {
+          const doc = (await OfferModel.findById(draft._id))!;
+          doc.status = OfferStatus.POSSIBLY_REMOVED;
+          await doc.save();
+        }),
+      ).rejects.toThrow(/possibly_removed only through a status-pinned update/);
+      expect((await OfferModel.findById(draft._id).lean())?.status).toBe(OfferStatus.PENDING);
+    });
+
+    it('cannot republish an offer the business has taken over', async () => {
+      const merchantOffer = await ActorContext.run(merchant, () =>
+        OfferModel.create(baseOffer({ origin: OfferOrigin.SCRAPER, managedBy: OfferManagedBy.MERCHANT, status: OfferStatus.POSSIBLY_REMOVED })),
+      );
+      await ActorContext.run(recheck, async () => {
+        await OfferModel.updateOne(
+          { _id: merchantOffer._id, status: OfferStatus.POSSIBLY_REMOVED, origin: OfferOrigin.SCRAPER, managedBy: OfferManagedBy.SCRAPER },
+          { $set: { status: OfferStatus.ACTIVE } },
+        );
+      });
+      expect((await OfferModel.findById(merchantOffer._id).lean())?.status).toBe(OfferStatus.POSSIBLY_REMOVED);
+    });
+
+    it('cannot verify an offer while republishing it', async () => {
+      const hidden = await imported(OfferStatus.POSSIBLY_REMOVED);
+      await expect(
+        ActorContext.run(recheck, async () => {
+          await OfferModel.updateOne(pinned(hidden._id, OfferStatus.POSSIBLY_REMOVED), { $set: { status: OfferStatus.ACTIVE, verification: OfferVerification.ADMIN_VERIFIED } });
+        }),
+      ).rejects.toThrow(/may not mark an offer admin_verified/);
+    });
+  });
+
   describe('human actors', () => {
     it('lets an admin publish and verify an imported offer', async () => {
       const offer = await ActorContext.run(admin, () =>

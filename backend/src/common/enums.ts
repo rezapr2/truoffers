@@ -53,8 +53,9 @@ export enum OfferStatus {
   REMOVED = 'removed',
 }
 
-// Statuses a member of the public may see.
-export const PUBLIC_OFFER_STATUSES: OfferStatus[] = [OfferStatus.ACTIVE];
+// Statuses a member of the public may see. A revision_pending offer stays visible as published until an
+// admin applies or discards the revision (spec §9).
+export const PUBLIC_OFFER_STATUSES: OfferStatus[] = [OfferStatus.ACTIVE, OfferStatus.REVISION_PENDING];
 
 // Statuses in which an offer still occupies its dedupe slot (business + content fingerprint).
 export const LIVE_OFFER_STATUSES: OfferStatus[] = [

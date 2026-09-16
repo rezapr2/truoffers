@@ -200,11 +200,26 @@ export class Offer {
 
   @Prop({ type: Date })
   excerptsRedactedAt?: Date;
+
+  // ---- Rechecks (spec §9/§10) ----
+
+  // Consecutive successful checks of the website that did not find this offer.
+  @Prop({ default: 0 })
+  absentChecks: number;
+
+  // The last successful check that found the offer.
+  @Prop({ type: Date })
+  lastSeenAt?: Date;
+
+  // When the offer entered its current recheck state (possibly_removed, expiry_review, revision_pending).
+  @Prop({ type: Date })
+  recheckStateAt?: Date;
 }
 
 export const OfferSchema = SchemaFactory.createForClass(Offer);
 OfferSchema.index({ status: 1, endsAt: 1 });
 OfferSchema.index({ businessId: 1, contentFingerprint: 1 });
+OfferSchema.index({ scrapedWebsiteRef: 1, status: 1 });
 OfferSchema.index(
   { dedupeKey: 1 },
   { unique: true, partialFilterExpression: { dedupeKey: { $type: 'string' } } },

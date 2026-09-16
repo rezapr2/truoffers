@@ -38,6 +38,7 @@ const STAGE_ORDER = [
   ImportJobType.EXTRACT_OFFERS,
   ImportJobType.MATCH_BUSINESS,
   ImportJobType.DEDUPLICATE_OFFERS,
+  ImportJobType.RECHECK_OFFER,
 ];
 
 describe('scraping pipeline, end to end', () => {
@@ -125,7 +126,7 @@ describe('scraping pipeline, end to end', () => {
   }
 
   const finished = (stages: ImportJob[]) =>
-    stages.some((s) => s.type === ImportJobType.DEDUPLICATE_OFFERS && s.status === ImportJobStatus.COMPLETED) ||
+    stages.some((s) => s.type === ImportJobType.RECHECK_OFFER && s.status === ImportJobStatus.COMPLETED) ||
     stages.some((s) => [ImportJobStatus.FAILED, ImportJobStatus.DEAD_LETTERED, ImportJobStatus.CANCELLED].includes(s.status)) ||
     stages.some((s) => s.status === ImportJobStatus.COMPLETED && (s.resultCounts as Record<string, number>)?.held);
 

@@ -10,6 +10,9 @@ export function takeOverAsMerchant(offer: OfferDocument, actor: Actor): void {
   offer.sourceChanged = false;
 }
 
+// Matches offers the business has taken over: rechecks may only flag these, never change them.
+export const MERCHANT_MANAGED_FILTER = { managedBy: OfferManagedBy.MERCHANT } as const;
+
 // Imported offers are never hard-deleted so dedupe remembers the business removed them.
 export function removeAsMerchant(offer: OfferDocument, actor: Actor): void {
   takeOverAsMerchant(offer, actor);

@@ -19,6 +19,7 @@ import { AuditAction, AuthorisationSource, CandidateStatus, DomainAuthorisationS
 import { AuditService } from '../audit/audit.service';
 import { RunsService } from '../queue/runs.service';
 import { CandidatesService } from '../review/candidates.service';
+import { ImportedOffersService } from '../review/imported-offers.service';
 import { JobMonitoringService } from '../review/job-monitoring.service';
 import { OptOutsService } from '../review/opt-outs.service';
 import { ProviderPoliciesService } from '../review/provider-policies.service';
@@ -304,18 +305,20 @@ export class AdminScraperController {
     private readonly candidates: CandidatesService,
     private readonly optOuts: OptOutsService,
     private readonly monitoring: JobMonitoringService,
+    private readonly importedOffers: ImportedOffersService,
   ) {}
 
   // Counters for the admin dashboard and navigation badges.
   @Get('overview')
   async overview() {
-    const [candidates, pendingDomains, providerReview, branches, removalRequests, status] = await Promise.all([
+    const [candidates, pendingDomains, providerReview, branches, removalRequests, status, importedOffers] = await Promise.all([
       this.candidates.list({ status: CandidateStatus.PENDING_REVIEW, limit: 1 }),
       this.websites.list({ status: DomainAuthorisationStatus.PENDING_AUTHORISATION, limit: 1 }),
       this.websites.list({ status: DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW, limit: 1 }),
       this.websites.pendingBranches(200),
       this.optOuts.unacknowledgedCount(),
       this.monitoring.status(),
+      this.importedOffers.counts(),
     ]);
     return {
       candidatesAwaitingReview: candidates.total,
@@ -324,6 +327,7 @@ export class AdminScraperController {
       websitesAwaitingProviderReview: providerReview.total,
       branchesAwaitingMatch: branches.length,
       unacknowledgedRemovalRequests: removalRequests,
+      importedOffers,
       halted: status.halted,
       workers: status.workers.length,
     };

@@ -66,6 +66,26 @@ export const RETENTION = {
   jobLogLines: 500,
 } as const;
 
+// Spec §10 recheck defaults. Per-domain (DomainCrawlConfig) and per-adapter (ScraperAdapter) intervals override
+// the base interval; the ending-soon rule and error backoff always apply.
+export const RECHECK = {
+  activeOfferHours: 24,
+  endingSoonHours: 6,
+  endingSoonWindowHours: 48,
+  inactiveHours: 7 * 24,
+  errorBackoffHours: [1, 4, 16, 64],
+  maxBackoffHours: 7 * 24,
+  // Consecutive successful checks without the offer before it goes to admin expiry review.
+  absentChecksForExpiryReview: 2,
+  schedulerEveryMs: 5 * 60 * 1000,
+  schedulerBatch: 25,
+  staleReviewEveryMs: 60 * 60 * 1000,
+  // A scheduled run that never reports back (cancelled, lost) is tried again after this.
+  provisionalHours: 24,
+  // Imported offers not successfully checked for this long are listed as stale for admins.
+  staleAfterDays: 7,
+} as const;
+
 // Template traits and fingerprint match results removed from a website when it opts out.
 export const OPTED_OUT_MATCH_FIELDS = {
   siteMarkers: 1,

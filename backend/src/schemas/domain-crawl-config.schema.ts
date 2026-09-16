@@ -16,6 +16,10 @@ export class DomainCrawlConfig {
   @Prop({ min: 1, max: 1000 })
   pageCap?: number;
 
+  // Hours between rechecks of published offers (spec §10); defaults to the adapter's, then 24h / weekly.
+  @Prop({ min: 1, max: 24 * 30 })
+  recheckIntervalHours?: number;
+
   @Prop({ default: false })
   paused: boolean;
 

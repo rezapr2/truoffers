@@ -29,7 +29,7 @@ describe('data retention (docs/data-protection.md)', () => {
     await connectTestMongo();
     models = testModels();
     await syncTestIndexes(models);
-    retention = new RetentionService(models.candidates as any, models.offers as any, models.jobs as any, models.fingerprints as any, models.adapters as any);
+    retention = new RetentionService(models.candidates as any, models.offers as any, models.jobs as any, models.fingerprints as any, models.adapters as any, models.revisions as any);
   });
   afterAll(disconnectTestMongo);
   beforeEach(resetTestMongo);
@@ -97,7 +97,7 @@ describe('data retention (docs/data-protection.md)', () => {
     await models.jobs.collection.updateOne({ _id: staleJob._id }, { $set: { updatedAt: new Date(now.getTime() - 8 * DAY) } });
 
     const result = await retention.run(now);
-    expect(result).toEqual({ candidatesRedacted: 1, offersRedacted: 2, staleRunOutputsCleared: 1, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
+    expect(result).toEqual({ candidatesRedacted: 1, offersRedacted: 2, revisionsRedacted: 0, staleRunOutputsCleared: 1, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
 
     const redactedCandidate = await models.candidates.findById(rejectedLongAgo._id).lean();
     expect(redactedCandidate!.sources[0]).toMatchObject({ url: 'https://pizza-palace.test/offers', excerpt: '' });
@@ -119,7 +119,7 @@ describe('data retention (docs/data-protection.md)', () => {
     }
     expect((await models.jobs.findById(staleJob._id).lean())!.output).toBeUndefined();
 
-    expect(await retention.run(now)).toEqual({ candidatesRedacted: 0, offersRedacted: 0, staleRunOutputsCleared: 0, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
+    expect(await retention.run(now)).toEqual({ candidatesRedacted: 0, offersRedacted: 0, revisionsRedacted: 0, staleRunOutputsCleared: 0, fingerprintExamplesRedacted: 0, adapterTestResultsRedacted: 0 });
   });
 
   describe('adapter builder output', () => {

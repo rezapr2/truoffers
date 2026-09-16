@@ -11,6 +11,7 @@ import {
   ImportJobType,
   OPEN_CANDIDATE_STATUSES,
   OfferManagedBy,
+  OfferOrigin,
   ProviderPolicyStatus,
   RESOLVED_BRANCH_STATUSES,
 } from '../../common/scraper.enums';
@@ -38,6 +39,8 @@ import { promotionalTextBlocks } from '../extraction/html-blocks';
 import { classifyPage, isCrawlablePath, pagePriority } from '../extraction/page-classifier';
 import { validateExtractedOffer } from '../extraction/validate-offer';
 import { comparableOfPublished } from '../lifecycle/offer-mapping';
+import { RecheckService } from '../lifecycle/recheck.service';
+import { RECHECKED_STATUSES } from '../lifecycle/recheck-rules';
 import { BusinessMatcherService } from '../matching/business-matcher.service';
 import { dedupeDecision, ExistingOfferView, MergedExtraction, mergeRunExtractions } from '../matching/offer-dedupe';
 import type { LogLevel } from '../queue/import-jobs.service';
@@ -83,6 +86,9 @@ export class StageAbortedError extends Error {
 
 interface PageExtractionOutput {
   processedUrls: string[];
+  // For rechecks: page keys read successfully, and page keys that no longer exist.
+  readPages: string[];
+  gonePages: string[];
   businesses: ExtractedBusiness[];
   offers: OfferExtraction[];
   aiPages?: { url: string; title?: string; blocks: string[] }[];
@@ -125,6 +131,7 @@ export class PipelineService {
     private readonly domains: DomainRegistryService,
     private readonly registry: AdapterRegistry,
     private readonly matcher: BusinessMatcherService,
+    private readonly recheck: RecheckService,
     @Inject(AI_OFFER_EXTRACTOR) private readonly ai: AiOfferExtractor,
   ) {}
 
@@ -142,6 +149,8 @@ export class PipelineService {
         return this.matchBusinesses(ctx);
       case ImportJobType.DEDUPLICATE_OFFERS:
         return this.deduplicate(ctx);
+      case ImportJobType.RECHECK_OFFER:
+        return this.applyCheck(ctx);
       default:
         throw new StageAbortedError(`${type} is not a website import stage`);
     }
@@ -203,9 +212,10 @@ export class PipelineService {
   private async holdForProvider(site: ScrapedWebsiteLean, match: ProviderMatch): Promise<string | null> {
     await this.sites.updateOne({ _id: site._id }, { $set: { providerRef: match.policyId, providerSignals: match.signals } });
     if (match.status === ProviderPolicyStatus.ALLOWED) return null;
+    // Held websites aren't checked again until the provider is allowed and a run is started.
     await this.sites.updateOne(
       { _id: site._id },
-      { $set: { authorisationStatus: DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW, lastError: `Hosted by ${match.name} (${match.status})` } },
+      { $set: { authorisationStatus: DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW, lastError: `Hosted by ${match.name} (${match.status})` }, $unset: { nextCheckAt: 1 } },
     );
     return `${site.domain} is hosted by ${match.name}, whose policy is ${match.status}; held for provider review`;
   }
@@ -233,7 +243,8 @@ export class PipelineService {
     const homepage = await loader.load(homepageUrl);
     if (!homepage) {
       const reason = loader.skipped.get(homepageUrl) ?? 'unavailable';
-      await this.sites.updateOne({ _id: site._id }, { $set: { lastFailedCheckAt: new Date(), lastError: `Homepage not usable: ${reason}` } });
+      await this.sites.updateOne({ _id: site._id }, { $set: { lastFailedCheckAt: new Date(), lastError: `Homepage not usable: ${reason}` }, $inc: { failureCount: 1 } });
+      await this.recheck.scheduleAfterFailure(site._id);
       return { held: `The homepage could not be used: ${reason}` };
     }
 
@@ -294,7 +305,7 @@ export class PipelineService {
   // Runs the adapter over every page the loader holds in memory.
   private async extractLoaded(loader: PageLoader, plan: DiscoveredPage[], adapter: BuiltinAdapter, wctx: WebsiteContext): Promise<PageExtractionOutput> {
     const wantAi = await this.aiBlocksWanted();
-    const out: PageExtractionOutput = { processedUrls: [], businesses: [], offers: [], aiPages: wantAi ? [] : undefined };
+    const out: PageExtractionOutput = { processedUrls: [], readPages: [], gonePages: [...loader.gone], businesses: [], offers: [], aiPages: wantAi ? [] : undefined };
     for (const [key, page] of loader.loadedPages()) {
       const roles = plan.find((p) => pageKey(p.url) === key)?.roles ?? classifyPage(new URL(page.finalUrl));
       this.collect(out, key, page, roles.length ? roles : ['home'], adapter, wctx, wantAi);
@@ -304,6 +315,7 @@ export class PipelineService {
 
   private collect(out: PageExtractionOutput, key: string, page: LoadedPage, roles: PageRole[], adapter: BuiltinAdapter, wctx: WebsiteContext, wantAi: boolean) {
     if (!out.processedUrls.includes(key)) out.processedUrls.push(key);
+    for (const read of [key, pageKey(page.finalUrl)]) if (!out.readPages.includes(read)) out.readPages.push(read);
     const result = adapter.extractFromPage(page, roles, wctx);
     out.businesses.push(...result.businesses);
     out.offers.push(...result.offers);
@@ -379,6 +391,8 @@ export class PipelineService {
     const wantAi = await this.aiBlocksWanted();
     const out: PageExtractionOutput = {
       processedUrls: partial.processedUrls ?? [],
+      readPages: partial.readPages ?? [],
+      gonePages: partial.gonePages ?? [],
       businesses: partial.businesses ?? [],
       offers: partial.offers ?? [],
       aiPages: wantAi ? (partial.aiPages ?? []) : undefined,
@@ -393,6 +407,7 @@ export class PipelineService {
       const key = pageKey(page.url);
       if (loaded) this.collect(out, key, loaded, page.roles, adapter, wctx, wantAi);
       else if (!out.processedUrls.includes(key)) out.processedUrls.push(key);
+      if (loader.gone.has(key) && !out.gonePages.includes(key)) out.gonePages.push(key);
       await ctx.checkpoint(out as unknown as Record<string, unknown>);
     }
     await ctx.progress(targets.length, targets.length, 'Pages read');
@@ -544,7 +559,11 @@ export class PipelineService {
       offersByBusiness.set(String(offer.businessId), list);
     }
 
-    const counts = { offersSeen: merged.length, candidatesCreated: 0, candidatesMerged: 0, offersRefreshed: 0, merchantOwned: 0, suppressed: 0, failedExtractions: 0 };
+    const counts = { offersSeen: merged.length, candidatesCreated: 0, candidatesMerged: 0, offersRefreshed: 0, merchantOwned: 0, suppressed: 0, failedExtractions: 0, revisionsProposed: 0, merchantSourceChanged: 0 };
+    // Published offers found again (spec §9 rechecks), and those found with changed terms.
+    const seenOfferIds = new Set<string>();
+    const revisedOfferIds = new Set<string>();
+    const viewOf = (id: Types.ObjectId) => [...offersByBusiness.values()].flat().find((o) => String(o.id) === String(id));
     for (const [index, extraction] of merged.entries()) {
       await ctx.progress(index, merged.length, 'Checking duplicates');
       const targetPaths = extraction.branchPaths ?? (branches.length ? branches.map((b) => b.branchPath) : ['/']);
@@ -564,19 +583,43 @@ export class PipelineService {
         switch (decision.kind) {
           case 'refresh_offer':
             await this.refreshOffer(decision.offerId, extraction, checkedAt);
+            seenOfferIds.add(String(decision.offerId));
             counts.offersRefreshed++;
             break;
           case 'merchant_owned':
+            seenOfferIds.add(String(decision.offerId));
             counts.merchantOwned++;
             break;
           case 'suppressed':
             counts.suppressed++;
             await ctx.log(`Suppressed "${extraction.offer.title}": ${decision.reason}`);
             break;
-          case 'changed_terms':
+          case 'changed_terms': {
+            const view = viewOf(decision.offerId);
+            // Spec §9: the business manages its offer, so the recheck may only tell it the website changed.
+            if (view && (view.origin === OfferOrigin.MERCHANT || view.managedBy === OfferManagedBy.MERCHANT)) {
+              await this.recheck.flagSourceChanged(decision.offerId);
+              seenOfferIds.add(String(decision.offerId));
+              counts.merchantSourceChanged++;
+              break;
+            }
+            // Spec §9: changed terms on a published imported offer become an OfferRevision; the public offer stays.
+            if (view && RECHECKED_STATUSES.includes(view.status)) {
+              const proposal = await this.recheck.proposeRevision(decision.offerId, extraction, ctx.job.runId, site.domain);
+              if (proposal !== 'not_applicable') {
+                seenOfferIds.add(String(decision.offerId));
+                if (proposal === 'opened' || proposal === 'updated') {
+                  revisedOfferIds.add(String(decision.offerId));
+                  counts.revisionsProposed++;
+                  await ctx.log(`Changed terms found for "${extraction.offer.title}": revision ${proposal}`);
+                }
+                break;
+              }
+            }
             candidatePaths.push(path);
             duplicate = { kind: DuplicateKind.CHANGED_TERMS, offerRef: decision.offerId, diff: decision.diff };
             break;
+          }
           case 'reappeared':
             candidatePaths.push(path);
             duplicate = { kind: DuplicateKind.REAPPEARED, offerRef: decision.offerId };
@@ -631,6 +674,36 @@ export class PipelineService {
       { _id: site._id },
       { $set: { lastSuccessfulCheckAt: new Date(), failureCount: 0, lastRunRef: ctx.job.runId }, $unset: { lastError: 1 } },
     );
+    return {
+      output: { seenOfferIds: [...seenOfferIds], revisedOfferIds: [...revisedOfferIds] },
+      resultCounts: counts,
+      next: ImportJobType.RECHECK_OFFER,
+    };
+  }
+
+  // ---------- recheck_offer ----------
+
+  private async applyCheck(ctx: StageContext): Promise<StageOutcome> {
+    const site = await this.site(ctx);
+    const outputs = await this.outputs(ctx);
+    const pageStages = [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.EXTRACT_BUSINESS, ImportJobType.EXTRACT_OFFERS].map(
+      (type) => outputs[type] as Partial<PageExtractionOutput> | undefined,
+    );
+    const dedupe = outputs[ImportJobType.DEDUPLICATE_OFFERS] as { seenOfferIds?: string[]; revisedOfferIds?: string[] } | undefined;
+    if (!dedupe) throw new StageAbortedError('Duplicate check output is missing');
+    const counts = await this.recheck.applyCheck(
+      site._id,
+      {
+        seenOfferIds: new Set(dedupe.seenOfferIds ?? []),
+        readPages: new Set(pageStages.flatMap((o) => o?.readPages ?? [])),
+        gonePages: new Set(pageStages.flatMap((o) => o?.gonePages ?? [])),
+      },
+      new Set(dedupe.revisedOfferIds ?? []),
+      ctx.job.startedAt ?? new Date(),
+    );
+    if (counts.possiblyRemoved || counts.expiryReview || counts.republished) {
+      await ctx.log(`Recheck: ${counts.possiblyRemoved} possibly removed, ${counts.expiryReview} to expiry review, ${counts.republished} republished`);
+    }
     return { resultCounts: counts };
   }
 

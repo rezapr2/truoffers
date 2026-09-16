@@ -281,9 +281,17 @@ export class WebsitesService {
     return config;
   }
 
-  async updateCrawlConfig(id: string, patch: { rateLimitMs?: number; pageCap?: number }) {
+  async updateCrawlConfig(id: string, patch: { rateLimitMs?: number; pageCap?: number; recheckIntervalHours?: number | null }) {
     const site = await this.find(id);
-    return this.configs.findOneAndUpdate({ domain: site.domain }, { $set: patch }, { upsert: true, new: true, runValidators: true });
+    // An explicit null clears the override so the adapter's or the default interval applies again.
+    const entries = Object.entries(patch).filter(([, value]) => value !== undefined);
+    const $set = Object.fromEntries(entries.filter(([, value]) => value !== null));
+    const $unset = Object.fromEntries(entries.filter(([, value]) => value === null).map(([key]) => [key, 1]));
+    return this.configs.findOneAndUpdate(
+      { domain: site.domain },
+      { ...(Object.keys($set).length ? { $set } : {}), ...(Object.keys($unset).length ? { $unset } : {}) },
+      { upsert: true, new: true, runValidators: true },
+    );
   }
 
   async decideBranch(id: string, branchPath: string, decision: BranchDecision, userId: string) {

@@ -4,6 +4,8 @@ export const SCRAPER_QUEUES = {
   fetch: 'scraper-fetch',
   process: 'scraper-process',
   deadLetter: 'scraper-dead-letter',
+  // Repeatable maintenance ticks (recheck scheduling, stale offer review); they start ImportJobs, never fetch.
+  schedule: 'scraper-schedule',
 } as const;
 
 export const WORK_QUEUES = [SCRAPER_QUEUES.fetch, SCRAPER_QUEUES.process] as const;
@@ -20,7 +22,14 @@ export const QUEUE_FOR_JOB: Record<ImportJobType, (typeof WORK_QUEUES)[number]> 
   [ImportJobType.CREATE_FINGERPRINT]: SCRAPER_QUEUES.fetch,
   [ImportJobType.MATCH_FINGERPRINT]: SCRAPER_QUEUES.fetch,
   [ImportJobType.TEST_ADAPTER]: SCRAPER_QUEUES.fetch,
+  [ImportJobType.RECHECK_OFFER]: SCRAPER_QUEUES.process,
+  [ImportJobType.REVIEW_STALE_OFFER]: SCRAPER_QUEUES.process,
 };
+
+export const SCHEDULE_JOBS = {
+  rechecks: 'schedule_rechecks',
+  staleOffers: 'schedule_stale_offer_review',
+} as const;
 
 export const QUEUE_CONCURRENCY: Record<(typeof WORK_QUEUES)[number], number> = {
   [SCRAPER_QUEUES.fetch]: 4,

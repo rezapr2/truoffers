@@ -38,6 +38,8 @@ export class PageLoader {
   private readonly memo = new Map<string, Promise<LoadedPage | null>>();
   private readonly loaded = new Map<string, LoadedPage>();
   readonly skipped = new Map<string, string>();
+  // Page keys that answered 404 or 410: for a recheck, the offer on that page is gone.
+  readonly gone = new Set<string>();
   fetchedCount = 0;
 
   // Pages loaded so far in this job, keyed by page key; their DOMs are still in memory.
@@ -154,6 +156,7 @@ export class PageLoader {
     if (response.status === 429 || response.status >= 500) {
       throw new FetchFailedError('http_status', `${url} returned HTTP ${response.status}`, true, response.status, response.retryAfterMs);
     }
+    if (response.status === 404 || response.status === 410) this.gone.add(key);
     if (response.status >= 400) return this.skip(url, `HTTP ${response.status}`);
 
     const $ = cheerio.load(response.body);

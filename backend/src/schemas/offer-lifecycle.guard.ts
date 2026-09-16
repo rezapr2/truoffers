@@ -106,12 +106,47 @@ function updatedFields(update: Record<string, any> | null | undefined): Map<stri
 const RETENTION_REDACTABLE = new Set(['sources', 'evidence', 'excerptsRedactedAt']);
 export const RETENTION_COMPONENT = 'retention';
 
-function checkUpdate(fields: Map<string, unknown>, actor: Actor): { restrictToScraperManaged: boolean } {
+/**
+ * Spec §9's automatic transitions between states an admin has already published: a recheck republishes an
+ * approved offer it had hidden as possibly_removed, or keeps its published version while a revision waits.
+ * Allowed only to the recheck component, through a query update whose filter pins the current status to one
+ * of these and the offer to scraper-origin and scraper-managed, so nothing unpublished can pass through.
+ */
+export const RECHECK_COMPONENT = 'recheck';
+const RECHECK_PUBLIC_FROM: Partial<Record<OfferStatus, OfferStatus[]>> = {
+  [OfferStatus.ACTIVE]: [OfferStatus.POSSIBLY_REMOVED, OfferStatus.REVISION_PENDING],
+  [OfferStatus.REVISION_PENDING]: [OfferStatus.ACTIVE, OfferStatus.POSSIBLY_REMOVED],
+};
+
+type UpdateFilter = Record<string, unknown> | undefined;
+
+function isRecheckTransition(actor: Actor, to: OfferStatus, filter: UpdateFilter): boolean {
+  if (actor.kind !== ActorKind.SYSTEM || actor.component !== RECHECK_COMPONENT || !filter) return false;
+  const from = filter.status;
+  return (
+    typeof from === 'string' &&
+    (RECHECK_PUBLIC_FROM[to] ?? []).includes(from as OfferStatus) &&
+    filter.origin === OfferOrigin.SCRAPER &&
+    filter.managedBy === OfferManagedBy.SCRAPER
+  );
+}
+
+// possibly_removed can be republished automatically, so only a published offer may enter it without a human.
+function assertCanMarkPossiblyRemoved(actor: Actor, filter: UpdateFilter) {
+  if (ActorContext.isHuman(actor)) return;
+  const from = filter?.status;
+  if (typeof from !== 'string' || !PUBLIC_OFFER_STATUSES.includes(from as OfferStatus)) {
+    throw new OfferLifecycleViolation(`${describe(actor)} may mark only a published offer possibly_removed, with its status pinned in the filter`);
+  }
+}
+
+function checkUpdate(fields: Map<string, unknown>, actor: Actor, filter?: UpdateFilter): { restrictToScraperManaged: boolean } {
   if (fields.has('verification')) assertVerification(fields.get('verification'), actor);
   if (fields.has('managedBy')) assertCanChangeManagement(actor);
   const status = fields.get('status') as OfferStatus | undefined;
   // Query updates can't see the matched documents' origin, so any publish through one needs a human.
-  if (status && PUBLIC_OFFER_STATUSES.includes(status)) assertCanPublish(actor);
+  if (status && PUBLIC_OFFER_STATUSES.includes(status) && !isRecheckTransition(actor, status, filter)) assertCanPublish(actor);
+  if (status === OfferStatus.POSSIBLY_REMOVED) assertCanMarkPossiblyRemoved(actor, filter);
 
   if (ActorContext.isHuman(actor)) return { restrictToScraperManaged: false };
   const retention = actor.kind === ActorKind.SYSTEM && actor.component === RETENTION_COMPONENT;
@@ -153,6 +188,9 @@ export function applyOfferLifecycleGuard(schema: Schema) {
       ) {
         assertCanPublish(actor);
       }
+      if (offer.isModified('status') && offer.status === OfferStatus.POSSIBLY_REMOVED && !ActorContext.isHuman(actor)) {
+        throw new OfferLifecycleViolation(`${describe(actor)} may mark an offer possibly_removed only through a status-pinned update`);
+      }
       if (!ActorContext.isHuman(actor) && offer.managedBy === OfferManagedBy.MERCHANT) {
         const blocked = offer
           .modifiedPaths()
@@ -183,7 +221,7 @@ export function applyOfferLifecycleGuard(schema: Schema) {
         const fields = op.includes('eplace')
           ? new Map(Object.entries(update ?? {}))
           : updatedFields(update);
-        const { restrictToScraperManaged } = checkUpdate(fields, actor);
+        const { restrictToScraperManaged } = checkUpdate(fields, actor, query.getFilter() as UpdateFilter);
         if (restrictToScraperManaged) query.where({ managedBy: { $ne: OfferManagedBy.MERCHANT } });
 
         const status = fields.get('status') as OfferStatus | undefined;
@@ -217,8 +255,9 @@ export function applyOfferLifecycleGuard(schema: Schema) {
         if ('insertOne' in op) checkNewOffer(op.insertOne.document as OfferShape, actor);
         const update =
           ('updateOne' in op && op.updateOne.update) || ('updateMany' in op && op.updateMany.update);
+        const filter = ('updateOne' in op && op.updateOne.filter) || ('updateMany' in op && op.updateMany.filter) || undefined;
         if (update && !Array.isArray(update)) {
-          if (checkUpdate(updatedFields(update as Record<string, any>), actor).restrictToScraperManaged) {
+          if (checkUpdate(updatedFields(update as Record<string, any>), actor, filter as UpdateFilter).restrictToScraperManaged) {
             throw new OfferLifecycleViolation(`${describe(actor)} may not bulk-modify offers outside the lifecycle service`);
           }
         }

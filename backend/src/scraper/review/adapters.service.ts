@@ -264,6 +264,15 @@ export class AdaptersService {
     return current;
   }
 
+  /** Spec §10: how often websites this adapter reads are rechecked. Operational, so every version shares it. */
+  async setRecheckInterval(key: string, hours: number | null | undefined) {
+    const exists = await this.adapters.exists({ key });
+    if (!exists) throw new NotFoundException('Adapter not found');
+    await this.adapters.updateMany({ key }, hours == null ? { $unset: { recheckIntervalHours: 1 } } : { $set: { recheckIntervalHours: hours } });
+    await this.audit.record({ action: AuditAction.ADAPTER_UPDATED, targetType: 'ScraperAdapter', targetId: key, after: { key, recheckIntervalHours: hours ?? null } });
+    return { key, recheckIntervalHours: hours ?? null };
+  }
+
   private validConfig(input: unknown) {
     const { config, errors } = parseSelectorConfig(input);
     if (!config) throw new BadRequestException(errors);

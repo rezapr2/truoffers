@@ -5,7 +5,7 @@ import { Business, BusinessDocument } from '../schemas/business.schema';
 import { Offer, OfferDocument } from '../schemas/offer.schema';
 import { Category, CategoryDocument } from '../schemas/category.schema';
 import { Promotion, PromotionDocument, PromotionStatus } from '../schemas/promotion.schema';
-import { OfferStatus, VerificationStatus } from '../common/enums';
+import { PUBLIC_OFFER_STATUSES, VerificationStatus } from '../common/enums';
 import { geocodePostcode } from '../common/postcode.util';
 import { PUBLIC_OFFER_PROJECTION, withImportNotice } from '../common/public-offer';
 
@@ -87,7 +87,7 @@ export class SearchService {
     const now = new Date();
     const offerFilter: any = {
       businessId: { $in: businesses.map((b) => b._id) },
-      status: OfferStatus.ACTIVE,
+      status: { $in: PUBLIC_OFFER_STATUSES },
       $or: [{ endsAt: null }, { endsAt: { $gte: now } }],
     };
     if (params.discountType) offerFilter.discountType = params.discountType;

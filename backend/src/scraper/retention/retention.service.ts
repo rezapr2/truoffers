@@ -11,6 +11,7 @@ import {
 } from '../../schemas/extracted-offer-candidate.schema';
 import { ImportJob, ImportJobDocument } from '../../schemas/import-job.schema';
 import { RETENTION_COMPONENT } from '../../schemas/offer-lifecycle.guard';
+import { OfferRevision, OfferRevisionDocument } from '../../schemas/offer-revision.schema';
 import { Offer, OfferDocument } from '../../schemas/offer.schema';
 import { ScraperAdapter, ScraperAdapterDocument } from '../../schemas/scraper-adapter.schema';
 import { WebsiteFingerprint, WebsiteFingerprintDocument } from '../../schemas/website-fingerprint.schema';
@@ -40,6 +41,7 @@ export class RetentionService {
     @InjectModel(ImportJob.name) private readonly jobs: Model<ImportJobDocument>,
     @InjectModel(WebsiteFingerprint.name) private readonly fingerprints: Model<WebsiteFingerprintDocument>,
     @InjectModel(ScraperAdapter.name) private readonly adapters: Model<ScraperAdapterDocument>,
+    @InjectModel(OfferRevision.name) private readonly revisions: Model<OfferRevisionDocument>,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
@@ -115,6 +117,15 @@ export class RetentionService {
       await this.offers.updateOne({ _id: offer._id }, { $set: { sources: redact(offer), evidence: {}, excerptsRedactedAt: now } });
     }
 
+    // Changes an admin applied, discarded or that were closed: the record stays, the page text goes.
+    const revisions = await this.revisions
+      .find({ excerptsRedactAfter: { $lte: now }, excerptsRedactedAt: { $exists: false } })
+      .select('_id sources')
+      .lean();
+    for (const revision of revisions) {
+      await this.revisions.updateOne({ _id: revision._id }, { $set: { sources: redact(revision), evidence: {}, excerptsRedactedAt: now } });
+    }
+
     // Stage hand-over data is cleared when a run ends; this catches runs that never finished.
     const staleOutputs = await this.jobs.updateMany(
       { updatedAt: { $lte: new Date(now.getTime() - STALE_RUN_OUTPUT_MS) }, $or: [{ output: { $exists: true } }, { payload: { $exists: true } }] },
@@ -143,6 +154,7 @@ export class RetentionService {
     return {
       candidatesRedacted: candidates.length,
       offersRedacted: offers.length,
+      revisionsRedacted: revisions.length,
       staleRunOutputsCleared: staleOutputs.modifiedCount,
       fingerprintExamplesRedacted: fingerprints.length,
       adapterTestResultsRedacted: adapters.length,

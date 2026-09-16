@@ -2,11 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { DelayedError, Job, UnrecoverableError } from 'bullmq';
 import { Model } from 'mongoose';
-import { ImportJobStatus } from '../../common/scraper.enums';
+import { IMPORT_RUN_STAGES, ImportJobStatus, ImportJobType } from '../../common/scraper.enums';
 import { OfferLifecycleViolation } from '../../schemas/offer-lifecycle.guard';
 import type { ImportJobDocument } from '../../schemas/import-job.schema';
 import { ScrapedWebsite, ScrapedWebsiteDocument } from '../../schemas/scraped-website.schema';
 import { NoAdapterAvailableError } from '../extraction/adapter-registry.service';
+import { RecheckService } from '../lifecycle/recheck.service';
 import { NetworkJobsService } from '../pipeline/network-jobs.service';
 import { PipelineService, StageAbortedError, StageContext, StageOutcome } from '../pipeline/pipeline.service';
 import { CrawlDeniedError, PARKING_DENIALS } from '../safety/crawl-gate.service';
@@ -51,6 +52,7 @@ export class StageRunner {
     private readonly pipeline: PipelineService,
     private readonly networkJobs: NetworkJobsService,
     private readonly control: ScraperControlService,
+    private readonly recheck: RecheckService,
     @InjectModel(ScrapedWebsite.name) private readonly sites: Model<ScrapedWebsiteDocument>,
   ) {}
 
@@ -94,15 +96,19 @@ export class StageRunner {
         },
         checkpoint: (partial) => this.jobs.checkpoint(importJob._id, partial),
       };
-      const outcome = this.networkJobs.handles(importJob.type)
-        ? await this.networkJobs.run(importJob.type, ctx)
-        : await this.pipeline.run(importJob.type, ctx);
+      const outcome = await this.dispatch(importJob.type, ctx);
       await this.finish(running, outcome);
     } catch (err) {
       await this.handleError(job, token, importJob, err as Error, controller);
     } finally {
       this.untrack(runId, controller);
     }
+  }
+
+  private async dispatch(type: ImportJobType, ctx: StageContext): Promise<StageOutcome> {
+    if (this.networkJobs.handles(type)) return this.networkJobs.run(type, ctx);
+    if (type === ImportJobType.REVIEW_STALE_OFFER) return { resultCounts: await this.recheck.reviewStaleOffers() };
+    return this.pipeline.run(type, ctx);
   }
 
   private track(runId: string, controller: AbortController) {
@@ -174,10 +180,16 @@ export class StageRunner {
     if (!final) throw err;
 
     this.logger.warn(`${importJob.type} failed for ${importJob.domain}: ${err.message}`);
-    await this.sites.updateOne(
-      { _id: importJob.scrapedWebsiteRef },
-      { $set: { lastFailedCheckAt: new Date(), lastError: err.message }, $inc: { failureCount: 1 } },
-    );
+    // Jobs without a website (network discovery, stale offer review) have nothing to record: an undefined _id
+    // would make Mongoose drop the condition and update whichever website came first.
+    if (importJob.scrapedWebsiteRef) {
+      await this.sites.updateOne(
+        { _id: importJob.scrapedWebsiteRef },
+        { $set: { lastFailedCheckAt: new Date(), lastError: err.message }, $inc: { failureCount: 1 } },
+      );
+      // A failed check of the website is tried again with backoff (spec §10).
+      if (IMPORT_RUN_STAGES.includes(importJob.type)) await this.recheck.scheduleAfterFailure(importJob.scrapedWebsiteRef);
+    }
     if (retryable) await this.queue.deadLetterJob(importJob, err.message);
     throw new UnrecoverableError(err.message);
   }

@@ -43,9 +43,14 @@ export enum ImportJobType {
   CREATE_FINGERPRINT = 'create_fingerprint',
   MATCH_FINGERPRINT = 'match_fingerprint',
   TEST_ADAPTER = 'test_adapter',
+  // Phase 3
+  // Last stage of every import run: applies the check to offers already published from the website.
+  RECHECK_OFFER = 'recheck_offer',
+  // Scheduled: expires imported offers whose end date has passed.
+  REVIEW_STALE_OFFER = 'review_stale_offer',
 }
 
-// The six stages of a website import run, in order.
+// The stages of a website import run, in order. Every completed run is a check of the website.
 export const IMPORT_RUN_STAGES = [
   ImportJobType.ANALYSE_SEED_WEBSITE,
   ImportJobType.DISCOVER_OFFER_PAGES,
@@ -53,6 +58,7 @@ export const IMPORT_RUN_STAGES = [
   ImportJobType.EXTRACT_OFFERS,
   ImportJobType.MATCH_BUSINESS,
   ImportJobType.DEDUPLICATE_OFFERS,
+  ImportJobType.RECHECK_OFFER,
 ];
 
 export enum ImportJobStatus {
@@ -100,6 +106,15 @@ export enum DuplicateKind {
   CHANGED_TERMS = 'changed_terms',
   REAPPEARED = 'reappeared',
   CONFLICT = 'conflict',
+}
+
+// Spec §9/§12: a change to a published imported offer found by a recheck, kept as revision history.
+export enum OfferRevisionStatus {
+  PENDING = 'pending',
+  APPLIED = 'applied',
+  DISCARDED = 'discarded',
+  // Closed without a decision: the website went back to the published terms, or the offer expired or was removed.
+  SUPERSEDED = 'superseded',
 }
 
 export enum DomainAuthorisationStatus {
@@ -252,4 +267,12 @@ export enum AuditAction {
   NETWORK_UPDATED = 'network.updated',
   NETWORK_DISCOVERY_REQUESTED = 'network.discovery_requested',
   WEBSITES_BULK_ACTION = 'websites.bulk_action',
+  // Phase 3
+  REVISION_APPLIED = 'revision.applied',
+  REVISION_DISCARDED = 'revision.discarded',
+  OFFER_EXPIRY_DECIDED = 'offer.expiry_decided',
+  WEBSITE_RECHECK_UPDATED = 'website.recheck_updated',
+  CLAIM_INVITATION_CREATED = 'claim_invitation.created',
+  CLAIM_INVITATION_REVOKED = 'claim_invitation.revoked',
+  OUTREACH_CONTACT_RECORDED = 'outreach.contact_recorded',
 }

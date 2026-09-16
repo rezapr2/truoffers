@@ -47,6 +47,7 @@ describe('offer lifecycle service (spec §9)', () => {
       models.sites as any,
       models.businesses as any,
       new AuditService(models.audit as any),
+      models.revisions as any,
     );
   });
   afterAll(disconnectTestMongo);

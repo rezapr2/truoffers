@@ -9,12 +9,14 @@ import {
   AdminWebsitesController,
 } from './controllers/admin-scraper.controllers';
 import { AdminAdaptersController, AdminFingerprintsController, AdminNetworkController } from './controllers/admin-network.controllers';
+import { AdminImportedOffersController, AdminRevisionsController } from './controllers/admin-recheck.controllers';
 import { MerchantImportsController, RemovalRequestsController } from './controllers/merchant-imports.controller';
 import { OfferLifecycleService } from './lifecycle/offer-lifecycle.service';
 import { RetentionService } from './retention/retention.service';
 import { AdaptersService } from './review/adapters.service';
 import { CandidatesService } from './review/candidates.service';
 import { FingerprintsService } from './review/fingerprints.service';
+import { ImportedOffersService } from './review/imported-offers.service';
 import { JobMonitoringService } from './review/job-monitoring.service';
 import { MerchantImportsService } from './review/merchant-imports.service';
 import { NetworksService } from './review/networks.service';
@@ -39,6 +41,8 @@ import { ScraperCoreModule } from './scraper-core.module';
     AdminFingerprintsController,
     AdminAdaptersController,
     AdminNetworkController,
+    AdminImportedOffersController,
+    AdminRevisionsController,
     MerchantImportsController,
     RemovalRequestsController,
   ],
@@ -53,6 +57,7 @@ import { ScraperCoreModule } from './scraper-core.module';
     MerchantImportsService,
     FingerprintsService,
     NetworksService,
+    ImportedOffersService,
     RetentionService,
   ],
   exports: [ScraperCoreModule, JobMonitoringService],

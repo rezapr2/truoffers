@@ -5,6 +5,7 @@ import { AdaptersService } from '../review/adapters.service';
 import { FingerprintsService } from '../review/fingerprints.service';
 import { NetworksService } from '../review/networks.service';
 import {
+  AdapterRecheckDto,
   BulkWebsitesDto,
   CreateAdapterDto,
   CreateFingerprintDto,
@@ -81,6 +82,11 @@ export class AdminAdaptersController {
   @Patch(':key')
   pause(@Param('key') key: string, @Body() dto: PauseDto) {
     return this.adapters.setPaused(key, dto.paused, dto.reason);
+  }
+
+  @Patch(':key/recheck')
+  setRecheckInterval(@Param('key') key: string, @Body() dto: AdapterRecheckDto) {
+    return this.adapters.setRecheckInterval(key, dto.recheckIntervalHours);
   }
 
   @Patch(':key/versions/:version')

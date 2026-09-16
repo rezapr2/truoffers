@@ -1,9 +1,9 @@
 import { DiscountType, RedemptionType } from '../../common/enums';
 import type { OfferType } from '../../common/scraper.enums';
 import type { Offer } from '../../schemas/offer.schema';
-import type { ExtractedOffer } from '../extraction/adapter.types';
+import type { ExtractedOffer, FieldEvidence } from '../extraction/adapter.types';
 import { contentFingerprint, FingerprintInput } from '../extraction/content-fingerprint';
-import { londonDate } from '../extraction/london-time';
+import { londonDate, londonEndOfDay, londonStartOfDay } from '../extraction/london-time';
 
 export const DISCOUNT_TYPE_BY_OFFER_TYPE: Record<OfferType, DiscountType> = {
   percentage_discount: DiscountType.PERCENT,
@@ -119,4 +119,110 @@ export function comparableOfPublished(offer: PublishedOfferFields): ComparableOf
     freeItem: input.freeItem,
     endDate: offer.endsAt ? londonDate(offer.endsAt) : undefined,
   };
+}
+
+const DAY_NAMES: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+
+export function composeTerms(c: Partial<ExtractedOffer>): string | undefined {
+  const parts: string[] = [];
+  if (c.eligibleWeekdays?.length) parts.push(`Valid ${c.eligibleWeekdays.map((d) => DAY_NAMES[d]).join(', ')}`);
+  if (c.dailyStartTime || c.dailyEndTime) parts.push(`${c.dailyStartTime ?? 'opening'}–${c.dailyEndTime ?? 'close'}`);
+  if (c.collectionEligible && c.deliveryEligible === false) parts.push('Collection only');
+  if (c.deliveryEligible && c.collectionEligible === false) parts.push('Delivery only');
+  if (c.newCustomersOnly) parts.push('New customers only');
+  if (c.requiredSpend) parts.push(`When you spend £${c.requiredSpend}`);
+  if (c.terms) parts.push(c.terms);
+  const text = parts.join('. ').replace(/\.\./g, '.');
+  return text ? text.slice(0, 600) : undefined;
+}
+
+// An extracted offer as a candidate or revision holds it: everything needed to publish it.
+export type PublishableOffer = Omit<ExtractedOffer, 'evidence'> & { evidence: Record<string, FieldEvidence>; flags?: string[] };
+
+// The Offer fields an extracted offer publishes as. Shared by approval, merging and applying revisions.
+export function publishedFieldsOf(c: PublishableOffer, business: { orderUrl?: string; website?: string }, siteDomain: string) {
+  return {
+    title: c.title,
+    description: c.shortDescription,
+    discountType: DISCOUNT_TYPE_BY_OFFER_TYPE[c.offerType],
+    offerTypeRaw: c.offerType === 'custom' ? (c.flags?.includes('price_point') ? 'price_point' : 'custom') : undefined,
+    value: valueFor(c),
+    displayLabel: displayLabelFor(c),
+    minOrder: c.minimumOrder ?? 0,
+    redemptionType: redemptionTypeFor(c.promoCode, business),
+    code: c.promoCode,
+    redemptionUrl: business.orderUrl ?? business.website ?? c.sources[0]?.url,
+    terms: composeTerms(c),
+    collection: c.collectionEligible ?? true,
+    delivery: c.deliveryEligible ?? true,
+    startsAt: c.startDate ? londonStartOfDay(c.startDate) : undefined,
+    endsAt: c.endDate ? londonEndOfDay(c.endDate) : undefined,
+    sources: c.sources,
+    evidence: c.evidence,
+    adapterId: c.adapterId,
+    adapterVersion: c.adapterVersion,
+    confidenceScore: c.confidenceScore,
+    contentFingerprint: c.contentFingerprint,
+    lastCheckedAt: c.lastCheckedAt,
+    sourceDomain: siteDomain,
+    eligibleWeekdays: c.eligibleWeekdays,
+    dailyStartTime: c.dailyStartTime,
+    dailyEndTime: c.dailyEndTime,
+    newCustomersOnly: c.newCustomersOnly,
+    freeItem: c.freeItem,
+    applicableProducts: c.applicableProducts,
+    originalPrice: c.originalPrice,
+    promotionalPrice: c.promotionalPrice,
+    requiredSpend: c.requiredSpend,
+  };
+}
+
+// Spec §10: the changes a recheck tracks. Named after Offer fields, compared as published.
+export const REVISION_TRACKED_FIELDS = [
+  'title',
+  'discountType',
+  'value',
+  'code',
+  'minOrder',
+  'requiredSpend',
+  'terms',
+  'applicableProducts',
+  'freeItem',
+  'originalPrice',
+  'promotionalPrice',
+  'startsAt',
+  'endsAt',
+  'eligibleWeekdays',
+  'dailyStartTime',
+  'dailyEndTime',
+  'collection',
+  'delivery',
+  'newCustomersOnly',
+] as const;
+export type RevisionTrackedField = (typeof REVISION_TRACKED_FIELDS)[number];
+export type RevisionValue = string | number | boolean | string[] | null;
+export type RevisionValues = Record<RevisionTrackedField, RevisionValue>;
+
+type TrackedOfferFields = Partial<Pick<Offer, Exclude<RevisionTrackedField, 'startsAt' | 'endsAt'>>> & { startsAt?: Date | null; endsAt?: Date | null };
+
+function normalised(field: RevisionTrackedField, value: unknown): RevisionValue {
+  if (value === undefined || value === null || value === '') return null;
+  if (value instanceof Date) return londonDate(value);
+  if (Array.isArray(value)) return value.length ? [...value].map(String).sort() : null;
+  if ((field === 'minOrder' || field === 'value') && value === 0) return null;
+  if (typeof value === 'string') return value.trim().replace(/\s+/g, ' ');
+  return value as RevisionValue;
+}
+
+// Tracked values of an offer as published (or as it would be published).
+export function revisionValuesOf(offer: TrackedOfferFields): RevisionValues {
+  return Object.fromEntries(REVISION_TRACKED_FIELDS.map((field) => [field, normalised(field, offer[field])])) as RevisionValues;
+}
+
+export function revisionValuesOfExtraction(extracted: PublishableOffer): RevisionValues {
+  return revisionValuesOf(publishedFieldsOf(extracted, {}, ''));
+}
+
+export function changedRevisionFields(previous: RevisionValues, proposed: RevisionValues): RevisionTrackedField[] {
+  return REVISION_TRACKED_FIELDS.filter((field) => JSON.stringify(previous[field]) !== JSON.stringify(proposed[field]));
 }

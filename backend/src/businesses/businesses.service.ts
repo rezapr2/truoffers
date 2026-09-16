@@ -17,6 +17,7 @@ import {
   BusinessStatus,
   ClaimMethod,
   ClaimStatus,
+  OfferStatus,
   PUBLIC_OFFER_STATUSES,
   Role,
   VerificationStatus,
@@ -103,7 +104,7 @@ export class BusinessesService {
       .populate('categories', 'name slug emoji');
     if (!business) throw new NotFoundException('Business not found');
     const now = new Date();
-    const [offers, menu] = await Promise.all([
+    const [offers, menu, checkingAvailability] = await Promise.all([
       this.offerModel
         .find({
           businessId: business._id,
@@ -114,13 +115,15 @@ export class BusinessesService {
         .sort({ createdAt: -1 })
         .lean(),
       this.menuModel.find({ businessId: business._id }).sort({ section: 1, sortOrder: 1 }),
+      // Spec §9: imported offers hidden while a recheck confirms whether they are still offered.
+      this.offerModel.countDocuments({ businessId: business._id, status: OfferStatus.POSSIBLY_REMOVED, $or: [{ endsAt: null }, { endsAt: { $gte: now } }] }),
     ]);
     // A listing created from the business's website (and not yet claimed) says so, like imported offers do.
     const imported =
       business.importSource?.domain && !business.ownerId
         ? { domain: business.importSource.domain, lastCheckedAt: business.importSource.lastCheckedAt }
         : null;
-    return { business: { ...business.toJSON(), imported }, offers: offers.map(withImportNotice), menu };
+    return { business: { ...business.toJSON(), imported }, offers: offers.map(withImportNotice), menu, checkingAvailability };
   }
 
   async create(

@@ -101,8 +101,8 @@ describe('website network, fingerprints and selector adapters, end to end', () =
   async function waitForRun(domain: string, since: Date, timeoutMs = 90_000) {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const stages = await jobs.find({ domain, createdAt: { $gte: since }, type: { $in: [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.DEDUPLICATE_OFFERS] } }).lean();
-      if (stages.some((s) => s.type === ImportJobType.DEDUPLICATE_OFFERS && s.status === ImportJobStatus.COMPLETED)) return;
+      const stages = await jobs.find({ domain, createdAt: { $gte: since }, type: { $in: [ImportJobType.ANALYSE_SEED_WEBSITE, ImportJobType.RECHECK_OFFER] } }).lean();
+      if (stages.some((s) => s.type === ImportJobType.RECHECK_OFFER && s.status === ImportJobStatus.COMPLETED)) return;
       const failed = await jobs.findOne({ domain, createdAt: { $gte: since }, status: { $in: [ImportJobStatus.FAILED, ImportJobStatus.DEAD_LETTERED] } }).lean();
       if (failed) throw new Error(`${failed.type} failed: ${JSON.stringify(failed.errorLog)}`);
       if (Date.now() > deadline) throw new Error(`Run for ${domain} did not finish`);

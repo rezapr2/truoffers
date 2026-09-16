@@ -10,6 +10,7 @@ import {
 } from '../schemas/extracted-offer-candidate.schema';
 import { ImportJob, ImportJobSchema } from '../schemas/import-job.schema';
 import { Offer, OfferSchema } from '../schemas/offer.schema';
+import { OfferRevision, OfferRevisionSchema } from '../schemas/offer-revision.schema';
 import { ProviderPolicy, ProviderPolicySchema } from '../schemas/provider-policy.schema';
 import { RobotsCache, RobotsCacheSchema } from '../schemas/robots-cache.schema';
 import { ScrapedWebsite, ScrapedWebsiteSchema } from '../schemas/scraped-website.schema';
@@ -34,6 +35,7 @@ export const SCRAPER_MODELS = MongooseModule.forFeature([
   { name: ExtractedOfferCandidate.name, schema: ExtractedOfferCandidateSchema },
   { name: ImportJob.name, schema: ImportJobSchema },
   { name: Offer.name, schema: OfferSchema },
+  { name: OfferRevision.name, schema: OfferRevisionSchema },
   { name: ProviderPolicy.name, schema: ProviderPolicySchema },
   { name: RobotsCache.name, schema: RobotsCacheSchema },
   { name: ScrapedWebsite.name, schema: ScrapedWebsiteSchema },

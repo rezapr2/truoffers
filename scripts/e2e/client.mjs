@@ -75,6 +75,6 @@ export function waitForRun(token, runId, description, timeoutMs = 180_000) {
     const body = await call('GET', `/admin/scraper/jobs/runs/${runId}`, { token });
     const failed = body.stages.find((s) => ['failed', 'dead_lettered', 'cancelled'].includes(s.status));
     if (failed) throw new Error(`Stage ${failed.type} ${failed.status}: ${JSON.stringify(failed.errorLog)}`);
-    return body.stages.some((s) => s.type === 'deduplicate_offers' && s.status === 'completed') && body;
+    return body.stages.some((s) => s.type === 'recheck_offer' && s.status === 'completed') && body;
   }, timeoutMs);
 }

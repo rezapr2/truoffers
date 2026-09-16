@@ -20,6 +20,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { CreateBusinessDto } from '../../businesses/businesses.dto';
@@ -38,6 +39,7 @@ import {
   WEEKDAYS,
 } from '../../common/scraper.enums';
 import type { OfferType, Weekday } from '../../common/scraper.enums';
+import { OfferRevisionStatus } from '../../common/scraper.enums';
 import { INTAKE_LIMITS } from '../scraper.constants';
 
 const toBoolean = ({ value }: { value: unknown }) => (value === 'true' ? true : value === 'false' ? false : value);
@@ -82,6 +84,8 @@ export class PauseDto {
 export class CrawlConfigDto {
   @IsOptional() @IsInt() @Min(250) @Max(60_000) rateLimitMs?: number;
   @IsOptional() @IsInt() @Min(1) @Max(1000) pageCap?: number;
+  // Hours between rechecks of this website's published offers; null goes back to the adapter or default.
+  @IsOptional() @ValidateIf((_, value) => value !== null) @IsInt() @Min(1) @Max(24 * 30) recheckIntervalHours?: number | null;
 }
 
 export class ReasonDto {
@@ -300,4 +304,34 @@ export class BulkWebsitesDto {
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @IsMongoId({ each: true }) websiteIds: string[];
   @IsIn(['authorise', 'run', 'pause', 'resume', 'opt_out', 'match_fingerprint']) action: 'authorise' | 'run' | 'pause' | 'resume' | 'opt_out' | 'match_fingerprint';
   @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
+// ---------- imported offers and revisions (Phase 3) ----------
+
+const IMPORTED_OFFER_STATES = ['possibly_removed', 'expiry_review', 'revision_pending', 'stale', 'source_changed'] as const;
+
+export class ImportedOffersQuery extends PageQuery {
+  @IsIn(IMPORTED_OFFER_STATES) state: (typeof IMPORTED_OFFER_STATES)[number];
+  @IsOptional() @IsString() @MaxLength(100) q?: string;
+}
+
+export class ExpiryDecisionDto {
+  @IsIn(['expire', 'restore']) decision: 'expire' | 'restore';
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}
+
+export class ApplyRevisionDto {
+  @IsIn([OfferVerification.UNVERIFIED, OfferVerification.ADMIN_VERIFIED])
+  verification: OfferVerification.UNVERIFIED | OfferVerification.ADMIN_VERIFIED;
+
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}
+
+export class ListRevisionsQuery extends PageQuery {
+  @IsOptional() @IsEnum(OfferRevisionStatus) status?: OfferRevisionStatus;
+  @IsOptional() @IsMongoId() offerId?: string;
+}
+
+export class AdapterRecheckDto {
+  @IsOptional() @ValidateIf((_, value) => value !== null) @IsInt() @Min(1) @Max(24 * 30) recheckIntervalHours?: number | null;
 }

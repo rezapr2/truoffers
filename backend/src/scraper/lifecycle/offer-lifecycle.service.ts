@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ActorContext } from '../../common/actor-context';
@@ -12,6 +12,7 @@ import {
   DuplicateKind,
   OfferManagedBy,
   OfferOrigin,
+  OfferRevisionStatus,
   OfferVerification,
   RESOLVED_BRANCH_STATUSES,
 } from '../../common/scraper.enums';
@@ -20,14 +21,14 @@ import {
   ExtractedOfferCandidate,
   ExtractedOfferCandidateDocument,
 } from '../../schemas/extracted-offer-candidate.schema';
+import { OfferRevision, OfferRevisionDocument } from '../../schemas/offer-revision.schema';
 import { Offer, OfferDocument } from '../../schemas/offer.schema';
 import { ScrapedWebsite, ScrapedWebsiteDocument } from '../../schemas/scraped-website.schema';
 import { AuditService } from '../audit/audit.service';
 import type { ExtractedOffer } from '../extraction/adapter.types';
-import { londonEndOfDay, londonStartOfDay } from '../extraction/london-time';
 import { validateExtractedOffer } from '../extraction/validate-offer';
-import { RETENTION } from '../scraper.constants';
-import { DISCOUNT_TYPE_BY_OFFER_TYPE, displayLabelFor, redemptionTypeFor, valueFor } from './offer-mapping';
+import { RECHECK, RETENTION } from '../scraper.constants';
+import { PublishableOffer, publishedFieldsOf } from './offer-mapping';
 
 const AUTO_LIVE_VERIFICATION = [
   VerificationStatus.VERIFIED,
@@ -35,21 +36,6 @@ const AUTO_LIVE_VERIFICATION = [
   VerificationStatus.TRUSTED_PARTNER,
   VerificationStatus.FRANCHISE_VERIFIED,
 ];
-
-const DAY_NAMES: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
-
-export function composeTerms(c: Partial<ExtractedOffer>): string | undefined {
-  const parts: string[] = [];
-  if (c.eligibleWeekdays?.length) parts.push(`Valid ${c.eligibleWeekdays.map((d) => DAY_NAMES[d]).join(', ')}`);
-  if (c.dailyStartTime || c.dailyEndTime) parts.push(`${c.dailyStartTime ?? 'opening'}–${c.dailyEndTime ?? 'close'}`);
-  if (c.collectionEligible && c.deliveryEligible === false) parts.push('Collection only');
-  if (c.deliveryEligible && c.collectionEligible === false) parts.push('Delivery only');
-  if (c.newCustomersOnly) parts.push('New customers only');
-  if (c.requiredSpend) parts.push(`When you spend £${c.requiredSpend}`);
-  if (c.terms) parts.push(c.terms);
-  const text = parts.join('. ').replace(/\.\./g, '.');
-  return text ? text.slice(0, 600) : undefined;
-}
 
 function redactedSources(sources: { url: string; pageTitle?: string; checkedAt: Date }[]) {
   return sources.map((s) => ({ url: s.url, pageTitle: s.pageTitle, checkedAt: s.checkedAt, excerpt: '' }));
@@ -69,6 +55,7 @@ export class OfferLifecycleService {
     @InjectModel(ScrapedWebsite.name) private readonly sites: Model<ScrapedWebsiteDocument>,
     @InjectModel(Business.name) private readonly businesses: Model<BusinessDocument>,
     private readonly audit: AuditService,
+    @InjectModel(OfferRevision.name) private readonly revisions: Model<OfferRevisionDocument>,
   ) {}
 
   private async loadCandidate(id: string) {
@@ -102,42 +89,7 @@ export class OfferLifecycleService {
 
   private offerFields(candidate: ExtractedOfferCandidateDocument, business: Pick<Business, 'orderUrl' | 'website'>, siteDomain: string) {
     const c = candidate.toObject() as ExtractedOfferCandidate & { _id: Types.ObjectId };
-    return {
-      title: c.title,
-      description: c.shortDescription,
-      discountType: DISCOUNT_TYPE_BY_OFFER_TYPE[c.offerType],
-      offerTypeRaw: c.offerType === 'custom' ? (c.flags.includes('price_point') ? 'price_point' : 'custom') : undefined,
-      value: valueFor(c),
-      displayLabel: displayLabelFor(c),
-      minOrder: c.minimumOrder ?? 0,
-      redemptionType: redemptionTypeFor(c.promoCode, business),
-      code: c.promoCode,
-      redemptionUrl: business.orderUrl ?? business.website ?? c.sources[0]?.url,
-      terms: composeTerms(c as unknown as ExtractedOffer),
-      collection: c.collectionEligible ?? true,
-      delivery: c.deliveryEligible ?? true,
-      startsAt: c.startDate ? londonStartOfDay(c.startDate) : undefined,
-      endsAt: c.endDate ? londonEndOfDay(c.endDate) : undefined,
-      sources: c.sources,
-      evidence: c.evidence,
-      adapterId: c.adapterId,
-      adapterVersion: c.adapterVersion,
-      confidenceScore: c.confidenceScore,
-      contentFingerprint: c.contentFingerprint,
-      lastCheckedAt: c.lastCheckedAt,
-      candidateRef: c._id,
-      scrapedWebsiteRef: c.scrapedWebsiteRef,
-      sourceDomain: siteDomain,
-      eligibleWeekdays: c.eligibleWeekdays,
-      dailyStartTime: c.dailyStartTime,
-      dailyEndTime: c.dailyEndTime,
-      newCustomersOnly: c.newCustomersOnly,
-      freeItem: c.freeItem,
-      applicableProducts: c.applicableProducts,
-      originalPrice: c.originalPrice,
-      promotionalPrice: c.promotionalPrice,
-      requiredSpend: c.requiredSpend,
-    };
+    return { ...publishedFieldsOf(c as unknown as PublishableOffer, business, siteDomain), candidateRef: c._id, scrapedWebsiteRef: c.scrapedWebsiteRef };
   }
 
   // Spec §9: candidate -> approved (published, unverified | admin_verified).
@@ -180,6 +132,7 @@ export class OfferLifecycleService {
       published.push(offer._id);
       await recountActiveOffers(this.offers, this.businesses, businessId);
     }
+    if (published.length) await this.checkWithinADay(site._id);
 
     const before = { status: candidate.status };
     candidate.set({
@@ -224,6 +177,7 @@ export class OfferLifecycleService {
     offer.set({ ...this.offerFields(candidate, business ?? {}, site?.domain ?? candidate.domain), verification: options.verification });
     await offer.save();
     await recountActiveOffers(this.offers, this.businesses, offer.businessId);
+    if (site) await this.checkWithinADay(site._id);
 
     candidate.set({
       status: CandidateStatus.MERGED,
@@ -380,6 +334,22 @@ export class OfferLifecycleService {
     const businessIds = [...new Set(targets.map((o) => String(o.businessId)))].map((id) => new Types.ObjectId(id));
     for (const businessId of businessIds) await recountActiveOffers(this.offers, this.businesses, businessId);
 
+    // Changes waiting for review on those offers are closed, and their page text goes with the offers'.
+    const revisionsOpen = await this.revisions.find({ scrapedWebsiteRef: { $in: siteIds }, excerptsRedactedAt: { $exists: false } }).select('_id status sources').lean();
+    for (const revision of revisionsOpen) {
+      await this.revisions.updateOne(
+        { _id: revision._id },
+        {
+          $set: {
+            ...(revision.status === OfferRevisionStatus.PENDING ? { status: OfferRevisionStatus.SUPERSEDED, closedReason: reason } : {}),
+            sources: redactedSources(revision.sources),
+            evidence: {},
+            excerptsRedactedAt: now,
+          },
+        },
+      );
+    }
+
     await this.candidates.updateMany(
       { scrapedWebsiteRef: { $in: siteIds }, status: { $in: [CandidateStatus.PENDING_REVIEW, CandidateStatus.AWAITING_MERCHANT_CONFIRMATION, CandidateStatus.NEEDS_REEXTRACTION, CandidateStatus.FAILED_EXTRACTION] } },
       { $set: { status: CandidateStatus.REJECTED, reviewNote: reason, reviewedAt: now } },
@@ -398,5 +368,139 @@ export class OfferLifecycleService {
       after: { offersRemoved: targets.length, reason },
     });
     return { removed: targets.length, businesses: businessIds };
+  }
+
+  /** The business has seen the source change flagged by a recheck and is keeping its offer as it is. */
+  async markSourceReviewed(offerId: string) {
+    const actor = ActorContext.current();
+    if (actor.kind !== ActorKind.MERCHANT) throw new ForbiddenException('Only the business can review this');
+    const offer = Types.ObjectId.isValid(offerId) ? await this.offers.findById(offerId) : null;
+    if (!offer) throw new NotFoundException('Offer not found');
+    const business = await this.businesses.findById(offer.businessId).lean();
+    if (!business || String(business.ownerId) !== actor.userId) throw new ForbiddenException('You do not manage this business');
+    offer.set({ sourceChanged: false });
+    await offer.save();
+    return offer;
+  }
+
+  // A newly published imported offer is checked within a day, whatever the website's schedule was.
+  private async checkWithinADay(siteId: Types.ObjectId) {
+    const soon = new Date(Date.now() + RECHECK.activeOfferHours * 60 * 60 * 1000);
+    await this.sites.updateOne({ _id: siteId, $or: [{ nextCheckAt: { $exists: false } }, { nextCheckAt: { $gt: soon } }] }, { $set: { nextCheckAt: soon } });
+  }
+
+  private async loadRevision(id: string) {
+    const revision = Types.ObjectId.isValid(id) ? await this.revisions.findById(id) : null;
+    if (!revision) throw new NotFoundException('Revision not found');
+    if (revision.status !== OfferRevisionStatus.PENDING) throw new BadRequestException(`This revision is already ${revision.status}`);
+    const offer = await this.offers.findById(revision.offerRef);
+    if (!offer) throw new NotFoundException('The offer this revision changes no longer exists');
+    return { revision, offer };
+  }
+
+  /** Spec §9: revision_pending -> approved, publishing the terms the website now shows. */
+  async applyRevision(revisionId: string, options: { verification: OfferVerification.UNVERIFIED | OfferVerification.ADMIN_VERIFIED; note?: string }, reviewer: Reviewer) {
+    const { revision, offer } = await this.loadRevision(revisionId);
+    if (offer.managedBy === OfferManagedBy.MERCHANT || offer.origin !== OfferOrigin.SCRAPER) {
+      throw new ForbiddenException('The business manages this offer; it can only be flagged for their review');
+    }
+    if (![OfferStatus.ACTIVE, OfferStatus.REVISION_PENDING, OfferStatus.POSSIBLY_REMOVED, OfferStatus.EXPIRY_REVIEW].includes(offer.status)) {
+      throw new BadRequestException(`The offer is ${offer.status}; revisions apply only to published offers`);
+    }
+    const proposed = { ...(revision.proposed as object), sources: revision.sources, evidence: revision.evidence } as PublishableOffer;
+    const validation = validateExtractedOffer(proposed as unknown as ExtractedOffer, new Date());
+    if (!validation.valid) throw new BadRequestException(`The new terms can't be published as they are: ${validation.errors.join('; ')}`);
+
+    const business = await this.businesses.findById(offer.businessId).lean();
+    const before = { status: offer.status, verification: offer.verification, ...revision.previous };
+    offer.set({
+      ...publishedFieldsOf(proposed, business ?? {}, revision.domain ?? offer.sourceDomain ?? ''),
+      verification: options.verification,
+      status: OfferStatus.ACTIVE,
+      absentChecks: 0,
+      recheckStateAt: new Date(),
+    });
+    try {
+      await offer.save();
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000) throw new ConflictException('Another live offer for this business already has these terms');
+      throw err;
+    }
+    await recountActiveOffers(this.offers, this.businesses, offer.businessId);
+
+    revision.set({
+      status: OfferRevisionStatus.APPLIED,
+      appliedVerification: options.verification,
+      reviewedBy: new Types.ObjectId(reviewer.userId),
+      reviewedAt: new Date(),
+      reviewNote: options.note,
+      excerptsRedactAfter: new Date(Date.now() + RETENTION.excerptDays * 24 * 60 * 60 * 1000),
+    });
+    await revision.save();
+    await this.audit.record({
+      action: AuditAction.REVISION_APPLIED,
+      targetType: 'Offer',
+      targetId: offer._id,
+      before,
+      after: { status: offer.status, verification: offer.verification, ...revision.proposedValues, revision: String(revision._id), changedFields: revision.changedFields },
+      note: options.note,
+    });
+    return { offer, revision };
+  }
+
+  /** Spec §9: revision_pending -> approved, keeping the published terms. The same change isn't proposed again. */
+  async discardRevision(revisionId: string, note: string | undefined, reviewer: Reviewer) {
+    const { revision, offer } = await this.loadRevision(revisionId);
+    revision.set({
+      status: OfferRevisionStatus.DISCARDED,
+      reviewedBy: new Types.ObjectId(reviewer.userId),
+      reviewedAt: new Date(),
+      reviewNote: note,
+      excerptsRedactAfter: new Date(Date.now() + RETENTION.excerptDays * 24 * 60 * 60 * 1000),
+    });
+    await revision.save();
+    if (offer.status === OfferStatus.REVISION_PENDING) {
+      offer.set({ status: OfferStatus.ACTIVE, recheckStateAt: new Date() });
+      await offer.save();
+      await recountActiveOffers(this.offers, this.businesses, offer.businessId);
+    }
+    await this.audit.record({
+      action: AuditAction.REVISION_DISCARDED,
+      targetType: 'Offer',
+      targetId: offer._id,
+      after: { revision: String(revision._id), changedFields: revision.changedFields, status: offer.status },
+      note,
+    });
+    return { offer, revision };
+  }
+
+  /** Spec §9: expiry_review -> expired or approved, decided by an admin. */
+  async decideExpiryReview(offerId: string, decision: 'expire' | 'restore', note?: string) {
+    const offer = Types.ObjectId.isValid(offerId) ? await this.offers.findById(offerId) : null;
+    if (!offer || offer.origin !== OfferOrigin.SCRAPER) throw new NotFoundException('Imported offer not found');
+    if (offer.status !== OfferStatus.EXPIRY_REVIEW) throw new BadRequestException(`The offer is ${offer.status}, not awaiting expiry review`);
+    const now = new Date();
+    if (decision === 'expire') {
+      offer.set({ status: OfferStatus.EXPIRED, expiredAt: now, recheckStateAt: now });
+      await this.revisions.updateMany(
+        { offerRef: offer._id, status: OfferRevisionStatus.PENDING },
+        { $set: { status: OfferRevisionStatus.SUPERSEDED, closedReason: 'The offer expired', excerptsRedactAfter: new Date(now.getTime() + RETENTION.excerptDays * 24 * 60 * 60 * 1000) } },
+      );
+    } else {
+      const pending = await this.revisions.exists({ offerRef: offer._id, status: OfferRevisionStatus.PENDING });
+      offer.set({ status: pending ? OfferStatus.REVISION_PENDING : OfferStatus.ACTIVE, absentChecks: 0, recheckStateAt: now });
+    }
+    await offer.save();
+    await recountActiveOffers(this.offers, this.businesses, offer.businessId);
+    if (decision === 'restore' && offer.scrapedWebsiteRef) await this.checkWithinADay(offer.scrapedWebsiteRef);
+    await this.audit.record({
+      action: AuditAction.OFFER_EXPIRY_DECIDED,
+      targetType: 'Offer',
+      targetId: offer._id,
+      before: { status: OfferStatus.EXPIRY_REVIEW },
+      after: { status: offer.status, decision },
+      note,
+    });
+    return offer;
   }
 }

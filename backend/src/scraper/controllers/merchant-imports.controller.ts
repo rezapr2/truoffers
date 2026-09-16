@@ -36,6 +36,14 @@ export class MerchantImportsController {
   confirmOffer(@Param('id') offerId: string) {
     return this.lifecycle.confirmOfferAsMerchant(offerId);
   }
+
+  // The business has seen that its website now says something different, and keeps its own offer as it is.
+  @Post('offers/:id/source-reviewed')
+  @HttpCode(200)
+  async sourceReviewed(@Param('id') offerId: string) {
+    await this.lifecycle.markSourceReviewed(offerId);
+    return { reviewed: true };
+  }
 }
 
 @Controller('removal-requests')

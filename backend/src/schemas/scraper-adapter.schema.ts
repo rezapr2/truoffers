@@ -46,6 +46,10 @@ export class ScraperAdapter {
   @Prop({ type: [String], default: [] })
   exampleDomains: string[];
 
+  // Hours between rechecks of websites this adapter reads (spec §10). Operational, so shared by every version.
+  @Prop({ min: 1, max: 24 * 30 })
+  recheckIntervalHours?: number;
+
   @Prop({ type: Object })
   testResults?: Record<string, unknown>;
 

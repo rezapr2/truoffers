@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { AdapterRegistry } from './extraction/adapter-registry.service';
 import { AnthropicAiOfferExtractor } from './extraction/ai/anthropic-offer-extractor';
 import { NullAiOfferExtractor } from './extraction/ai/ai-offer-extractor';
+import { RecheckService } from './lifecycle/recheck.service';
 import { BusinessMatcherService } from './matching/business-matcher.service';
 import { NetworkJobsService } from './pipeline/network-jobs.service';
 import { PipelineService } from './pipeline/pipeline.service';
+import { RecheckSchedulerService } from './queue/recheck-scheduler.service';
 import { ScraperWorkerService } from './queue/scraper-worker.service';
 import { StageRunner } from './queue/stage-runner.service';
 import { CrawlGateService } from './safety/crawl-gate.service';
@@ -41,11 +43,13 @@ import { AI_OFFER_EXTRACTOR, CNAME_RESOLVER, HOST_RESOLVER, NETWORK_POLICY } fro
     CrawlGateService,
     AdapterRegistry,
     BusinessMatcherService,
+    RecheckService,
     PipelineService,
     NetworkJobsService,
     StageRunner,
     ScraperWorkerService,
+    RecheckSchedulerService,
   ],
-  exports: [StageRunner, PipelineService],
+  exports: [StageRunner, PipelineService, RecheckService, RecheckSchedulerService],
 })
 export class ScraperWorkerModule {}

@@ -29,6 +29,7 @@ import { CurrentUser, Roles } from '../common/decorators';
 import {
   ClaimStatus,
   OfferStatus,
+  PUBLIC_OFFER_STATUSES,
   Role,
   SubscriptionStatus,
   VerificationStatus,
@@ -85,7 +86,7 @@ export class AdminService {
     if (approve) {
       const count = await this.offerModel.countDocuments({
         businessId: offer.businessId,
-        status: OfferStatus.ACTIVE,
+        status: { $in: PUBLIC_OFFER_STATUSES },
       });
       await this.businessModel.findByIdAndUpdate(offer.businessId, { activeOfferCount: count });
     }
@@ -130,7 +131,7 @@ export class AdminService {
       this.businessModel.countDocuments({
         verificationStatus: { $ne: VerificationStatus.UNCLAIMED },
       }),
-      this.offerModel.countDocuments({ status: OfferStatus.ACTIVE }),
+      this.offerModel.countDocuments({ status: { $in: PUBLIC_OFFER_STATUSES } }),
       this.claimModel.countDocuments({ status: ClaimStatus.PENDING }),
       this.offerModel.countDocuments({ status: OfferStatus.PENDING }),
       this.userModel.countDocuments({}),
