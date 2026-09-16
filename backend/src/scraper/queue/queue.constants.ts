@@ -1,4 +1,5 @@
 import { ImportJobType } from '../../common/scraper.enums';
+import { RENDER } from '../render/render.constants';
 
 export const SCRAPER_QUEUES = {
   fetch: 'scraper-fetch',
@@ -40,8 +41,8 @@ export const SCHEDULE_JOBS = {
 export const QUEUE_CONCURRENCY: Record<string, number> = {
   [SCRAPER_QUEUES.fetch]: 4,
   [SCRAPER_QUEUES.process]: 4,
-  // One render at a time per worker, each using at most two browser contexts.
-  [SCRAPER_QUEUES.render]: 1,
+  // Each render job uses one browser context, so this is the spec's limit of two contexts per worker.
+  [SCRAPER_QUEUES.render]: RENDER.maxContexts,
 };
 
 // A worker consumes either the crawling queues or the render queue, never both: only the render image

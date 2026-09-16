@@ -76,6 +76,20 @@ describe('Chromium rendering (spec §3/§5)', () => {
     expect(STRICT_NETWORK_POLICY.isAddressAllowed('127.0.0.1', 'internal.test')).toBe(false);
   }, 60_000);
 
+  it('refuses a redirect to a private address, which the browser follows by itself', async () => {
+    server.route(HOST, '/moved', (_req, res) => {
+      // Playwright's route handler never sees this hop; the proxy does.
+      res.writeHead(302, { Location: 'http://internal.test/admin' }).end();
+    });
+    const logs: string[] = [];
+    const result = await renderer.render(request('/moved', { log: (message: string) => void logs.push(message) }));
+    expect(result.pages).toHaveLength(0);
+    expect(result.blockedRequests).toBeGreaterThanOrEqual(1);
+    expect(server.requestsFor('internal.test')).toHaveLength(0);
+    // Our own refusal, not the website's: the page is skipped and the website isn't treated as blocking us.
+    expect(logs.join(' ')).toMatch(/Did not render .*internal\.test resolves to 127\.0\.0\.1/);
+  }, 60_000);
+
   it('applies the crawl gate to the pages the browser asks for', async () => {
     server.route(HOST, '/private-deals', (_req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

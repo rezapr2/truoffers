@@ -29,6 +29,9 @@ export interface ProxyRecord {
 
 const PROXY_TIMEOUT_MS = 30_000;
 
+// Marks the proxy's own refusals, so a page we blocked is never mistaken for the website blocking us.
+export const PROXY_BLOCKED_HEADER = 'x-truoffersbot-blocked';
+
 /**
  * Spec §3: every request Chromium makes, including sub-resources and each hop of a redirect chain, goes
  * through this proxy. It applies the same checks as SafeFetch — scheme, port, never-crawl, the crawl gate,
@@ -104,8 +107,9 @@ export class ValidatingProxy {
     try {
       target = await this.validate(url, kind);
     } catch (err) {
-      this.record(url.toString(), kind, false, (err as Error).message);
-      res.writeHead(403, { 'Content-Type': 'text/plain' }).end('blocked by TruOffersBot');
+      const reason = (err as Error).message;
+      this.record(url.toString(), kind, false, reason);
+      res.writeHead(403, { 'Content-Type': 'text/plain', [PROXY_BLOCKED_HEADER]: encodeURIComponent(reason) }).end('blocked by TruOffersBot');
       return;
     }
     this.record(url.toString(), kind, true);

@@ -10,7 +10,7 @@ import type { HostResolver } from '../safety/pinned-lookup';
 import type { NetworkPolicy } from '../safety/ssrf-policy';
 import { BLOCKED_RESOURCE_TYPES, CHALLENGE_MARKERS, LOGIN_MARKERS, RENDER, TRACKER_HOSTS } from './render.constants';
 import { processTreeRssMb } from './process-memory';
-import { ProxyChecks, ValidatingProxy } from './validating-proxy';
+import { PROXY_BLOCKED_HEADER, ProxyChecks, ValidatingProxy } from './validating-proxy';
 
 // The site answered with a challenge, CAPTCHA or login wall: stop and leave it alone (spec §3).
 export class BlockedBySiteError extends Error {
@@ -188,6 +188,11 @@ export class RenderService implements OnApplicationShutdown {
       }
       // Give client-side rendering a moment to put the content in, without waiting for trackers.
       await page.waitForLoadState('networkidle', { timeout: RENDER.settleMs }).catch(() => undefined);
+      const refused = response.headers()[PROXY_BLOCKED_HEADER];
+      if (refused) {
+        request.log(`Did not render ${url}: ${decodeURIComponent(refused)}`);
+        return null;
+      }
       const html = await page.content();
       const status = response.status();
       const reason = challengeReason(html, status);
