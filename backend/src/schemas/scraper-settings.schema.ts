@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { CRAWL_DEFAULTS } from '../scraper/scraper.constants';
 
 export type ScraperSettingsDocument = HydratedDocument<ScraperSettings>;
@@ -26,7 +26,7 @@ export class ScraperSettings {
   @Prop({ type: [String], default: [] })
   extraNeverCrawlDomains: string[];
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   updatedBy?: Types.ObjectId;
 }
 

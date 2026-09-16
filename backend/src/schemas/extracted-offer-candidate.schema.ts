@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Query, Types } from 'mongoose';
+import { HydratedDocument, Query, SchemaTypes, Types } from 'mongoose';
 import {
   CandidateStatus,
   ConfidenceBand,
@@ -20,10 +20,10 @@ export class CandidateDuplicate {
   @Prop({ type: String, enum: Object.values(DuplicateKind), required: true })
   kind: DuplicateKind;
 
-  @Prop({ type: Types.ObjectId, ref: 'Offer' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Offer' })
   offerRef?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'ExtractedOfferCandidate' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ExtractedOfferCandidate' })
   candidateRef?: Types.ObjectId;
 
   // field -> { previous, proposed }
@@ -43,7 +43,7 @@ export class CandidateEdit {
   @Prop({ type: Object })
   after?: unknown;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   editedBy: Types.ObjectId;
 
   @Prop({ type: Date, required: true })
@@ -63,10 +63,10 @@ export const ConfidenceSignalSchema = SchemaFactory.createForClass(ConfidenceSig
 
 @Schema({ timestamps: true })
 export class ExtractedOfferCandidate {
-  @Prop({ type: Types.ObjectId, ref: 'ImportJob', required: true, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ImportJob', required: true, index: true })
   runRef: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'ScrapedWebsite', required: true, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ScrapedWebsite', required: true, index: true })
   scrapedWebsiteRef: Types.ObjectId;
 
   @Prop({ required: true })
@@ -157,7 +157,7 @@ export class ExtractedOfferCandidate {
   conflicts: string[];
 
   // Set when an expired offer reappears as a new offer period.
-  @Prop({ type: Types.ObjectId, ref: 'Offer' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Offer' })
   previousOfferRef?: Types.ObjectId;
 
   // ---- Review ----
@@ -165,7 +165,7 @@ export class ExtractedOfferCandidate {
   @Prop({ type: String, enum: Object.values(CandidateStatus), default: CandidateStatus.PENDING_REVIEW })
   status: CandidateStatus;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   reviewedBy?: Types.ObjectId;
 
   @Prop({ type: Date })
@@ -177,10 +177,10 @@ export class ExtractedOfferCandidate {
   @Prop({ type: [CandidateEditSchema], default: [] })
   edits: CandidateEdit[];
 
-  @Prop({ type: [Types.ObjectId], ref: 'Offer', default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], ref: 'Offer', default: [] })
   approvedOfferRefs: Types.ObjectId[];
 
-  @Prop({ type: Types.ObjectId, ref: 'ExtractedOfferCandidate' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ExtractedOfferCandidate' })
   mergedInto?: Types.ObjectId;
 
   // scrapedWebsite:branches:fingerprint while the candidate is open; maintained by the hooks below.

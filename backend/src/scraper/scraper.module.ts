@@ -10,12 +10,14 @@ import {
 } from './controllers/admin-scraper.controllers';
 import { AdminAdaptersController, AdminFingerprintsController, AdminNetworkController } from './controllers/admin-network.controllers';
 import { AdminImportedOffersController, AdminRevisionsController } from './controllers/admin-recheck.controllers';
+import { AdminOutreachController, ClaimInvitationsController } from './controllers/outreach.controllers';
 import { MerchantImportsController, RemovalRequestsController } from './controllers/merchant-imports.controller';
 import { OfferLifecycleService } from './lifecycle/offer-lifecycle.service';
 import { RetentionService } from './retention/retention.service';
 import { AdaptersService } from './review/adapters.service';
 import { CandidatesService } from './review/candidates.service';
 import { FingerprintsService } from './review/fingerprints.service';
+import { OutreachService } from './outreach/outreach.service';
 import { ImportedOffersService } from './review/imported-offers.service';
 import { JobMonitoringService } from './review/job-monitoring.service';
 import { MerchantImportsService } from './review/merchant-imports.service';
@@ -43,7 +45,9 @@ import { ScraperCoreModule } from './scraper-core.module';
     AdminNetworkController,
     AdminImportedOffersController,
     AdminRevisionsController,
+    AdminOutreachController,
     MerchantImportsController,
+    ClaimInvitationsController,
     RemovalRequestsController,
   ],
   providers: [
@@ -58,8 +62,9 @@ import { ScraperCoreModule } from './scraper-core.module';
     FingerprintsService,
     NetworksService,
     ImportedOffersService,
+    OutreachService,
     RetentionService,
   ],
-  exports: [ScraperCoreModule, JobMonitoringService],
+  exports: [ScraperCoreModule, JobMonitoringService, OutreachService],
 })
 export class ScraperModule {}

@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { ActorKind, AuditAction } from '../common/scraper.enums';
 
 export type AdminAuditLogDocument = HydratedDocument<AdminAuditLog>;
@@ -7,7 +7,7 @@ export type AdminAuditLogDocument = HydratedDocument<AdminAuditLog>;
 @Schema({ _id: false })
 export class AuditActor {
   @Prop({ type: String, enum: Object.values(ActorKind), required: true }) kind: ActorKind;
-  @Prop({ type: Types.ObjectId, ref: 'User' }) userId?: Types.ObjectId;
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' }) userId?: Types.ObjectId;
   @Prop() role?: string;
   @Prop() component?: string;
   @Prop() ip?: string;

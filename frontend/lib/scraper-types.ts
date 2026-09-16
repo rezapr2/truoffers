@@ -585,3 +585,35 @@ export interface ImportedOfferDetail {
   } | null;
   revisions: OfferRevision[];
 }
+
+// ---------- claim invitations and outreach (Phase 3) ----------
+
+export interface ClaimInvitation {
+  _id: string;
+  businessRef: string;
+  domain?: string;
+  tokenHint: string;
+  generatedBy?: { name?: string; email?: string } | string;
+  expiresAt: string;
+  claimedAt?: string;
+  revokedAt?: string;
+  contacts: { channel: string; at: string; note?: string }[];
+  createdAt: string;
+}
+
+export interface OutreachCandidate {
+  business: { _id: string; name: string; slug: string; town?: string; postcode?: string; phone?: string; website?: string };
+  offers: number;
+  offerTitles: string[];
+  domain?: string;
+  lastCheckedAt?: string;
+  invitation: ClaimInvitation | null;
+  invitationCount: number;
+}
+
+export interface InvitationPack {
+  invitation: ClaimInvitation;
+  claimUrl: string;
+  qrCode: string;
+  messages: { email: { subject: string; body: string }; whatsapp: string; phone: string };
+}

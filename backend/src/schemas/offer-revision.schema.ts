@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { OfferRevisionStatus, OfferVerification } from '../common/scraper.enums';
 import type { PublishableOffer, RevisionTrackedField, RevisionValues } from '../scraper/lifecycle/offer-mapping';
 import type { FieldEvidence } from '../scraper/extraction/adapter.types';
@@ -13,13 +13,13 @@ export type OfferRevisionDocument = HydratedDocument<OfferRevision>;
  */
 @Schema({ timestamps: true })
 export class OfferRevision {
-  @Prop({ type: Types.ObjectId, ref: 'Offer', required: true, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Offer', required: true, index: true })
   offerRef: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Business', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Business', required: true })
   businessRef: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'ScrapedWebsite', index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ScrapedWebsite', index: true })
   scrapedWebsiteRef?: Types.ObjectId;
 
   @Prop()
@@ -51,7 +51,7 @@ export class OfferRevision {
   @Prop({ type: Object, default: {} })
   evidence: Record<string, FieldEvidence>;
 
-  @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ImportJob' })
   runRef?: Types.ObjectId;
 
   @Prop({ type: Date, required: true })
@@ -63,7 +63,7 @@ export class OfferRevision {
   @Prop({ default: 1 })
   detectionCount: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   reviewedBy?: Types.ObjectId;
 
   @Prop({ type: Date })

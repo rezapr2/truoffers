@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 
 export type AnalyticsEventDocument = HydratedDocument<AnalyticsEvent>;
 
@@ -13,19 +13,19 @@ export class AnalyticsEvent {
   @Prop({ required: true, index: true })
   eventName: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   userId?: Types.ObjectId;
 
   @Prop({ index: true })
   sessionId?: string;
 
-  @Prop({ type: Types.ObjectId, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, index: true })
   businessId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, index: true })
   offerId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId })
+  @Prop({ type: SchemaTypes.ObjectId })
   supplierId?: Types.ObjectId;
 
   @Prop()

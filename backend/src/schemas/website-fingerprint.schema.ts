@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { MarkerCategory } from '../common/scraper.enums';
 
 export type WebsiteFingerprintDocument = HydratedDocument<WebsiteFingerprint>;
@@ -38,7 +38,7 @@ export const FingerprintThresholdsSchema = SchemaFactory.createForClass(Fingerpr
 @Schema({ _id: false })
 export class ExampleAnalysis {
   @Prop({ required: true }) domain: string;
-  @Prop({ type: Types.ObjectId, ref: 'ScrapedWebsite' }) websiteRef?: Types.ObjectId;
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ScrapedWebsite' }) websiteRef?: Types.ObjectId;
   @Prop({ type: [String], default: [] }) pages: string[];
   @Prop({ default: 0 }) markers: number;
   @Prop({ type: Object, default: [] }) offersFound: { title: string; excerpt: string; pageUrl: string }[];
@@ -61,7 +61,7 @@ export class WebsiteFingerprint {
   @Prop({ default: true })
   active: boolean;
 
-  @Prop({ type: Types.ObjectId, ref: 'ProviderPolicy' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ProviderPolicy' })
   providerRef?: Types.ObjectId;
 
   @Prop({ type: [String], default: [] })
@@ -91,13 +91,13 @@ export class WebsiteFingerprint {
   @Prop({ type: Date })
   excerptsRedactedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ImportJob' })
   lastJobRef?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   updatedBy?: Types.ObjectId;
 }
 

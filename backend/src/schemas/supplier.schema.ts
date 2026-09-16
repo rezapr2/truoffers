@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { VerificationStatus } from '../common/enums';
 
 export type SupplierDocument = HydratedDocument<Supplier>;
@@ -22,7 +22,7 @@ export class Supplier {
   @Prop({ default: 'UK-wide' })
   serviceArea: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   ownerId?: Types.ObjectId;
 
   @Prop({

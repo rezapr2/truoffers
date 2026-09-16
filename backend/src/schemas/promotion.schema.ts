@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 
 export type PromotionDocument = HydratedDocument<Promotion>;
 
@@ -15,11 +15,11 @@ export enum PromotionStatus {
 // the wallet can't cover the next day.
 @Schema({ timestamps: true })
 export class Promotion {
-  @Prop({ type: Types.ObjectId, ref: 'Business', required: true, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Business', required: true, index: true })
   businessId: Types.ObjectId;
 
   // Optional: boost only this offer instead of the whole business
-  @Prop({ type: Types.ObjectId, ref: 'Offer' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Offer' })
   offerId?: Types.ObjectId;
 
   @Prop({ required: true, min: 1 })

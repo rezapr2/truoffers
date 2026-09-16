@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { ProviderPolicyBasis, ProviderPolicyStatus } from '../common/scraper.enums';
 
 export type ProviderPolicyDocument = HydratedDocument<ProviderPolicy>;
@@ -35,7 +35,7 @@ export class ProviderPolicy {
   @Prop({ type: ProviderDetectionSchema, default: () => ({}) })
   detection: ProviderDetection;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   reviewedBy?: Types.ObjectId;
 
   @Prop({ type: Date })

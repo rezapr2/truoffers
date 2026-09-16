@@ -1,15 +1,15 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { ClaimMethod, ClaimStatus } from '../common/enums';
 
 export type ClaimDocument = HydratedDocument<Claim>;
 
 @Schema({ timestamps: true })
 export class Claim {
-  @Prop({ type: Types.ObjectId, ref: 'Business', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Business', required: true })
   businessId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
   @Prop({ type: String, enum: Object.values(ClaimMethod), required: true })
@@ -31,7 +31,7 @@ export class Claim {
   @Prop({ default: 'medium' })
   riskLevel: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   reviewedBy?: Types.ObjectId;
 
   @Prop()

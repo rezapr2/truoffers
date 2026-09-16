@@ -16,6 +16,7 @@ const NAV = [
   { href: '/admin/scraper/network', label: 'Network' },
   { href: '/admin/scraper/adapters', label: 'Adapters' },
   { href: '/admin/scraper/fingerprints', label: 'Templates' },
+  { href: '/admin/scraper/outreach', label: 'Claim invitations' },
   { href: '/admin/scraper/jobs', label: 'Jobs' },
   { href: '/admin/scraper/policies', label: 'Policies & opt-outs', badge: 'optOuts' },
   { href: '/admin/scraper/audit', label: 'Audit log' },

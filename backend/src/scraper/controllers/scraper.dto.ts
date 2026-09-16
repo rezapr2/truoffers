@@ -335,3 +335,12 @@ export class ListRevisionsQuery extends PageQuery {
 export class AdapterRecheckDto {
   @IsOptional() @ValidateIf((_, value) => value !== null) @IsInt() @Min(1) @Max(24 * 30) recheckIntervalHours?: number | null;
 }
+
+export class OutreachQuery extends PageQuery {
+  @IsOptional() @IsString() @MaxLength(100) q?: string;
+}
+
+export class OutreachContactDto {
+  @IsIn(['email', 'whatsapp', 'phone', 'post', 'in_person', 'other']) channel: string;
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}

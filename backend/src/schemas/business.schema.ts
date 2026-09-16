@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { BusinessStatus, VerificationStatus } from '../common/enums';
 
 export type BusinessDocument = HydratedDocument<Business>;
@@ -43,7 +43,7 @@ export class ReviewsCache {
 // Set when a listing was created from an imported website; drives the public "Imported from" notice.
 @Schema({ _id: false })
 export class ImportSource {
-  @Prop({ type: Types.ObjectId, ref: 'ScrapedWebsite', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ScrapedWebsite', required: true })
   scrapedWebsiteRef: Types.ObjectId;
 
   @Prop({ required: true })
@@ -80,10 +80,10 @@ export class Business {
   @Prop({ default: 0 })
   trustScore: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   ownerId?: Types.ObjectId;
 
-  @Prop({ type: [Types.ObjectId], ref: 'Category', default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], ref: 'Category', default: [] })
   categories: Types.ObjectId[];
 
   // Primary location (MVP: single location; multi-branch in V2)

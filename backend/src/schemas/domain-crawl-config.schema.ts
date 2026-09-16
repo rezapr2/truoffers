@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 
 export type DomainCrawlConfigDocument = HydratedDocument<DomainCrawlConfig>;
 
@@ -26,7 +26,7 @@ export class DomainCrawlConfig {
   @Prop()
   pausedReason?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   pausedBy?: Types.ObjectId;
 
   // Path prefixes never fetched on this domain (admin "block source" on a single URL).

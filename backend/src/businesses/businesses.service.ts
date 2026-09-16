@@ -10,6 +10,7 @@ import { Model, Types } from 'mongoose';
 import slugify from 'slugify';
 import { Business, BusinessDocument } from '../schemas/business.schema';
 import { Claim, ClaimDocument } from '../schemas/claim.schema';
+import { MerchantClaimInvitation, MerchantClaimInvitationDocument } from '../schemas/merchant-claim-invitation.schema';
 import { MenuItem, MenuItemDocument } from '../schemas/menu.schema';
 import { Offer, OfferDocument } from '../schemas/offer.schema';
 import { Category, CategoryDocument } from '../schemas/category.schema';
@@ -47,6 +48,7 @@ export class BusinessesService {
   constructor(
     @InjectModel(Business.name) private businessModel: Model<BusinessDocument>,
     @InjectModel(Claim.name) private claimModel: Model<ClaimDocument>,
+    @InjectModel(MerchantClaimInvitation.name) private invitationModel: Model<MerchantClaimInvitationDocument>,
     @InjectModel(MenuItem.name) private menuModel: Model<MenuItemDocument>,
     @InjectModel(Offer.name) private offerModel: Model<OfferDocument>,
     @InjectModel(Category.name) private categoryModel: Model<CategoryDocument>,
@@ -311,6 +313,11 @@ export class BusinessesService {
       verificationStatus,
       $inc: { trustScore: 20 },
     });
+    // Spec §14: any claim invitation an admin handed this business is done with, however the claim arrived.
+    await this.invitationModel.updateMany(
+      { businessRef: claim.businessId, claimedAt: { $exists: false }, revokedAt: { $exists: false } },
+      { $set: { claimedAt: new Date(), claimedBy: claim.userId } },
+    );
   }
 
   async myClaims(userId: string) {

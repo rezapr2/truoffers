@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Business, BusinessSchema } from '../schemas/business.schema';
 import { Claim, ClaimSchema } from '../schemas/claim.schema';
+import { MerchantClaimInvitation, MerchantClaimInvitationSchema } from '../schemas/merchant-claim-invitation.schema';
 import { MenuItem, MenuItemSchema } from '../schemas/menu.schema';
 import { Offer, OfferSchema } from '../schemas/offer.schema';
 import { Category, CategorySchema } from '../schemas/category.schema';
@@ -16,6 +17,7 @@ import { BusinessesService } from './businesses.service';
       { name: MenuItem.name, schema: MenuItemSchema },
       { name: Offer.name, schema: OfferSchema },
       { name: Category.name, schema: CategorySchema },
+      { name: MerchantClaimInvitation.name, schema: MerchantClaimInvitationSchema },
     ]),
   ],
   controllers: [BusinessesController],

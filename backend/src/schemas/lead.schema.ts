@@ -1,18 +1,18 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { LeadStatus } from '../common/enums';
 
 export type LeadDocument = HydratedDocument<Lead>;
 
 @Schema({ timestamps: true })
 export class Lead {
-  @Prop({ type: Types.ObjectId, ref: 'Supplier', required: true, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Supplier', required: true, index: true })
   supplierId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   fromUserId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Business' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Business' })
   fromBusinessId?: Types.ObjectId;
 
   @Prop({ required: true })

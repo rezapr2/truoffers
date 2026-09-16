@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { ProviderPolicyBasis } from '../common/scraper.enums';
 
 export type AuthorisedNetworkDocument = HydratedDocument<AuthorisedNetwork>;
@@ -26,10 +26,10 @@ export class AuthorisedNetwork {
   @Prop()
   basisNotes?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'ProviderPolicy' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ProviderPolicy' })
   providerRef?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   registeredBy?: Types.ObjectId;
 
   @Prop({ default: true })
@@ -41,7 +41,7 @@ export class AuthorisedNetwork {
   @Prop({ default: 0 })
   domainsRegistered: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ImportJob' })
   lastJobRef?: Types.ObjectId;
 }
 

@@ -26,6 +26,10 @@ function ClaimInner() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingReview, setPendingReview] = useState(false);
+  // An invitation link from the import robot: it says which business the link is for (spec §14).
+  const invite = params.get('invite');
+  const [invited, setInvited] = useState<{ business: Business; expiresAt: string } | null>(null);
+  const [inviteExpired, setInviteExpired] = useState(false);
 
   // Add-business form
   const [categories, setCategories] = useState<Category[]>([]);
@@ -49,6 +53,17 @@ function ClaimInner() {
   useEffect(() => {
     void api<Category[]>('/categories').then(setCategories).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!invite) return;
+    void api<{ business: Business; expiresAt: string }>(`/claim-invitations/${encodeURIComponent(invite)}`)
+      .then((result) => {
+        setInvited(result);
+        setSelected(result.business);
+        setStep('method');
+      })
+      .catch(() => setInviteExpired(true));
+  }, [invite]);
 
   async function search(e?: React.FormEvent) {
     e?.preventDefault();
@@ -154,6 +169,21 @@ function ClaimInner() {
       {error && (
         <div className="bg-peach-2/40 border border-primary/30 text-primary-dark text-sm font-bold rounded-xl px-4 py-3 mb-5">
           {error}
+        </div>
+      )}
+
+      {invited && (
+        <div className="bg-card border border-line rounded-2xl px-5 py-4 mb-5">
+          <p className="font-bold">We listed offers we found on {invited.business.name}’s website.</p>
+          <p className="text-[13px] font-semibold text-muted mt-1">
+            Claim the page to verify them, correct the details and see your clicks. Choose how you would like us to check you run the
+            business — this link works until {new Date(invited.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.
+          </p>
+        </div>
+      )}
+      {inviteExpired && (
+        <div className="bg-card border border-line rounded-2xl px-5 py-4 mb-5 font-semibold text-muted">
+          That invitation link has expired or has already been used. Search for your business below to claim it.
         </div>
       )}
 

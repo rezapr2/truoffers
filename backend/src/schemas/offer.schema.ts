@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { DiscountType, OfferStatus, RedemptionType } from '../common/enums';
 import {
   OfferManagedBy,
@@ -33,7 +33,7 @@ export const OfferSourceSchema = SchemaFactory.createForClass(OfferSource);
 // `collection` (the collection-eligible flag) predates this and shadows a reserved Mongoose name.
 @Schema({ timestamps: true, suppressReservedKeysWarning: true })
 export class Offer {
-  @Prop({ type: Types.ObjectId, ref: 'Business', required: true, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Business', required: true, index: true })
   businessId: Types.ObjectId;
 
   @Prop({ required: true, trim: true })
@@ -148,10 +148,10 @@ export class Offer {
   @Prop({ default: false })
   sourceChanged: boolean;
 
-  @Prop({ type: Types.ObjectId, ref: 'ExtractedOfferCandidate' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ExtractedOfferCandidate' })
   candidateRef?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'ScrapedWebsite', index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ScrapedWebsite', index: true })
   scrapedWebsiteRef?: Types.ObjectId;
 
   // Shown publicly as "Imported from <domain>".

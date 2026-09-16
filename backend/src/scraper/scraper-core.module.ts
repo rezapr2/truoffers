@@ -9,6 +9,7 @@ import {
   ExtractedOfferCandidateSchema,
 } from '../schemas/extracted-offer-candidate.schema';
 import { ImportJob, ImportJobSchema } from '../schemas/import-job.schema';
+import { MerchantClaimInvitation, MerchantClaimInvitationSchema } from '../schemas/merchant-claim-invitation.schema';
 import { Offer, OfferSchema } from '../schemas/offer.schema';
 import { OfferRevision, OfferRevisionSchema } from '../schemas/offer-revision.schema';
 import { ProviderPolicy, ProviderPolicySchema } from '../schemas/provider-policy.schema';
@@ -34,6 +35,7 @@ export const SCRAPER_MODELS = MongooseModule.forFeature([
   { name: DomainOptOut.name, schema: DomainOptOutSchema },
   { name: ExtractedOfferCandidate.name, schema: ExtractedOfferCandidateSchema },
   { name: ImportJob.name, schema: ImportJobSchema },
+  { name: MerchantClaimInvitation.name, schema: MerchantClaimInvitationSchema },
   { name: Offer.name, schema: OfferSchema },
   { name: OfferRevision.name, schema: OfferRevisionSchema },
   { name: ProviderPolicy.name, schema: ProviderPolicySchema },

@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { OptOutSource } from '../common/scraper.enums';
 
 export type DomainOptOutDocument = HydratedDocument<DomainOptOut>;
@@ -13,8 +13,8 @@ export const OptOutRequesterSchema = SchemaFactory.createForClass(OptOutRequeste
 
 @Schema({ _id: false })
 export class OptOutListing {
-  @Prop({ type: Types.ObjectId, ref: 'Offer' }) offerId?: Types.ObjectId;
-  @Prop({ type: Types.ObjectId, ref: 'Business' }) businessId?: Types.ObjectId;
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Offer' }) offerId?: Types.ObjectId;
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Business' }) businessId?: Types.ObjectId;
 }
 export const OptOutListingSchema = SchemaFactory.createForClass(OptOutListing);
 
@@ -33,19 +33,19 @@ export class DomainOptOut {
   @Prop({ type: OptOutRequesterSchema })
   requestedBy?: OptOutRequester;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;
 
   @Prop({ type: OptOutListingSchema })
   relatedListing?: OptOutListing;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   acknowledgedBy?: Types.ObjectId;
 
   @Prop({ type: Date })
   acknowledgedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   liftedBy?: Types.ObjectId;
 
   @Prop({ type: Date })

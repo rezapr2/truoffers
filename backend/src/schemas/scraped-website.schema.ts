@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import {
   AuthorisationSource,
   BranchMatchStatus,
@@ -32,7 +32,7 @@ export const ExtractedBusinessSnapshotSchema = SchemaFactory.createForClass(Extr
 
 @Schema({ _id: false })
 export class MatchSuggestion {
-  @Prop({ type: Types.ObjectId, ref: 'Business', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Business', required: true })
   businessRef: Types.ObjectId;
 
   @Prop({ required: true })
@@ -52,7 +52,7 @@ export class WebsiteBranch {
   @Prop()
   branchLabel?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Business' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Business' })
   businessRef?: Types.ObjectId;
 
   @Prop({ type: String, enum: Object.values(BranchMatchStatus), required: true })
@@ -70,7 +70,7 @@ export class WebsiteBranch {
   @Prop({ type: ExtractedBusinessSnapshotSchema })
   extracted?: ExtractedBusinessSnapshot;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   decidedBy?: Types.ObjectId;
 
   @Prop({ type: Date })
@@ -123,7 +123,7 @@ export class ScrapedWebsite {
   @Prop()
   authorisationNote?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   authorisedBy?: Types.ObjectId;
 
   @Prop({ type: Date })
@@ -133,13 +133,13 @@ export class ScrapedWebsite {
   @Prop()
   discoveredFrom?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   submittedBy?: Types.ObjectId;
 
   @Prop()
   batchId?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'ProviderPolicy', index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ProviderPolicy', index: true })
   providerRef?: Types.ObjectId;
 
   @Prop({ type: [String], default: [] })
@@ -172,7 +172,7 @@ export class ScrapedWebsite {
   @Prop({ type: Date })
   nextCheckAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ImportJob' })
   lastRunRef?: Types.ObjectId;
 
   // Phase 2: template fingerprinting and authorised networks.
@@ -182,7 +182,7 @@ export class ScrapedWebsite {
   @Prop({ type: Date })
   markersExtractedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'WebsiteFingerprint', index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'WebsiteFingerprint', index: true })
   fingerprintRef?: Types.ObjectId;
 
   @Prop()
@@ -194,7 +194,7 @@ export class ScrapedWebsite {
   @Prop({ type: Date })
   fingerprintMatchedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'AuthorisedNetwork', index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'AuthorisedNetwork', index: true })
   networkRef?: Types.ObjectId;
 }
 

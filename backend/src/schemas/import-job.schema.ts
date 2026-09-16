@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { ImportJobStatus, ImportJobType } from '../common/scraper.enums';
 import { RETENTION } from '../scraper/scraper.constants';
 
@@ -38,16 +38,16 @@ export class ImportJob {
   @Prop({ type: String, enum: Object.values(ImportJobType), required: true, index: true })
   type: ImportJobType;
 
-  @Prop({ type: Types.ObjectId, required: true, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, required: true, index: true })
   runId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ImportJob' })
   parentJobId?: Types.ObjectId;
 
   @Prop()
   batchId?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   submittedBy?: Types.ObjectId;
 
   @Prop({ type: [String], default: [] })
@@ -59,7 +59,7 @@ export class ImportJob {
   @Prop({ index: true })
   domain?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'ScrapedWebsite', index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ScrapedWebsite', index: true })
   scrapedWebsiteRef?: Types.ObjectId;
 
   @Prop()
@@ -113,7 +113,7 @@ export class ImportJob {
   @Prop()
   durationMs?: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   cancelledBy?: Types.ObjectId;
 
   @Prop()

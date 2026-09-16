@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { ScraperAdapterStatus, ScraperAdapterType } from '../common/scraper.enums';
 
 export type ScraperAdapterDocument = HydratedDocument<ScraperAdapter>;
@@ -53,7 +53,7 @@ export class ScraperAdapter {
   @Prop({ type: Object })
   testResults?: Record<string, unknown>;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   approvedBy?: Types.ObjectId;
 
   @Prop({ type: Date })
@@ -63,22 +63,22 @@ export class ScraperAdapter {
   @Prop({ default: true })
   isCurrent: boolean;
 
-  @Prop({ type: Types.ObjectId, ref: 'WebsiteFingerprint' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'WebsiteFingerprint' })
   fingerprintRef?: Types.ObjectId;
 
   @Prop()
   basedOnVersion?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;
 
   @Prop({ type: Date })
   testedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'ImportJob' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ImportJob' })
   lastTestJobRef?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   withdrawnBy?: Types.ObjectId;
 
   @Prop({ type: Date })

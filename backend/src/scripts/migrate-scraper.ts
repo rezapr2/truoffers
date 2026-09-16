@@ -1,5 +1,5 @@
 /**
- * Website import robot migration (phases 1 and 2). Idempotent; run on every deploy that changes the robot,
+ * Website import robot migration (phases 1 to 3). Idempotent; run on every deploy that changes the robot,
  * before starting the worker.
  *
  *   npm run migrate:scraper                                  (local, ts-node)
@@ -27,6 +27,8 @@ import { DomainCrawlConfig, DomainCrawlConfigSchema } from '../schemas/domain-cr
 import { DomainOptOut, DomainOptOutSchema } from '../schemas/domain-opt-out.schema';
 import { ExtractedOfferCandidate, ExtractedOfferCandidateSchema } from '../schemas/extracted-offer-candidate.schema';
 import { ImportJob, ImportJobSchema } from '../schemas/import-job.schema';
+import { MerchantClaimInvitation, MerchantClaimInvitationSchema } from '../schemas/merchant-claim-invitation.schema';
+import { OfferRevision, OfferRevisionSchema } from '../schemas/offer-revision.schema';
 import { Offer, OfferSchema } from '../schemas/offer.schema';
 import { ProviderPolicy, ProviderPolicySchema } from '../schemas/provider-policy.schema';
 import { RobotsCache, RobotsCacheSchema } from '../schemas/robots-cache.schema';
@@ -155,6 +157,8 @@ async function main() {
     settings: model(ScraperSettings.name, ScraperSettingsSchema),
     fingerprint: model(WebsiteFingerprint.name, WebsiteFingerprintSchema),
     network: model(AuthorisedNetwork.name, AuthorisedNetworkSchema),
+    revision: model(OfferRevision.name, OfferRevisionSchema),
+    invitation: model(MerchantClaimInvitation.name, MerchantClaimInvitationSchema),
   };
 
   const businesses = await migrateBusinesses(skipDuplicates);
