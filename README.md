@@ -262,7 +262,7 @@ scripts/e2e-phase3.sh                   # the same stack plus a render worker: r
 ```
 
 The rendering tests need Chromium. The render worker image installs it; for local tests, run
-`npx playwright-core install chromium` in `backend/` once.
+`npx playwright-core install --only-shell chromium` in `backend/` once.
 
 After upgrading, run `npm run migrate:scraper` (or `migrate:scraper:prod` in the container) once.
 It is idempotent: it registers the built-in adapters and creates the indexes for every phase.

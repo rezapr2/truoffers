@@ -29,6 +29,8 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      # The rendering tests need Chromium: the headless shell matching the pinned playwright-core.
+      - run: npx playwright-core install --with-deps --only-shell chromium
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
