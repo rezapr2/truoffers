@@ -97,6 +97,13 @@ export interface Offer {
   imported?: ImportNotice | null;
 }
 
+// An imported offer hidden while a recheck confirms whether the takeaway still offers it.
+export interface CheckingOffer {
+  _id: string;
+  availability: 'checking';
+  business?: { _id: string; name: string; slug: string; town?: string };
+}
+
 export interface Wallet {
   _id: string;
   businessId: string;

@@ -441,6 +441,12 @@ export default function OffersTab({ business }: { business: Business }) {
     load();
   }
 
+  // The robot flagged that the website now says something different; the business keeps its own offer as it is.
+  async function sourceReviewed(offer: Offer) {
+    await api(`/offers/${offer._id}/source-reviewed`, { method: 'POST' }).catch(() => {});
+    load();
+  }
+
   async function remove(offer: Offer) {
     const question = offer.imported
       ? `Remove "${offer.title}"? It will be taken down, and we won’t import it from your website again.`
@@ -515,13 +521,20 @@ export default function OffersTab({ business }: { business: Business }) {
                   </div>
                 )}
                 {offer.sourceChanged && (
-                  <div className="text-[13px] font-bold text-star mt-1">This offer has changed on your website since you took it over.</div>
+                  <div className="text-[13px] font-bold text-star mt-1">
+                    Your website now shows something different from this offer. Update it, or keep it as it is.
+                  </div>
                 )}
                 {offer.moderationNote && offer.status === 'rejected' && (
                   <div className="text-[13px] font-bold text-primary mt-1">Moderator: {offer.moderationNote}</div>
                 )}
               </div>
               <div className="flex gap-2 flex-wrap">
+                {offer.sourceChanged && (
+                  <button onClick={() => sourceReviewed(offer)} className="text-[13px] font-bold border border-line px-4 py-2 rounded-full hover:border-primary cursor-pointer">
+                    Keep as it is
+                  </button>
+                )}
                 {offer.imported && offer.imported.verification !== 'merchant_verified' && (
                   <button onClick={() => confirmImported(offer)} className="text-[13px] font-bold bg-verified text-white px-4 py-2 rounded-full hover:opacity-90 cursor-pointer">
                     Confirm

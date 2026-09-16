@@ -24,6 +24,8 @@ interface ProfileData {
   business: Business;
   offers: Offer[];
   menu: MenuItem[];
+  // Imported offers hidden while the robot checks whether the takeaway still offers them.
+  checkingAvailability?: number;
 }
 
 const TABS = ['Offers', 'Menu', 'Reviews', 'Info'] as const;
@@ -53,7 +55,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
   }
   if (!data) return <div className="py-24 text-center text-muted font-bold">Loading…</div>;
 
-  const { business, offers, menu } = data;
+  const { business, offers, menu, checkingAvailability = 0 } = data;
   const cats = Array.isArray(business.categories)
     ? (business.categories as { name?: string }[]).map((c) => c?.name).filter(Boolean).join(' · ')
     : '';
@@ -153,7 +155,12 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
           {offers.map((o) => (
             <OfferFlipCard key={o._id} offer={{ ...o, business }} />
           ))}
-          {offers.length === 0 && (
+          {checkingAvailability > 0 && (
+            <div className="bg-card rounded-2xl p-6 text-muted font-semibold sm:col-span-2 text-center border border-dashed border-line">
+              Checking availability of {checkingAvailability} more offer{checkingAvailability === 1 ? '' : 's'} we found on this takeaway’s website.
+            </div>
+          )}
+          {offers.length === 0 && checkingAvailability === 0 && (
             <div className="bg-card rounded-2xl p-8 text-muted font-semibold sm:col-span-2 text-center">
               No live offers right now — follow to be notified when one drops.
             </div>

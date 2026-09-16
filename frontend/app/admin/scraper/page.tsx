@@ -19,6 +19,12 @@ export default function ScraperOverviewPage() {
     { label: 'Branches to match to a listing', value: overview.branchesAwaitingMatch, href: '/admin/scraper/candidates?tab=matches' },
     { label: 'Domains awaiting authorisation', value: overview.domainsPendingAuthorisation, href: '/admin/scraper/websites?status=pending_authorisation' },
     { label: 'Held for provider review', value: overview.websitesAwaitingProviderReview, href: '/admin/scraper/websites?status=awaiting_provider_review' },
+    {
+      label: 'Imported offers needing a decision',
+      value: (overview.importedOffers?.revision_pending ?? 0) + (overview.importedOffers?.expiry_review ?? 0),
+      detail: `${overview.importedOffers?.revision_pending ?? 0} changed terms · ${overview.importedOffers?.expiry_review ?? 0} expiry review · ${overview.importedOffers?.possibly_removed ?? 0} possibly removed`,
+      href: '/admin/scraper/offers',
+    },
     { label: 'Removal requests to acknowledge', value: overview.unacknowledgedRemovalRequests, href: '/admin/scraper/policies' },
     {
       label: overview.halted ? 'Emergency stop active' : 'Workers online',
@@ -44,6 +50,7 @@ export default function ScraperOverviewPage() {
           <li>Submit takeaway websites. Only domains you submit, or approve, are ever crawled.</li>
           <li>The worker checks permissions (never-crawl list, opt-outs, provider policy, robots.txt), then reads the site’s offer, menu and contact pages.</li>
           <li>Every extracted value carries its source excerpt. Nothing is published until you approve it or the business confirms it.</li>
+          <li>Published offers are rechecked on a schedule: offers that disappear are hidden, changed terms wait for you under Imported offers.</li>
           <li>Removal requests unpublish a domain’s imported offers immediately and appear under Policies &amp; opt-outs.</li>
         </ol>
       </Card>

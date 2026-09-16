@@ -8,7 +8,7 @@ import { useOverview } from '../_components/overview';
 import { btn, Card, EmptyState, ErrorNote, formatDate, inputClass, Pager, SectionTitle, StatusPill, useAction } from '../_components/ui';
 
 const STATUSES: ('' | JobStatus)[] = ['', 'queued', 'running', 'delayed', 'completed', 'failed', 'cancelled', 'dead_lettered'];
-const TYPES = ['', 'analyse_seed_website', 'discover_offer_pages', 'extract_business', 'extract_offers', 'match_business', 'deduplicate_offers'];
+const TYPES = ['', 'analyse_seed_website', 'discover_offer_pages', 'extract_business', 'extract_offers', 'match_business', 'deduplicate_offers', 'recheck_offer', 'review_stale_offer'];
 const ACTIVE: JobStatus[] = ['queued', 'running', 'delayed'];
 
 function LogsDrawer({ jobId, onClose }: { jobId: string; onClose: () => void }) {

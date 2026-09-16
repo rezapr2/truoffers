@@ -12,6 +12,7 @@ const NAV = [
   { href: '/admin/scraper', label: 'Overview', exact: true },
   { href: '/admin/scraper/websites', label: 'Websites', badge: 'websites' },
   { href: '/admin/scraper/candidates', label: 'Review queue', badge: 'candidates' },
+  { href: '/admin/scraper/offers', label: 'Imported offers', badge: 'importedOffers' },
   { href: '/admin/scraper/network', label: 'Network' },
   { href: '/admin/scraper/adapters', label: 'Adapters' },
   { href: '/admin/scraper/fingerprints', label: 'Templates' },
@@ -28,6 +29,7 @@ function ScraperNav() {
     websites: (overview?.domainsPendingAuthorisation ?? 0) + (overview?.websitesAwaitingProviderReview ?? 0),
     candidates: (overview?.candidatesAwaitingReview ?? 0) + (overview?.branchesAwaitingMatch ?? 0),
     optOuts: overview?.unacknowledgedRemovalRequests ?? 0,
+    importedOffers: (overview?.importedOffers?.revision_pending ?? 0) + (overview?.importedOffers?.expiry_review ?? 0),
   };
 
   return (

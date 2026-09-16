@@ -117,6 +117,15 @@ export default function AdapterDetailPage({ params }: { params: Promise<{ key: s
     if (result) alert(`Started ${result.runsStarted} runs across ${result.websites} websites.`);
   }
 
+  async function setRecheckInterval() {
+    const answer = prompt('Hours between rechecks of websites this adapter reads. Leave empty for the default (24h, or 6h when an offer ends within 48h).', String(current?.recheckIntervalHours ?? ''));
+    if (answer === null) return;
+    const saved = await run(() =>
+      api(`/admin/scraper/adapters/${key}/recheck`, { method: 'PATCH', body: JSON.stringify({ recheckIntervalHours: answer.trim() ? Number(answer) : null }) }),
+    );
+    if (saved) load();
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -125,15 +134,19 @@ export default function AdapterDetailPage({ params }: { params: Promise<{ key: s
             <Link href="/admin/scraper/adapters" className="text-[13px] font-bold text-muted hover:text-primary">← Adapters</Link>
             <h2 className="font-display text-2xl font-extrabold">{detail.versions[0].name}</h2>
             <div className="text-[13px] font-semibold text-muted">
-              {key} · {current ? `v${current.version} is current` : 'no current version'} · {detail.affectedWebsites.length} websites
+              {key} · {current ? `v${current.version} is current` : 'no current version'} · {detail.affectedWebsites.length} websites ·{' '}
+              rechecks {current?.recheckIntervalHours ? `every ${current.recheckIntervalHours}h` : 'on the default schedule'}
             </div>
           </div>
-          {selector && (
-            <div className="flex gap-2 flex-wrap">
-              <button disabled={busy || !current} className={btn.danger} onClick={rollback}>Roll back current version</button>
-              <button disabled={busy} className={btn.outline} onClick={rerun}>Re-extract its websites</button>
-            </div>
-          )}
+          <div className="flex gap-2 flex-wrap">
+            <button disabled={busy} className={btn.outline} onClick={setRecheckInterval}>Recheck interval</button>
+            {selector && (
+              <>
+                <button disabled={busy || !current} className={btn.danger} onClick={rollback}>Roll back current version</button>
+                <button disabled={busy} className={btn.outline} onClick={rerun}>Re-extract its websites</button>
+              </>
+            )}
+          </div>
         </div>
         <div className="mt-3"><ErrorNote error={error} /></div>
       </Card>

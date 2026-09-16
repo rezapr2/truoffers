@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { track } from '@/lib/analytics';
-import type { Offer, Business } from '@/lib/types';
+import type { Offer, Business, CheckingOffer } from '@/lib/types';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import FollowButton from '@/components/FollowButton';
 import ImportedSourceNotice from '@/components/ImportedSourceNotice';
@@ -13,18 +13,40 @@ import { ukDate } from '@/lib/dates';
 export default function OfferDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [offer, setOffer] = useState<Offer | null>(null);
+  const [checking, setChecking] = useState<CheckingOffer | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    api<Offer>(`/offers/${id}`)
-      .then((o) => {
-        setOffer(o);
-        const businessId = typeof o.businessId === 'object' ? (o.businessId as Business)._id : o.businessId;
-        track('offer_detail_view', { offerId: o._id, businessId });
+    api<Offer | CheckingOffer>(`/offers/${id}`)
+      .then((result) => {
+        // An imported offer the robot could not find on the business's website is hidden while it checks again.
+        if ('availability' in result) {
+          setChecking(result);
+          return;
+        }
+        setOffer(result);
+        const businessId = typeof result.businessId === 'object' ? (result.businessId as Business)._id : result.businessId;
+        track('offer_detail_view', { offerId: result._id, businessId });
       })
       .catch(() => setNotFound(true));
   }, [id]);
+
+  if (checking) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-20 text-center">
+        <h1 className="font-display text-3xl font-extrabold mb-3">We’re checking this offer</h1>
+        <p className="text-muted font-semibold mb-6">
+          It was not on {checking.business?.name ?? 'the takeaway'}’s website the last time we looked, so it is hidden until we can confirm it.
+        </p>
+        {checking.business?.slug && (
+          <Link href={`/takeaway/${checking.business.slug}`} className="bg-ink text-surface font-bold px-6 py-3 rounded-full">
+            See {checking.business.name}’s other offers
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   if (notFound) {
     return (

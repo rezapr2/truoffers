@@ -99,6 +99,7 @@ export interface ScrapedWebsite {
   lastFailedCheckAt?: string;
   lastError?: string;
   failureCount: number;
+  nextCheckAt?: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -130,7 +131,7 @@ export interface ImportJob {
 
 export interface WebsiteDetail {
   site: ScrapedWebsite;
-  config: { rateLimitMs?: number; pageCap?: number; paused?: boolean; pausedReason?: string; blockedPaths?: string[] } | null;
+  config: { rateLimitMs?: number; pageCap?: number; recheckIntervalHours?: number; paused?: boolean; pausedReason?: string; blockedPaths?: string[] } | null;
   candidates: Partial<Record<CandidateStatus, number>>;
   runs: { runId: string; stages: ImportJob[] }[];
 }
@@ -287,6 +288,7 @@ export interface ScraperOverview {
   websitesAwaitingProviderReview: number;
   branchesAwaitingMatch: number;
   unacknowledgedRemovalRequests: number;
+  importedOffers: Record<ImportedOfferState, number>;
   halted: boolean;
   workers: number;
 }
@@ -431,6 +433,7 @@ export interface AdapterVersion {
   name: string;
   type: string;
   version: string;
+  recheckIntervalHours?: number;
   status: 'active' | 'draft' | 'testing' | 'approved' | 'paused' | 'withdrawn';
   isCurrent: boolean;
   priority: number;
@@ -498,4 +501,87 @@ export interface NetworkWebsite {
 
 export interface NetworkView extends Paged<NetworkWebsite> {
   groups: { key: string | null; count: number }[];
+}
+
+// ---------- rechecks, revisions and expiry (Phase 3) ----------
+
+export type ImportedOfferState = 'possibly_removed' | 'expiry_review' | 'revision_pending' | 'stale' | 'source_changed';
+export type RevisionStatus = 'pending' | 'applied' | 'discarded' | 'superseded';
+export type RevisionValue = string | number | boolean | string[] | null;
+
+export interface PendingRevisionSummary {
+  _id: string;
+  offerRef: string;
+  changedFields: string[];
+  lastDetectedAt: string;
+  detectionCount: number;
+}
+
+export interface ImportedOfferRow {
+  _id: string;
+  title: string;
+  displayLabel: string;
+  status: string;
+  sourceDomain?: string;
+  lastCheckedAt?: string;
+  lastSeenAt?: string;
+  absentChecks: number;
+  recheckStateAt?: string;
+  endsAt?: string;
+  verification: string;
+  managedBy?: string;
+  sourceChanged?: boolean;
+  businessId?: { _id: string; name: string; slug: string; town?: string } | string;
+  revision: PendingRevisionSummary | null;
+}
+
+export interface OfferRevision {
+  _id: string;
+  offerRef: string | { _id: string; title: string; status: string; sourceDomain?: string; verification?: string; managedBy?: string; endsAt?: string };
+  businessRef?: { _id: string; name: string; slug: string } | string;
+  domain?: string;
+  status: RevisionStatus;
+  previous: Record<string, RevisionValue>;
+  proposedValues: Record<string, RevisionValue>;
+  changedFields: string[];
+  sources: SourceExcerpt[];
+  evidence: Record<string, FieldEvidence>;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  detectionCount: number;
+  reviewedBy?: { name?: string; email?: string } | string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  appliedVerification?: string;
+  closedReason?: string;
+  createdAt: string;
+}
+
+export interface ImportedOfferDetail {
+  offer: ImportedOfferRow & {
+    sources?: SourceExcerpt[];
+    evidence?: Record<string, FieldEvidence>;
+    value: number;
+    minOrder: number;
+    code?: string;
+    terms?: string;
+    adapterId?: string;
+    adapterVersion?: string;
+    confidenceScore?: number;
+    scrapedWebsiteRef?: string;
+  };
+  business: { _id: string; name: string; slug: string; town?: string; ownerId?: string; verificationStatus?: string } | null;
+  website: {
+    _id: string;
+    domain: string;
+    authorisationStatus: string;
+    adapterId?: string;
+    adapterVersion?: string;
+    nextCheckAt?: string;
+    lastSuccessfulCheckAt?: string;
+    lastFailedCheckAt?: string;
+    lastError?: string;
+    failureCount?: number;
+  } | null;
+  revisions: OfferRevision[];
 }

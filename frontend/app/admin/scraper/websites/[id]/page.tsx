@@ -13,14 +13,18 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
   const { refresh } = useOverview();
   const [data, setData] = useState<WebsiteDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [config, setConfig] = useState({ rateLimitMs: '', pageCap: '' });
+  const [config, setConfig] = useState({ rateLimitMs: '', pageCap: '', recheckIntervalHours: '' });
   const { busy, error, run } = useAction();
 
   const load = useCallback(() => {
     void api<WebsiteDetail>(`/admin/scraper/websites/${id}`)
       .then((detail) => {
         setData(detail);
-        setConfig({ rateLimitMs: String(detail.config?.rateLimitMs ?? ''), pageCap: String(detail.config?.pageCap ?? '') });
+        setConfig({
+          rateLimitMs: String(detail.config?.rateLimitMs ?? ''),
+          pageCap: String(detail.config?.pageCap ?? ''),
+          recheckIntervalHours: String(detail.config?.recheckIntervalHours ?? ''),
+        });
       })
       .catch(() => setNotFound(true));
   }, [id]);
@@ -61,6 +65,7 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
               <div>robots.txt: {site.robots?.status ?? '—'}{site.robots?.crawlDelaySec ? ` · crawl delay ${site.robots.crawlDelaySec}s` : ''}</div>
               <div>Last checked: {formatDate(site.lastSuccessfulCheckAt)}</div>
               <div>Failures: {site.failureCount}{site.lastError ? ` · ${site.lastError}` : ''}</div>
+              <div>Next check: {formatDate(site.nextCheckAt)}</div>
               {site.providerSignals.length > 0 && <div className="sm:col-span-2">Provider signals: {site.providerSignals.join(', ')}</div>}
               {site.authorisationNote && <div className="sm:col-span-2">Note: {site.authorisationNote}</div>}
             </dl>
@@ -107,6 +112,8 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
             void act(`/admin/scraper/websites/${id}/crawl-config`, 'PATCH', {
               rateLimitMs: config.rateLimitMs ? Number(config.rateLimitMs) : undefined,
               pageCap: config.pageCap ? Number(config.pageCap) : undefined,
+              // null clears the override, so the adapter's or the default interval applies again.
+              recheckIntervalHours: config.recheckIntervalHours ? Number(config.recheckIntervalHours) : null,
             });
           }}
           className="flex gap-3 flex-wrap items-end"
@@ -118,6 +125,18 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
           <label className="flex flex-col gap-1">
             <span className="text-[12px] font-extrabold">Pages per run</span>
             <input type="number" min={1} max={1000} value={config.pageCap} onChange={(e) => setConfig({ ...config, pageCap: e.target.value })} placeholder="default" className={`${inputClass} w-32`} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[12px] font-extrabold">Hours between rechecks</span>
+            <input
+              type="number"
+              min={1}
+              max={720}
+              value={config.recheckIntervalHours}
+              onChange={(e) => setConfig({ ...config, recheckIntervalHours: e.target.value })}
+              placeholder="default"
+              className={`${inputClass} w-40`}
+            />
           </label>
           <button disabled={busy} className={btn.dark}>Save</button>
           {data.config?.blockedPaths?.length ? (

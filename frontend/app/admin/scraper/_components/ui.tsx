@@ -68,6 +68,14 @@ const STATUS_TONES: Record<string, keyof typeof TONES> = {
   no_match: 'neutral',
   admin_verified: 'good',
   merchant_verified: 'good',
+  // Rechecks and revisions
+  possibly_removed: 'warn',
+  expiry_review: 'warn',
+  revision_pending: 'info',
+  applied: 'good',
+  discarded: 'neutral',
+  superseded: 'neutral',
+  source_changed: 'warn',
 };
 
 export function humanise(value: string) {
