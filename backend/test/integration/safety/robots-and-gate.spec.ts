@@ -129,13 +129,17 @@ describe('robots, page directives and the crawl gate', () => {
       await expect(h.gate.assertSiteCrawlable(SITE)).resolves.toBeDefined();
     });
 
-    it('holds sites whose provider is unknown or blocked, and allows them once the provider is allowed', async () => {
+    it('never crawls a blocked provider’s sites, and an unknown provider’s only while provider review is off', async () => {
       const policy = await h.models.policies.create({ name: 'OrderNest', status: ProviderPolicyStatus.UNKNOWN });
       await h.authorise(SITE, { providerRef: policy._id });
-      await expect(h.gate.assertSiteCrawlable(SITE)).rejects.toMatchObject({ denial: 'provider_not_allowed' });
+      await expect(h.gate.assertSiteCrawlable(SITE)).resolves.toBeDefined();
 
       await h.models.policies.updateOne({ _id: policy._id }, { status: ProviderPolicyStatus.BLOCKED });
-      await expect(h.gate.assertSiteCrawlable(SITE)).rejects.toMatchObject({ denial: 'provider_not_allowed' });
+      await expect(h.gate.assertSiteCrawlable(SITE)).rejects.toMatchObject({ denial: 'provider_not_allowed', message: expect.stringMatching(/which is blocked/) });
+
+      await h.settings.update({ providerReviewRequired: true });
+      await h.models.policies.updateOne({ _id: policy._id }, { status: ProviderPolicyStatus.UNKNOWN });
+      await expect(h.gate.assertSiteCrawlable(SITE)).rejects.toMatchObject({ denial: 'provider_not_allowed', message: expect.stringMatching(/not allowed/) });
 
       policy.set({ status: ProviderPolicyStatus.ALLOWED, basis: ProviderPolicyBasis.WRITTEN_AGREEMENT, agreementReference: 'DSA-2026-014' });
       await policy.save();

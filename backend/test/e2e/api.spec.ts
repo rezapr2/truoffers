@@ -12,6 +12,7 @@ import { deriveBusinessIdentity } from '../../src/common/business-identity';
 import { OfferStatus, Role, VerificationStatus } from '../../src/common/enums';
 import {
   AuditAction,
+  AuthorisationSource,
   IMPORT_RUN_STAGES,
   CandidateStatus,
   DomainAuthorisationStatus,
@@ -20,6 +21,7 @@ import {
   OfferManagedBy,
   OfferOrigin,
   OfferVerification,
+  ProviderPolicyStatus,
 } from '../../src/common/scraper.enums';
 import { SCRAPER_QUEUES } from '../../src/scraper/queue/queue.constants';
 import { ScraperQueueService } from '../../src/scraper/queue/scraper-queue.service';
@@ -32,6 +34,7 @@ import { DomainOptOut } from '../../src/schemas/domain-opt-out.schema';
 import { ExtractedOfferCandidate } from '../../src/schemas/extracted-offer-candidate.schema';
 import { ImportJob } from '../../src/schemas/import-job.schema';
 import { Offer } from '../../src/schemas/offer.schema';
+import { ProviderPolicy } from '../../src/schemas/provider-policy.schema';
 import { ScrapedWebsite } from '../../src/schemas/scraped-website.schema';
 import { User } from '../../src/schemas/user.schema';
 import { FixtureServer, startFixtureServer, testResolver } from '../helpers/fixture-server';
@@ -141,6 +144,45 @@ describe('scraper API, end to end', () => {
     const current = await request(http).get('/api/admin/scraper/settings').set(as('admin')).expect(200);
     expect(current.body).toMatchObject({ renderWorkers: 0 });
     expect(await auditActions()).toContain(AuditAction.SETTINGS_UPDATED);
+  });
+
+  it('releases websites held for a provider once review is turned off or the provider is unblocked', async () => {
+    const policies = app.get<Model<ProviderPolicy>>(getModelToken(ProviderPolicy.name));
+    await request(http).patch('/api/admin/scraper/settings').set(as('admin')).send({ providerReviewRequired: true }).expect(200);
+    const [unknown, blocked] = await policies.create([{ name: 'HeldHost' }, { name: 'BlockedHost', status: ProviderPolicyStatus.BLOCKED }]);
+    const held = (domain: string, providerRef: Types.ObjectId, authorisationSource = AuthorisationSource.ADMIN_MANUAL) =>
+      sites.create({
+        domain,
+        registrableDomain: domain,
+        seedUrl: `https://${domain}/`,
+        authorisationStatus: DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW,
+        authorisationSource,
+        providerRef,
+        lastError: 'Hosted by a provider',
+      });
+    const [onUnknown, linkOnly, onBlocked] = await Promise.all([
+      held('held-unknown.test', unknown._id),
+      held('held-link.test', unknown._id, AuthorisationSource.DISCOVERED_LINK),
+      held('held-blocked.test', blocked._id),
+    ]);
+    const statusOf = async (id: Types.ObjectId) => (await sites.findById(id).lean())?.authorisationStatus;
+
+    const off = await request(http).patch('/api/admin/scraper/settings').set(as('admin')).send({ providerReviewRequired: false }).expect(200);
+    expect(off.body).toMatchObject({ providerReviewRequired: false, websitesReleased: 1 });
+    expect(await statusOf(onUnknown._id)).toBe(DomainAuthorisationStatus.AUTHORISED);
+    // Found only as a link, so nobody authorised it; and the blocked provider still holds its site.
+    expect(await statusOf(linkOnly._id)).toBe(DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW);
+    expect(await statusOf(onBlocked._id)).toBe(DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW);
+    const settingsEntry = await audit.findOne({ action: AuditAction.SETTINGS_UPDATED }).sort({ _id: -1 }).lean();
+    expect(settingsEntry).toMatchObject({ before: { providerReviewRequired: true }, after: { providerReviewRequired: false, websitesReleased: 1 } });
+
+    await request(http).patch(`/api/admin/scraper/provider-policies/${blocked._id}`).set(as('admin')).send({ status: 'unknown' }).expect(200);
+    expect(await statusOf(onBlocked._id)).toBe(DomainAuthorisationStatus.AUTHORISED);
+    const policyEntry = await audit.findOne({ action: AuditAction.PROVIDER_POLICY_UPDATED, targetId: String(blocked._id) }).lean();
+    expect(policyEntry?.after).toMatchObject({ status: ProviderPolicyStatus.UNKNOWN, websitesReleased: 1 });
+
+    await sites.deleteMany({ _id: { $in: [onUnknown._id, linkOnly._id, onBlocked._id] } });
+    await policies.deleteMany({ _id: { $in: [unknown._id, blocked._id] } });
   });
 
   it('refuses a provider client list without an allowed written-agreement policy', async () => {

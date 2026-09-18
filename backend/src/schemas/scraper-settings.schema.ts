@@ -20,6 +20,11 @@ export class ScraperSettings {
   @Prop({ default: false })
   renderingEnabled: boolean;
 
+  // Spec §2.3 provider review. Off (the default): websites on an ordering platform are crawled unless the
+  // platform's policy is blocked. On: they're held until the platform's policy is allowed, with a recorded basis.
+  @Prop({ default: false })
+  providerReviewRequired: boolean;
+
   @Prop({ default: CRAWL_DEFAULTS.rateLimitMs, min: 250 })
   defaultRateLimitMs: number;
 

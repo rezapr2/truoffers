@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import type { OptOut, PolicyStatus, ProviderPolicy } from '@/lib/scraper-types';
+import type { OptOut, PolicyStatus, ProviderPolicy, ScraperSettings } from '@/lib/scraper-types';
 import { useOverview } from '../_components/overview';
 import { btn, Card, EmptyState, ErrorNote, formatDate, inputClass, SectionTitle, StatusPill, Tabs, useAction } from '../_components/ui';
 
@@ -33,7 +33,7 @@ function toDraft(policy?: ProviderPolicy): PolicyDraft {
   };
 }
 
-function PolicyForm({ policy, onDone }: { policy?: ProviderPolicy; onDone: () => void }) {
+function PolicyForm({ policy, reviewRequired, onDone }: { policy?: ProviderPolicy; reviewRequired: boolean; onDone: () => void }) {
   const [draft, setDraft] = useState<PolicyDraft>(() => toDraft(policy));
   const { busy, error, run } = useAction();
 
@@ -67,7 +67,7 @@ function PolicyForm({ policy, onDone }: { policy?: ProviderPolicy; onDone: () =>
         <label className="flex flex-col gap-1">
           <span className="text-[12px] font-extrabold">Policy</span>
           <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as PolicyStatus })} className={inputClass}>
-            <option value="unknown">Unknown: hold its websites</option>
+            <option value="unknown">{reviewRequired ? 'Unknown: hold its websites' : 'Unknown: crawl its websites'}</option>
             <option value="allowed">Allowed</option>
             <option value="blocked">Blocked: never crawl</option>
           </select>
@@ -110,8 +110,12 @@ function PolicyForm({ policy, onDone }: { policy?: ProviderPolicy; onDone: () =>
 function Providers() {
   const [policies, setPolicies] = useState<ProviderPolicy[] | null>(null);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
+  const [reviewRequired, setReviewRequired] = useState(false);
   const { error, run } = useAction();
-  const load = useCallback(() => void api<ProviderPolicy[]>('/admin/scraper/provider-policies').then(setPolicies).catch(() => {}), []);
+  const load = useCallback(() => {
+    void api<ProviderPolicy[]>('/admin/scraper/provider-policies').then(setPolicies).catch(() => {});
+    void api<ScraperSettings>('/admin/scraper/settings').then((s) => setReviewRequired(!!s.providerReviewRequired)).catch(() => {});
+  }, []);
   useEffect(load, [load]);
 
   return (
@@ -120,22 +124,23 @@ function Providers() {
         Ordering providers
       </SectionTitle>
       <p className="text-[13px] font-semibold text-muted mb-4">
-        Websites hosted by a provider are crawled only while its policy is allowed, with a recorded basis. Unknown providers are created
-        automatically when a website credits one, and their websites wait here.
+        {reviewRequired
+          ? 'Provider review is on: websites hosted by a provider are crawled only while its policy is allowed, with a recorded basis. Providers are added automatically when a website uses one, and their websites wait here.'
+          : 'Websites hosted by a provider are crawled unless you block it here. Providers are added automatically when a website uses one. To hold their websites until you allow each provider, turn on provider review in Settings.'}
       </p>
       <ErrorNote error={error} />
       <div className="flex flex-col gap-3">
-        {editing === 'new' && <PolicyForm onDone={() => { setEditing(null); load(); }} />}
+        {editing === 'new' && <PolicyForm reviewRequired={reviewRequired} onDone={() => { setEditing(null); load(); }} />}
         {policies?.map((policy) =>
           editing === policy._id ? (
-            <PolicyForm key={policy._id} policy={policy} onDone={() => { setEditing(null); load(); }} />
+            <PolicyForm key={policy._id} policy={policy} reviewRequired={reviewRequired} onDone={() => { setEditing(null); load(); }} />
           ) : (
             <div key={policy._id} className="border border-line rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-extrabold">{policy.name}</span>
                   <StatusPill status={policy.status} />
-                  {policy.autoCreated && <StatusPill status="delayed" label="detected, not reviewed" />}
+                  {policy.autoCreated && <StatusPill status="delayed" label={reviewRequired ? 'detected, not reviewed' : 'detected'} />}
                 </div>
                 <div className="text-[13px] font-semibold text-muted mt-1">
                   {policy.basis ? `${policy.basis.replace(/_/g, ' ')}${policy.agreementReference ? ` (${policy.agreementReference})` : ''}` : 'No basis recorded'}

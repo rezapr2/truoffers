@@ -306,6 +306,7 @@ export class AdminScraperController {
     private readonly optOuts: OptOutsService,
     private readonly monitoring: JobMonitoringService,
     private readonly importedOffers: ImportedOffersService,
+    private readonly providerPolicies: ProviderPoliciesService,
   ) {}
 
   // Counters for the admin dashboard and navigation badges.
@@ -346,13 +347,23 @@ export class AdminScraperController {
       extraNeverCrawlDomains: dto.extraNeverCrawlDomains?.map((d) => d.trim().toLowerCase().replace(/^www\./, '')).filter(Boolean),
     };
     const { before, after } = await this.settings.update({ ...patch, updatedBy: new Types.ObjectId(userId) });
+    // With provider review off, nothing stays held for a provider that isn't blocked.
+    const websitesReleased = after.providerReviewRequired ? 0 : await this.providerPolicies.releaseHeldWebsites();
+    const audited = (s: typeof before) => ({
+      aiExtractionEnabled: s.aiExtractionEnabled,
+      renderingEnabled: s.renderingEnabled,
+      providerReviewRequired: !!s.providerReviewRequired,
+      defaultRateLimitMs: s.defaultRateLimitMs,
+      defaultPageCap: s.defaultPageCap,
+      extraNeverCrawlDomains: s.extraNeverCrawlDomains,
+    });
     await this.audit.record({
       action: AuditAction.SETTINGS_UPDATED,
       targetType: 'ScraperSettings',
-      before: { aiExtractionEnabled: before.aiExtractionEnabled, defaultRateLimitMs: before.defaultRateLimitMs, defaultPageCap: before.defaultPageCap, extraNeverCrawlDomains: before.extraNeverCrawlDomains },
-      after: { aiExtractionEnabled: after.aiExtractionEnabled, defaultRateLimitMs: after.defaultRateLimitMs, defaultPageCap: after.defaultPageCap, extraNeverCrawlDomains: after.extraNeverCrawlDomains },
+      before: audited(before),
+      after: { ...audited(after), ...(websitesReleased ? { websitesReleased } : {}) },
     });
-    return { ...after, aiAvailable: !!process.env.ANTHROPIC_API_KEY };
+    return { ...after, aiAvailable: !!process.env.ANTHROPIC_API_KEY, websitesReleased };
   }
 
   @Get('audit-log')

@@ -6,7 +6,6 @@ import {
   DomainAuthorisationStatus,
   FingerprintMatchCategory,
   ImportJobType,
-  ProviderPolicyStatus,
   ScraperAdapterStatus,
 } from '../../common/scraper.enums';
 import { AuthorisedNetwork, AuthorisedNetworkDocument } from '../../schemas/authorised-network.schema';
@@ -28,6 +27,7 @@ import { CrawlDeniedError, CrawlGateService } from '../safety/crawl-gate.service
 import { DomainRegistryService } from '../safety/domain-registry.service';
 import { neverCrawlReason } from '../safety/never-crawl';
 import { PageBudget } from '../safety/page-budget.service';
+import { providerPermitsCrawling } from '../safety/provider-permission';
 import { DomainRateLimiter } from '../safety/rate-limiter.service';
 import { RobotsService } from '../safety/robots.service';
 import { SafeFetchService } from '../safety/safe-fetch.service';
@@ -258,7 +258,8 @@ export class NetworkJobsService {
     if (matched && categoryAtLeast(category, FingerprintMatchCategory.HIGH_CONFIDENCE) && best!.fingerprint.providerRef && !site.providerRef) {
       const policy = await this.policies.findById(best!.fingerprint.providerRef).lean();
       await this.sites.updateOne({ _id: site._id }, { $set: { providerRef: best!.fingerprint.providerRef }, $addToSet: { providerSignals: `fingerprint ${best!.fingerprint.name}` } });
-      if (policy && policy.status !== ProviderPolicyStatus.ALLOWED && site.authorisationStatus === DomainAuthorisationStatus.AUTHORISED) {
+      const reviewRequired = !!(await this.settings.get()).providerReviewRequired;
+      if (policy && !providerPermitsCrawling(policy.status, reviewRequired) && site.authorisationStatus === DomainAuthorisationStatus.AUTHORISED) {
         await this.sites.updateOne(
           { _id: site._id },
           { $set: { authorisationStatus: DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW, lastError: `Matches ${policy.name}'s template (${policy.status})` } },

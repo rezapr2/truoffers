@@ -25,6 +25,7 @@ import { AuditService } from '../audit/audit.service';
 import { RunsService } from '../queue/runs.service';
 import { DomainRegistryService } from '../safety/domain-registry.service';
 import { neverCrawlReason } from '../safety/never-crawl';
+import { providerPermitsCrawling } from '../safety/provider-permission';
 import { normaliseUrl, registrableDomainOf, siteDomainOf, UrlRejectedError } from '../safety/url';
 import { INTAKE_LIMITS } from '../scraper.constants';
 import { ScraperSettingsService } from './scraper-settings.service';
@@ -238,9 +239,9 @@ export class WebsitesService {
     if (decision === 'approve') {
       if (await this.registry.activeOptOutFor(site.domain)) throw new BadRequestException(`${site.domain} has an active opt-out; lift it first`);
       if (site.providerRef) {
-        const policy = await this.policies.findById(site.providerRef).lean();
-        if (policy?.status !== ProviderPolicyStatus.ALLOWED) {
-          throw new BadRequestException(`${site.domain} is hosted by ${policy?.name ?? 'a provider'} whose policy is not allowed`);
+        const [policy, settings] = await Promise.all([this.policies.findById(site.providerRef).lean(), this.settings.get()]);
+        if (!providerPermitsCrawling(policy?.status, !!settings.providerReviewRequired)) {
+          throw new BadRequestException(`${site.domain} is hosted by ${policy?.name ?? 'a provider'} whose policy is ${policy?.status ?? 'missing'}`);
         }
       }
       site.set({

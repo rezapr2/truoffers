@@ -12,7 +12,6 @@ import {
   OPEN_CANDIDATE_STATUSES,
   OfferManagedBy,
   OfferOrigin,
-  ProviderPolicyStatus,
   RESOLVED_BRANCH_STATUSES,
 } from '../../common/scraper.enums';
 import { Business, BusinessDocument } from '../../schemas/business.schema';
@@ -50,6 +49,7 @@ import { CrawlGateService } from '../safety/crawl-gate.service';
 import { DomainRegistryService, ScrapedWebsiteLean } from '../safety/domain-registry.service';
 import { PageBudget } from '../safety/page-budget.service';
 import { ProviderDetectionService, ProviderMatch } from '../safety/provider-detection.service';
+import { providerPermitsCrawling } from '../safety/provider-permission';
 import { DomainRateLimiter } from '../safety/rate-limiter.service';
 import { RobotsService } from '../safety/robots.service';
 import { SafeFetchService } from '../safety/safe-fetch.service';
@@ -222,8 +222,8 @@ export class PipelineService {
 
   private async holdForProvider(site: ScrapedWebsiteLean, match: ProviderMatch): Promise<string | null> {
     await this.sites.updateOne({ _id: site._id }, { $set: { providerRef: match.policyId, providerSignals: match.signals } });
-    if (match.status === ProviderPolicyStatus.ALLOWED) return null;
-    // Held websites aren't checked again until the provider is allowed and a run is started.
+    if (providerPermitsCrawling(match.status, !!(await this.settings.get()).providerReviewRequired)) return null;
+    // Held websites aren't checked again until the provider permits crawling and a run is started.
     await this.sites.updateOne(
       { _id: site._id },
       { $set: { authorisationStatus: DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW, lastError: `Hosted by ${match.name} (${match.status})` }, $unset: { nextCheckAt: 1 } },

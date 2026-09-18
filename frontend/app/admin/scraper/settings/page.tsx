@@ -7,7 +7,8 @@ import { btn, Card, ErrorNote, formatDate, inputClass, SectionTitle, StatusPill,
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<ScraperSettings | null>(null);
-  const [draft, setDraft] = useState({ aiExtractionEnabled: false, renderingEnabled: false, defaultRateLimitMs: 2000, defaultPageCap: 50, extraNeverCrawlDomains: '' });
+  const [draft, setDraft] = useState({ aiExtractionEnabled: false, renderingEnabled: false, providerReviewRequired: false, defaultRateLimitMs: 2000, defaultPageCap: 50, extraNeverCrawlDomains: '' });
+  const [released, setReleased] = useState(0);
   const [adapters, setAdapters] = useState<AdapterStats[]>([]);
   const [saved, setSaved] = useState(false);
   const { busy, error, run } = useAction();
@@ -18,6 +19,7 @@ export default function SettingsPage() {
       setDraft({
         aiExtractionEnabled: s.aiExtractionEnabled,
         renderingEnabled: s.renderingEnabled ?? false,
+        providerReviewRequired: s.providerReviewRequired ?? false,
         defaultRateLimitMs: s.defaultRateLimitMs,
         defaultPageCap: s.defaultPageCap,
         extraNeverCrawlDomains: s.extraNeverCrawlDomains.join('\n'),
@@ -31,11 +33,12 @@ export default function SettingsPage() {
     e.preventDefault();
     setSaved(false);
     const result = await run(() =>
-      api<ScraperSettings>('/admin/scraper/settings', {
+      api<ScraperSettings & { websitesReleased?: number }>('/admin/scraper/settings', {
         method: 'PATCH',
         body: JSON.stringify({
           aiExtractionEnabled: draft.aiExtractionEnabled,
           renderingEnabled: draft.renderingEnabled,
+          providerReviewRequired: draft.providerReviewRequired,
           defaultRateLimitMs: Number(draft.defaultRateLimitMs),
           defaultPageCap: Number(draft.defaultPageCap),
           extraNeverCrawlDomains: draft.extraNeverCrawlDomains.split('\n').map((d) => d.trim()).filter(Boolean),
@@ -44,6 +47,7 @@ export default function SettingsPage() {
     );
     if (result) {
       setSaved(true);
+      setReleased(result.websitesReleased ?? 0);
       load();
     }
   }
@@ -101,6 +105,22 @@ export default function SettingsPage() {
               </span>
             </span>
           </label>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 accent-primary"
+              checked={draft.providerReviewRequired}
+              onChange={(e) => setDraft({ ...draft, providerReviewRequired: e.target.checked })}
+            />
+            <span>
+              <span className="font-extrabold">Review ordering platforms before crawling</span>
+              <span className="block text-[13px] font-semibold text-muted">
+                Off: websites on an ordering platform such as Foodhub or Grub24 are crawled unless you block the platform on the
+                Policies page. On: they wait until you allow the platform and record an agreement or a review of its terms.
+                Turning this off releases the websites waiting for a platform that isn’t blocked.
+              </span>
+            </span>
+          </label>
           <div className="grid md:grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-extrabold">Milliseconds between requests to a domain</span>
@@ -120,7 +140,12 @@ export default function SettingsPage() {
           </label>
           <div className="flex items-center gap-3">
             <button disabled={busy} className={btn.dark}>{busy ? 'Saving…' : 'Save settings'}</button>
-            {saved && <span className="text-sm font-bold text-verified">Saved. Workers pick it up within seconds.</span>}
+            {saved && (
+              <span className="text-sm font-bold text-verified">
+                Saved. Workers pick it up within seconds.
+                {released > 0 && ` ${released} website${released === 1 ? '' : 's'} released from provider review; start their analysis from Websites.`}
+              </span>
+            )}
             {settings.updatedAt && <span className="text-[12px] font-semibold text-muted">Last changed {formatDate(settings.updatedAt)}</span>}
           </div>
         </form>

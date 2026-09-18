@@ -59,7 +59,7 @@ describe('match_fingerprint job', () => {
     };
   }
 
-  it('links a confidently matched site to the template’s provider and holds it while that provider is not allowed', async () => {
+  it('links a confidently matched site to the template’s provider, and holds it only while provider review is on', async () => {
     const policy = await h.models.policies.create({ name: 'OrderNest', status: ProviderPolicyStatus.UNKNOWN });
     const fingerprint = await h.models.fingerprints.create({
       name: 'OrderNest template',
@@ -72,6 +72,13 @@ describe('match_fingerprint job', () => {
     await h.authorise('unrelated.example.test', { siteMarkers: [{ category: MarkerCategory.CSS_CLASS, value: 'on-shop' }], markersExtractedAt: new Date() });
     const [luigis, unrelated] = await Promise.all([h.models.sites.findOne({ domain: 'luigis.example.test' }), h.models.sites.findOne({ domain: 'unrelated.example.test' })]);
 
+    // Provider review is off: the unknown provider is recorded, and the site stays authorised.
+    const linked = await jobs.run(ImportJobType.MATCH_FINGERPRINT, context({ websiteId: String(luigis!._id) }));
+    expect(linked.resultCounts).toMatchObject({ matched: 1, heldForProvider: 0 });
+    expect(await h.models.sites.findById(luigis!._id).lean()).toMatchObject({ providerRef: policy._id, authorisationStatus: DomainAuthorisationStatus.AUTHORISED });
+
+    await h.settings.update({ providerReviewRequired: true });
+    await h.models.sites.updateOne({ _id: luigis!._id }, { $unset: { providerRef: 1 } });
     const outcome = await jobs.run(ImportJobType.MATCH_FINGERPRINT, context({ websiteId: String(luigis!._id) }));
     expect(outcome.resultCounts).toMatchObject({ matched: 1, heldForProvider: 1 });
     const matched = await h.models.sites.findById(luigis!._id).lean();

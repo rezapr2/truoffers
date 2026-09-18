@@ -144,7 +144,7 @@ export class ProviderDetectionService {
   private async recordKnownPlatform(platform: KnownPlatform): Promise<PolicyLean> {
     const existing = await this.model.findOne({ name: new RegExp(`^${platform.name}$`, 'i') }).lean<PolicyLean>();
     if (existing) return existing;
-    this.logger.log(`Recording ordering platform "${platform.name}" for admin review`);
+    this.logger.log(`Recording ordering platform "${platform.name}"`);
     const created = await this.model.findOneAndUpdate(
       { name: platform.name },
       {
@@ -216,7 +216,7 @@ export class ProviderDetectionService {
   private async recordUnknownProvider(name: string): Promise<PolicyLean> {
     const existing = await this.model.findOne({ name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).lean<PolicyLean>();
     if (existing) return existing;
-    this.logger.log(`Recording unrecognised ordering provider "${name}" for admin review`);
+    this.logger.log(`Recording unrecognised ordering provider "${name}"`);
     const created = await this.model.findOneAndUpdate(
       { name },
       {

@@ -1,16 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import {
-  AuditAction,
-  AuthorisationSource,
-  DomainAuthorisationStatus,
-  ProviderPolicyBasis,
-  ProviderPolicyStatus,
-} from '../../common/scraper.enums';
+import { AuditAction, ProviderPolicyBasis, ProviderPolicyStatus } from '../../common/scraper.enums';
 import { ProviderDetection, ProviderPolicy, ProviderPolicyDocument } from '../../schemas/provider-policy.schema';
 import { ScrapedWebsite, ScrapedWebsiteDocument } from '../../schemas/scraped-website.schema';
 import { AuditService } from '../audit/audit.service';
+import { releaseHeldWebsites } from '../safety/provider-permission';
+import { ScraperSettingsService } from './scraper-settings.service';
 
 export interface ProviderPolicyInput {
   name?: string;
@@ -29,6 +25,7 @@ export class ProviderPoliciesService {
     @InjectModel(ProviderPolicy.name) private readonly policies: Model<ProviderPolicyDocument>,
     @InjectModel(ScrapedWebsite.name) private readonly sites: Model<ScrapedWebsiteDocument>,
     private readonly audit: AuditService,
+    private readonly settings: ScraperSettingsService,
   ) {}
 
   async list() {
@@ -74,19 +71,8 @@ export class ProviderPoliciesService {
     policy.set({ reviewedBy: new Types.ObjectId(userId), reviewedAt: new Date(), autoCreated: false });
     await this.save(policy);
 
-    // Sites held only because of this provider can proceed once it is allowed (the policy change is the admin action).
-    let released = 0;
-    if (before.status !== ProviderPolicyStatus.ALLOWED && policy.status === ProviderPolicyStatus.ALLOWED) {
-      const result = await this.sites.updateMany(
-        {
-          providerRef: policy._id,
-          authorisationStatus: DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW,
-          authorisationSource: { $ne: AuthorisationSource.DISCOVERED_LINK },
-        },
-        { $set: { authorisationStatus: DomainAuthorisationStatus.AUTHORISED }, $unset: { lastError: 1 } },
-      );
-      released = result.modifiedCount;
-    }
+    // Sites held only because of this provider can proceed once it permits crawling (the policy change is the admin action).
+    const released = before.status !== policy.status ? await this.releaseHeldWebsites(policy._id) : 0;
     await this.audit.record({
       action: AuditAction.PROVIDER_POLICY_UPDATED,
       targetType: 'ProviderPolicy',
@@ -95,6 +81,12 @@ export class ProviderPoliciesService {
       after: { ...this.snapshot(policy), websitesReleased: released },
     });
     return policy;
+  }
+
+  // Releases every held website whose provider now permits crawling, e.g. after provider review is turned off.
+  async releaseHeldWebsites(providerRef?: Types.ObjectId): Promise<number> {
+    const { providerReviewRequired } = await this.settings.get();
+    return releaseHeldWebsites({ policies: this.policies, sites: this.sites }, !!providerReviewRequired, providerRef);
   }
 
   async remove(id: string) {

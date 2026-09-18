@@ -15,6 +15,7 @@ import { CRAWL_DEFAULTS } from '../scraper.constants';
 import { DomainRegistryService, ScrapedWebsiteLean } from './domain-registry.service';
 import { FetchDeniedError } from './errors';
 import { neverCrawlReason } from './never-crawl';
+import { providerPermitsCrawling } from './provider-permission';
 import { RobotsService } from './robots.service';
 import { registrableDomainOf, siteDomainOf } from './url';
 
@@ -126,11 +127,11 @@ export class CrawlGateService {
     }
 
     if (site.providerRef) {
-      const policy = await this.policies.findById(site.providerRef).lean();
-      if (policy?.status !== ProviderPolicyStatus.ALLOWED) {
+      const [policy, settings] = await Promise.all([this.policies.findById(site.providerRef).lean(), this.settings.get()]);
+      if (!providerPermitsCrawling(policy?.status, !!settings.providerReviewRequired)) {
         throw new CrawlDeniedError(
           'provider_not_allowed',
-          `${siteDomain} is hosted by ${policy?.name ?? 'an unknown provider'}, which is not allowed`,
+          `${siteDomain} is hosted by ${policy?.name ?? 'an unknown provider'}, which is ${policy?.status === ProviderPolicyStatus.BLOCKED ? 'blocked' : 'not allowed'}`,
         );
       }
     }

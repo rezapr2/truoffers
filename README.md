@@ -172,18 +172,19 @@ there's no way to enter a regular expression. When several adapters could handle
 is provider adapter, selector adapter, JSON-LD, then generic HTML.
 
 **Ordering platforms (Foodhub, Grub24).** Many takeaway websites are hosted by ordering platforms,
-and the robot recognises these two from the assets their pages use.
+and the robot recognises these two from the assets their pages use. It reads the offers from the
+data the page already carries for its own JavaScript, and never calls the platform's API.
 
-- **Until you decide:** such a website is held under *awaiting provider review*, and an *unknown*
-  policy appears under **Policies & opt-outs**. Nothing beyond robots.txt and the homepage is
-  fetched.
-- **Once you allow the platform** (with an agreement reference or terms-review notes), the robot reads
-  the offers from the data the page already carries for its own JavaScript. It never calls the
-  platform's API.
-  - **Foodhub:** the store's discounts.
-  - **Grub24:** the offers list, plus the deals in the menu's offer categories.
+- **Foodhub:** the store's discounts.
+- **Grub24:** the offers list, plus the deals in the menu's offer categories.
 - **Foodhub offers need one check before approving:** Foodhub's data doesn't say whether an offer is
   for collection or delivery, so those offers are flagged for you to set before approving.
+- **Platform policies:** each platform (or other provider) the robot finds is listed under
+  **Policies & opt-outs** as *unknown*, and its websites are crawled.
+  - *Block* a platform there to stop crawling all of its websites.
+  - To hold every platform's websites until you allow that platform (with an agreement reference or
+    terms-review notes), turn on **Review ordering platforms before crawling** in Settings.
+    Turning it off again releases the websites waiting for a platform that isn't blocked.
 
 **Keeping imports current.** Every completed run ends with a *recheck* step that applies what it
 found to the offers already published from that website:
@@ -280,6 +281,7 @@ The rendering tests need Chromium. The render worker image installs it; for loca
 
 After upgrading, run `npm run migrate:scraper` (or `migrate:scraper:prod` in the container) once.
 It is idempotent: it registers the built-in adapters and creates the indexes for every phase.
+Unless provider review is on, it also releases websites held for a provider that isn't blocked.
 
 ## Not yet built
 

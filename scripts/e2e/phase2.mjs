@@ -156,6 +156,8 @@ log('Re-ran the 3 websites; with no approved selector version they fall back to 
 const policies = await call('GET', '/admin/scraper/provider-policies', { token: admin });
 const ordernest = policies.find((p) => p.name.startsWith('OrderNest'));
 assert.equal(ordernest?.status, 'unknown');
+// Unknown providers are crawled unless provider review is on; turn it on to exercise the hold.
+await call('PATCH', '/admin/scraper/settings', { token: admin, body: { providerReviewRequired: true } });
 const [held] = await call('POST', '/admin/scraper/websites', { token: admin, body: { urls: [`${origin('luigis.ordernest.test')}/`] } });
 assert.equal(held.outcome, 'queued', JSON.stringify(held));
 // The host name identifies the provider before any page is fetched; the run stops after its first stage.
@@ -181,7 +183,9 @@ assert.deepEqual(luigisCandidates.items.map((c) => c.title).sort(), ['25% off pi
 const garlic = luigisCandidates.items.find((c) => c.promoCode === 'GARLIC30');
 const garlicDetail = (await call('GET', `/admin/scraper/candidates/${garlic._id}`, { token: admin })).candidate;
 assert.match(garlicDetail.evidence.title.method, /^provider:provider-ordernest@/);
-log('An OrderNest website was held until the provider was allowed, then its provider adapter took precedence over JSON-LD');
+const reviewOff = await call('PATCH', '/admin/scraper/settings', { token: admin, body: { providerReviewRequired: false } });
+assert.equal(reviewOff.providerReviewRequired, false);
+log('With provider review on, an OrderNest website was held until the provider was allowed, then its provider adapter took precedence over JSON-LD');
 
 // ---------- opt-out removes builder output ----------
 
@@ -212,6 +216,7 @@ const expected = [
   'adapter.rerun_requested',
   'websites.bulk_action',
   'provider_policy.updated',
+  'settings.updated',
   'opt_out.added',
 ];
 for (const action of expected) {

@@ -13,6 +13,7 @@
  *    for one business keep a key only on the oldest and are reported.
  * 4. Creates the scraper indexes (including Phase 2 fingerprints, authorised networks and the one-current-
  *    version-per-adapter index), registers the code adapters and the settings document.
+ * 5. Unless provider review is turned on in settings, releases websites held for a provider that isn't blocked.
  */
 import 'reflect-metadata';
 import mongoose, { Model, Schema, Types } from 'mongoose';
@@ -21,6 +22,7 @@ import { LIVE_OFFER_STATUSES, OfferStatus } from '../common/enums';
 import { OfferOrigin, OfferVerification } from '../common/scraper.enums';
 import { AdapterRegistry } from '../scraper/extraction/adapter-registry.service';
 import { fingerprintOfPublishedOffer } from '../scraper/lifecycle/offer-mapping';
+import { releaseHeldWebsites } from '../scraper/safety/provider-permission';
 import { AdminAuditLog, AdminAuditLogSchema } from '../schemas/admin-audit-log.schema';
 import { Business, BusinessSchema } from '../schemas/business.schema';
 import { DomainCrawlConfig, DomainCrawlConfigSchema } from '../schemas/domain-crawl-config.schema';
@@ -174,7 +176,11 @@ async function main() {
 
   await models.settings.updateOne({ key: SCRAPER_SETTINGS_KEY }, { $setOnInsert: { key: SCRAPER_SETTINGS_KEY } }, { upsert: true });
 
-  console.log('\nScraper migration complete:', JSON.stringify({ ...businesses, ...offers }));
+  // Websites held for an unknown provider before provider review became optional are released unless review is on.
+  const settings = await models.settings.findOne({ key: SCRAPER_SETTINGS_KEY }).lean<ScraperSettings>();
+  const websitesReleased = await releaseHeldWebsites({ policies: models.policy, sites: models.site }, !!settings?.providerReviewRequired);
+
+  console.log('\nScraper migration complete:', JSON.stringify({ ...businesses, ...offers, websitesReleased }));
   await mongoose.disconnect();
 }
 
