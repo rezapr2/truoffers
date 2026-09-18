@@ -73,7 +73,9 @@ describe('scraper API, end to end', () => {
     await connection.dropDatabase();
     await Promise.all(Object.values(connection.models).map((m) => m.syncIndexes()));
     await app.get<Redis>(REDIS_CLIENT).flushdb();
-    await app.init();
+    // Listen on IPv4 loopback: supertest connects to 127.0.0.1, which some VPNs and firewalls stop reaching
+    // through the IPv6 wildcard address a bare listen(0) uses.
+    await app.listen(0, '127.0.0.1');
     http = app.getHttpServer();
 
     jobs = app.get(getModelToken(ImportJob.name));

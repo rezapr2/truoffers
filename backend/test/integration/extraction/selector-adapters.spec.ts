@@ -178,7 +178,7 @@ describe('selector adapters, the suggestion engine and adapter precedence', () =
 
       const kings = await registry.select(contextFor('kings-grill.test'));
       expect(kings.adapter.id).toBe('saffron');
-      expect(kings.considered.map((c) => c.id)).toEqual(['saffron', 'provider-ordernest', 'generic-jsonld', 'generic-html']);
+      expect(kings.considered.map((c) => c.id)).toEqual(['saffron', 'provider-ordernest', 'provider-foodhub', 'provider-grub24', 'generic-jsonld', 'generic-html']);
 
       await h.models.adapters.updateOne({ key: 'saffron' }, { $set: { status: ScraperAdapterStatus.PAUSED } });
       registry.invalidate();

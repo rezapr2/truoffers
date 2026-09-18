@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import * as cheerio from 'cheerio';
 import { ProviderPolicyStatus } from '../../../src/common/scraper.enums';
 import { ProviderDetectionService } from '../../../src/scraper/safety/provider-detection.service';
@@ -125,6 +127,27 @@ describe('provider detection', () => {
     const match = await detector.detectFromPage($);
     expect(match).toMatchObject({ name: 'TakeawayCloud', status: ProviderPolicyStatus.UNKNOWN });
     expect(await models.policies.findOne({ name: 'TakeawayCloud' }).lean()).toMatchObject({ autoCreated: true });
+  });
+
+  it('recognises the ordering platforms it knows even before an admin has a policy for them (spec §2.3)', async () => {
+    const fixture = (host: string) => cheerio.load(readFileSync(path.join(__dirname, '..', '..', 'fixtures', 'sites', host, 'index.html'), 'utf8'));
+    // Foodhub's page has no footer or generator tag: its asset host is in a preconnect link and the JSON-LD.
+    const foodhub = await detector.detectFromPage(fixture('fh-sultan.test'));
+    expect(foodhub).toMatchObject({ name: 'Foodhub', status: ProviderPolicyStatus.UNKNOWN, signals: ['assets from assets.foodhub.com'] });
+    expect(await models.policies.findOne({ name: 'Foodhub' }).lean()).toMatchObject({ autoCreated: true, detection: { assetHosts: ['foodhub.com', 'foodhub.co.uk'] } });
+
+    const grub24 = await detector.detectFromPage(fixture('g24-caspian.test'));
+    expect(grub24).toMatchObject({ name: 'Grub24', status: ProviderPolicyStatus.UNKNOWN });
+
+    // Once recorded, the policy itself matches, whatever an admin has decided since.
+    await models.policies.updateOne({ name: 'Foodhub' }, { $set: { status: ProviderPolicyStatus.ALLOWED, basis: 'written_agreement', agreementReference: 'FH-1' } });
+    detector.invalidate();
+    expect(await detector.detectFromPage(fixture('fh-sultan.test'))).toMatchObject({ name: 'Foodhub', status: ProviderPolicyStatus.ALLOWED });
+    expect(await models.policies.countDocuments({ name: /foodhub/i })).toBe(1);
+
+    // An independent takeaway that merely links to a platform is not treated as hosted by it.
+    const independent = cheerio.load('<html><body><a href="https://foodhub.co.uk/rubery/sultan-grill">Order on Foodhub</a><footer>© Sultan Grill</footer></body></html>');
+    expect(await detector.detectFromPage(independent)).toBeNull();
   });
 
   it('ignores website builders and designers', async () => {

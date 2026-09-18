@@ -171,6 +171,20 @@ CSS selectors and named parsers only (text, money, percent, date, promo code, ph
 there's no way to enter a regular expression. When several adapters could handle a page, the order
 is provider adapter, selector adapter, JSON-LD, then generic HTML.
 
+**Ordering platforms (Foodhub, Grub24).** Many takeaway websites are hosted by ordering platforms,
+and the robot recognises these two from the assets their pages use.
+
+- **Until you decide:** such a website is held under *awaiting provider review*, and an *unknown*
+  policy appears under **Policies & opt-outs**. Nothing beyond robots.txt and the homepage is
+  fetched.
+- **Once you allow the platform** (with an agreement reference or terms-review notes), the robot reads
+  the offers from the data the page already carries for its own JavaScript. It never calls the
+  platform's API.
+  - **Foodhub:** the store's discounts.
+  - **Grub24:** the offers list, plus the deals in the menu's offer categories.
+- **Foodhub offers need one check before approving:** Foodhub's data doesn't say whether an offer is
+  for collection or delivery, so those offers are flagged for you to set before approving.
+
 **Keeping imports current.** Every completed run ends with a *recheck* step that applies what it
 found to the offers already published from that website:
 

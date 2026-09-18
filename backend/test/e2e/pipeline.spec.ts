@@ -30,7 +30,7 @@ import { ScrapedWebsite } from '../../src/schemas/scraped-website.schema';
 import { EVIDENCED_OFFER_FIELDS } from '../../src/scraper/extraction/adapter.types';
 import { FixtureServer, startFixtureServer, testResolver } from '../helpers/fixture-server';
 
-const SITES = ['pizza-palace.test', 'curry-house.test', 'kebab-king.test', 'ordernest-bella.test', 'pizza-palace-friends.test'];
+const SITES = ['pizza-palace.test', 'curry-house.test', 'kebab-king.test', 'ordernest-bella.test', 'pizza-palace-friends.test', 'fh-sultan.test', 'g24-caspian.test'];
 const STAGE_ORDER = [
   ImportJobType.ANALYSE_SEED_WEBSITE,
   ImportJobType.DISCOVER_OFFER_PAGES,
@@ -267,6 +267,33 @@ describe('scraping pipeline, end to end', () => {
     expect((await sites.findById(site._id).lean())?.authorisationStatus).toBe(DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW);
     expect(server.requestsFor('ordernest-bella.test').map((r) => r.path)).toEqual(['/robots.txt', '/']);
     expect(await candidates.countDocuments()).toBe(0);
+  });
+
+  it('holds a Foodhub or Grub24 website until the platform is allowed, then reads its offers from the page data', async () => {
+    for (const [host, platform, adapterId, offers] of [
+      ['fh-sultan.test', 'Foodhub', 'provider-foodhub', 2],
+      ['g24-caspian.test', 'Grub24', 'provider-grub24', 4],
+    ] as const) {
+      const site = await authorise(host);
+      const held = await waitForRun((await runs.startRun(site)).job.runId, finished);
+      expect(held).toHaveLength(1);
+      expect(held[0].logs.map((l) => l.message).join(' ')).toMatch(new RegExp(`${platform}.*held for provider review`));
+      expect((await sites.findById(site._id).lean())?.authorisationStatus).toBe(DomainAuthorisationStatus.AWAITING_PROVIDER_REVIEW);
+      // Recognised from the homepage alone: nothing beyond robots.txt and that page was requested.
+      expect(server.requestsFor(host).map((r) => r.path)).toEqual(['/robots.txt', '/']);
+      const policy = await policies.findOne({ name: platform }).lean();
+      expect(policy).toMatchObject({ status: ProviderPolicyStatus.UNKNOWN, autoCreated: true });
+
+      // An admin records a basis and allows the platform (what PATCH /provider-policies/:id does).
+      await policies.updateOne({ _id: policy!._id }, { $set: { status: ProviderPolicyStatus.ALLOWED, basis: 'written_agreement', agreementReference: `${platform}-2026` } });
+      await sites.updateOne({ _id: site._id }, { $set: { authorisationStatus: DomainAuthorisationStatus.AUTHORISED } });
+      const imported = await waitForRun((await runs.startRun(site)).job.runId, finished);
+      expect(imported.map((s) => s.type)).toEqual(STAGE_ORDER);
+      expect((await sites.findById(site._id).lean())?.adapterId).toBe(adapterId);
+      const found = await candidates.find({ domain: host }).lean();
+      expect(found).toHaveLength(offers);
+      expect(found.every((c) => c.adapterId === adapterId && c.evidence.title.method.startsWith(`provider:${adapterId}@`))).toBe(true);
+    }
   });
 
   it('never contacts a domain that is pending authorisation', async () => {

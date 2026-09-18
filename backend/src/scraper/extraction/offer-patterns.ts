@@ -68,9 +68,15 @@ export function findWasNow(text: string): TextMatch<{ original: number; promotio
   );
 }
 
+// A word describing the item between "buy one" and "get one", including sizes: 16inch, 12", x-large.
+const ITEM_WORD = String.raw`[a-z0-9][\w"'-]*`;
+
 export function findBogof(text: string): TextMatch<true> | null {
   return first(
-    /\b(?:buy\s+(?:one|1)\s+get\s+(?:one|1)\s+free|bogof|bogo|b1g1|two\s+for\s+one|2\s?for\s?1|2\s?-\s?4\s?-\s?1|241(?=\s+(?:deal|offer|special|on|pizzas?|kebabs?|burgers?|monday|tuesday|wednesday|thursday|friday|saturday|sunday)))\b/i,
+    new RegExp(
+      String.raw`\b(?:buy\s+(?:one|1)\s+(?:${ITEM_WORD}\s+){0,3}?get\s+(?:one|1)\s+(?:${ITEM_WORD}\s+){0,3}?free|bogof|bogo|b1g1|two\s+for\s+one|2\s?for\s?1|2\s?-\s?4\s?-\s?1|241(?=\s+(?:deal|offer|special|on|pizzas?|kebabs?|burgers?|monday|tuesday|wednesday|thursday|friday|saturday|sunday)))\b`,
+      'i',
+    ),
     text,
     () => true as const,
   );
@@ -93,7 +99,7 @@ export function findMultiBuy(text: string): TextMatch<MultiBuy> | null {
   if (halfPrice) return halfPrice;
 
   const buyGetFree = first(
-    new RegExp(String.raw`\bbuy\s+${COUNT}\s+(?:[a-z]+\s+){0,3}?get\s+(a|an|one|two|three|\d)\s+(?:[a-z]+\s+){0,2}?free\b`, 'i'),
+    new RegExp(String.raw`\bbuy\s+${COUNT}\s+(?:${ITEM_WORD}\s+){0,3}?get\s+(a|an|one|two|three|\d)\s+(?:${ITEM_WORD}\s+){0,3}?free\b`, 'i'),
     text,
     (m) => {
       const buy = parseCount(m[1]);
@@ -163,7 +169,7 @@ export function findMealDeal(text: string): TextMatch<{ name: string; price?: nu
 export function findPricePoint(text: string): TextMatch<{ product: string; price: number }> | null {
   return first(
     new RegExp(
-      String.raw`\b(?:any|all|every)\s+((?:(?:large|medium|small|regular|\d{1,2}(?:"|\s?inch))\s+)?[a-z][a-z' ]{2,30}?)\s+(?:(?:for\s+)?(?:just|only|now|at)\s+)?${MONEY}(?:\s+each)?`,
+      String.raw`\b(?:any|all|every)\s+((?:(?:large|medium|small|regular|x[\s-]?large|extra\s+large|\d{1,2}(?:"|\s?inch))\s+){0,2}[a-z][a-z' ]{2,30}?)\s+(?:(?:for\s+)?(?:just|only|now|at)\s+)?${MONEY}(?:\s+each)?`,
       'i',
     ),
     text,

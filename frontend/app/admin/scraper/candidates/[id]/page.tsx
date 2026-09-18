@@ -32,6 +32,13 @@ const LABELS: Record<OfferField, string> = {
   endDate: 'Ends',
 };
 
+// Flags a reviewer has to act on before approving, with what to do.
+const FLAG_ACTIONS: Record<string, string> = {
+  order_type_unconfirmed:
+    'The platform marks this offer for one order type but doesn’t say whether that is collection or delivery. Check the website and set Collection and Delivery above before approving.',
+  weekdays_unconfirmed: 'The offer applies on some days only, but the page data doesn’t say which. Check the website and set the days above.',
+};
+
 const MONEY: OfferField[] = ['discountAmount', 'originalPrice', 'promotionalPrice', 'minimumOrder', 'requiredSpend'];
 const NUMBER: OfferField[] = ['discountPercentage', ...MONEY];
 const TRI_STATE: OfferField[] = ['collectionEligible', 'deliveryEligible', 'newCustomersOnly'];
@@ -278,6 +285,9 @@ export default function CandidateDetailPage({ params }: { params: Promise<{ id: 
                   {candidate.flags.map((f) => <StatusPill key={f} status="delayed" label={f.replace(/_/g, ' ')} />)}
                 </div>
               )}
+              {candidate.flags.filter((f) => FLAG_ACTIONS[f]).map((f) => (
+                <p key={f} className="mt-3 text-[13px] font-bold text-[#9a6210] bg-star/15 rounded-xl px-4 py-3">{FLAG_ACTIONS[f]}</p>
+              ))}
             </Card>
 
             <Card>

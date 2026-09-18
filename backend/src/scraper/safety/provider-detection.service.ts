@@ -6,6 +6,8 @@ import { Model, Types } from 'mongoose';
 import { ProviderPolicyStatus } from '../../common/scraper.enums';
 import { ProviderPolicy, ProviderPolicyDocument } from '../../schemas/provider-policy.schema';
 import { CNAME_RESOLVER } from '../scraper.tokens';
+import { referencedHosts } from '../extraction/embedded-data';
+import { KNOWN_ORDERING_PLATFORMS, KnownPlatform } from './known-platforms';
 import { hostMatchesDomain } from './url';
 
 export type CnameResolver = (hostname: string) => Promise<string[]>;
@@ -105,7 +107,9 @@ export class ProviderDetectionService {
       .get();
     const footerText = this.footerText($);
     const footerLower = footerText.toLowerCase();
-    const assetHosts = this.assetHosts($);
+    // Asset tags, plus URLs in structured data and embedded page data: platforms that build the page in the
+    // browser leave little else in the HTML.
+    const assetHosts = referencedHosts($);
 
     for (const policy of policies) {
       const signals: string[] = [];
@@ -123,10 +127,38 @@ export class ProviderDetectionService {
       if (found) return found;
     }
 
+    // A platform the robot knows, with no policy recorded yet: held until an admin decides (spec §2.3).
+    for (const platform of KNOWN_ORDERING_PLATFORMS) {
+      const host = assetHosts.find((h) => platform.assetHosts.some((known) => hostMatchesDomain(h, known)));
+      if (!host) continue;
+      const policy = await this.recordKnownPlatform(platform);
+      return this.match(policy, [`assets from ${host}`]);
+    }
+
     const name = this.orderingAttribution(footerText);
     if (!name) return null;
     const policy = await this.recordUnknownProvider(name);
     return this.match(policy, [`footer attribution "${name}"`]);
+  }
+
+  private async recordKnownPlatform(platform: KnownPlatform): Promise<PolicyLean> {
+    const existing = await this.model.findOne({ name: new RegExp(`^${platform.name}$`, 'i') }).lean<PolicyLean>();
+    if (existing) return existing;
+    this.logger.log(`Recording ordering platform "${platform.name}" for admin review`);
+    const created = await this.model.findOneAndUpdate(
+      { name: platform.name },
+      {
+        $setOnInsert: {
+          name: platform.name,
+          status: ProviderPolicyStatus.UNKNOWN,
+          autoCreated: true,
+          detection: { assetHosts: platform.assetHosts, footerPatterns: [platform.name], hostSuffixes: [], cnameSuffixes: [], generatorPatterns: [] },
+        },
+      },
+      { upsert: true, new: true },
+    );
+    this.invalidate();
+    return created.toObject() as PolicyLean;
   }
 
   invalidate() {
@@ -170,20 +202,6 @@ export class ProviderDetectionService {
     const footer = $('footer, [class*="footer" i], [id*="footer" i]').text();
     const text = footer || $('body').text().slice(-2000);
     return text.replace(/\s+/g, ' ').trim();
-  }
-
-  private assetHosts($: CheerioAPI): string[] {
-    const hosts = new Set<string>();
-    $('script[src], link[href], img[src]').each((_, el) => {
-      const raw = $(el).attr('src') ?? $(el).attr('href');
-      if (!raw || !/^(https?:)?\/\//i.test(raw)) return;
-      try {
-        hosts.add(new URL(raw, 'https://placeholder.invalid').hostname.toLowerCase());
-      } catch {
-        // ignore malformed asset URLs
-      }
-    });
-    return [...hosts];
   }
 
   private orderingAttribution(text: string): string | null {

@@ -8,6 +8,8 @@ import type { AdapterMatchResult, WebsiteContext } from './adapter.types';
 import { BuiltinAdapter } from './adapters/builtin-adapter';
 import { GenericHtmlAdapter } from './adapters/generic-html.adapter';
 import { JsonLdAdapter } from './adapters/jsonld.adapter';
+import { FoodhubAdapter } from './adapters/foodhub.adapter';
+import { Grub24Adapter } from './adapters/grub24.adapter';
 import { OrderNestAdapter } from './adapters/ordernest.adapter';
 import { SelectorAdapter } from './adapters/selector-adapter';
 import { parseSelectorConfig } from './selector-config';
@@ -30,6 +32,8 @@ type FingerprintLean = WebsiteFingerprint & { _id: Types.ObjectId };
 
 const CODE_ADAPTER_TYPES: Record<string, { type: ScraperAdapterType; provider?: string }> = {
   'provider-ordernest': { type: ScraperAdapterType.PROVIDER, provider: 'OrderNest' },
+  'provider-foodhub': { type: ScraperAdapterType.PROVIDER, provider: 'Foodhub' },
+  'provider-grub24': { type: ScraperAdapterType.PROVIDER, provider: 'Grub24' },
   'generic-jsonld': { type: ScraperAdapterType.BUILTIN_JSONLD },
   'generic-html': { type: ScraperAdapterType.BUILTIN_HTML },
 };
@@ -44,7 +48,13 @@ const SELECTOR_CACHE_MS = 15_000;
 @Injectable()
 export class AdapterRegistry implements OnModuleInit {
   private readonly logger = new Logger(AdapterRegistry.name);
-  private readonly codeAdapters: BuiltinAdapter[] = [new OrderNestAdapter(), new JsonLdAdapter(), new GenericHtmlAdapter()];
+  private readonly codeAdapters: BuiltinAdapter[] = [
+    new OrderNestAdapter(),
+    new FoodhubAdapter(),
+    new Grub24Adapter(),
+    new JsonLdAdapter(),
+    new GenericHtmlAdapter(),
+  ];
   private selectorCache?: { at: number; stamp: string; adapters: SelectorAdapter[] };
 
   constructor(
