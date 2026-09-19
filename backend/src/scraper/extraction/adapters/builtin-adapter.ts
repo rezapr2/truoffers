@@ -89,6 +89,9 @@ export abstract class BuiltinAdapter implements TakeawayWebsiteAdapter {
   // The platform loads its menu, and the deals in it, only in the browser: worth a render even when the
   // static HTML already had some offers.
   readonly menuNeedsRendering: boolean = false;
+  // The path of the data the platform's app loads and this adapter reads (matched against each JSON response's
+  // pathname). A render waits for it to arrive, up to a limit, instead of giving up at the ordinary settle time.
+  readonly renderExpects?: RegExp;
 
   abstract canHandle(ctx: WebsiteContext): Promise<AdapterMatchResult>;
   abstract extractFromPage(page: LoadedPage, roles: PageRole[], ctx: Pick<WebsiteContext, 'checkedAt'>): PageExtraction;

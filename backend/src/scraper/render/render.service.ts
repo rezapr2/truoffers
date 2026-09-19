@@ -30,6 +30,8 @@ export interface RenderRequest {
   assertHostAllowed: ProxyChecks['assertAllowed'];
   /** The crawl gate for a full URL the browser is about to request: robots.txt, blocked paths, authorisation. */
   assertUrlAllowed(url: URL, navigation: boolean): Promise<void>;
+  /** The data an app is expected to load (matched against the pathname of its JSON responses): wait for it. */
+  expectData?: RegExp;
 }
 
 export interface RenderResult {
@@ -193,7 +195,14 @@ export class RenderService implements OnApplicationShutdown {
         return null;
       }
       // Let client-side rendering put the content in: until the page stops loading, or the settle time runs out.
-      await activity.settled();
+      // An app whose data is expected gets longer, and a plain "still loading" is never mistaken for "no offers".
+      const expected = request.expectData;
+      const wait = await activity.settled(expected ? () => data.matched(expected) : undefined);
+      const seconds = Math.round(wait.waitedMs / 1000);
+      if (wait.outcome === 'timeout') request.log(`${url} was still loading after ${seconds}s, so it may not have finished rendering`);
+      if (expected && wait.outcome !== 'settled') {
+        request.log(`The page's app never loaded the data this platform normally loads (${expected.source}) within ${seconds}s. Its offers can't be read this time: the site may be slow, or may be refusing the robot.`);
+      }
       const refused = response.headers()[PROXY_BLOCKED_HEADER];
       if (refused) {
         request.log(`Did not render ${url}: ${decodeURIComponent(refused)}`);
@@ -209,7 +218,7 @@ export class RenderService implements OnApplicationShutdown {
       }
       const finalUrl = page.url();
       const dataResponses = await data.collected();
-      request.log(`Rendered ${url}`, { status, finalUrl, bytes: html.length, dataResponses: dataResponses.map((d) => new URL(d.url).pathname) });
+      request.log(`Rendered ${url}`, { status, finalUrl, bytes: html.length, waitedMs: wait.waitedMs, outcome: wait.outcome, dataResponses: dataResponses.map((d) => new URL(d.url).pathname) });
       return {
         url,
         finalUrl,
@@ -241,12 +250,20 @@ export class RenderService implements OnApplicationShutdown {
     page.on('requestfinished', ended);
     page.on('requestfailed', ended);
     return {
-      settled: async () => {
-        const deadline = Date.now() + RENDER.settleMs;
-        while (Date.now() < deadline && !page.isClosed()) {
-          if (inFlight === 0 && Date.now() - lastActivity >= RENDER.quietMs) return;
+      // Resolves when the page has been quiet long enough (and, if `dataArrived` is given, the data it expected has
+      // arrived), when the page goes quiet without that data, or when the time allowed runs out.
+      settled: async (dataArrived?: () => boolean): Promise<{ waitedMs: number; outcome: 'settled' | 'no_data' | 'timeout' | 'closed' }> => {
+        const started = Date.now();
+        const limit = dataArrived ? RENDER.patientMs : RENDER.settleMs;
+        while (!page.isClosed()) {
+          const now = Date.now();
+          const quietFor = inFlight === 0 ? now - lastActivity : 0;
+          if (quietFor >= RENDER.quietMs && (!dataArrived || dataArrived())) return { waitedMs: now - started, outcome: 'settled' };
+          if (dataArrived && quietFor >= RENDER.giveUpQuietMs) return { waitedMs: now - started, outcome: 'no_data' };
+          if (now - started >= limit) return { waitedMs: now - started, outcome: 'timeout' };
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
+        return { waitedMs: Date.now() - started, outcome: 'closed' };
       },
     };
   }
@@ -284,6 +301,8 @@ export class RenderService implements OnApplicationShutdown {
         await Promise.allSettled([...pending]);
         return responses;
       },
+      // Whether a response for this path has been read yet.
+      matched: (pattern: RegExp) => responses.some((r) => pattern.test(new URL(r.url).pathname)),
     };
   }
 

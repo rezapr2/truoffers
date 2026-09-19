@@ -541,6 +541,7 @@ export class PipelineService {
         siteDomain: site.domain,
         urls: targets.map((p) => p.url),
         signal: ctx.signal,
+        expectData: adapter.renderExpects,
         log: (message, data) => void ctx.log(message, data),
         // Host-level, for everything the browser connects to, including redirect hops it follows itself.
         assertHostAllowed: async (url) => {

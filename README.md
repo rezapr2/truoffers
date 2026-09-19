@@ -238,8 +238,10 @@ when the page already had some offers. Rendering happens in a separate **render 
 - The website's own URLs also go through robots.txt, blocked paths and the rate limit.
 - Images, media, fonts and analytics hosts are never loaded.
 - A bot challenge, CAPTCHA or login page stops the render, and the website is left alone for a week.
-- A page is read once nothing has loaded for 3 seconds, or after 20 seconds at most, so an app that
-  fetches its data late is still seen.
+- A page is read once nothing has loaded for 3 seconds, or after 20 seconds at most. An ordering
+  platform's app (Foodhub) can spend that long just loading its scripts, so for it the render waits
+  for the store data itself, up to 75 seconds, and gives up early if the page goes quiet for 10
+  seconds without it. The run log says which happened: a page still loading, or data that never came.
 - The adapters also get the JSON the page's own scripts loaded from the website (an app's store or
   menu, say). Only requests the page made itself and that passed the checks above count; nothing
   extra is requested, and that data is read in memory and never stored.

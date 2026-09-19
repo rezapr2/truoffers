@@ -98,6 +98,8 @@ export class FoodhubAdapter extends GenericHtmlAdapter {
   readonly version: string = '1.1.0';
   readonly priority: number = PROVIDER_ADAPTER_PRIORITY;
   readonly menuNeedsRendering: boolean = true;
+  // The store (with its discounts) is the first thing the app asks for once its script bundles have loaded.
+  readonly renderExpects: RegExp = /\/api\/consumer\/store$/;
   private readonly structured = new JsonLdAdapter();
 
   static recognises(page: LoadedPage): string[] {

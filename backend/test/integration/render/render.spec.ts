@@ -1,3 +1,4 @@
+import { RENDER } from '../../../src/scraper/render/render.constants';
 import { BlockedBySiteError, isTrackerHost, RenderService } from '../../../src/scraper/render/render.service';
 import { processTreeRssMb } from '../../../src/scraper/render/process-memory';
 import { fixtureNetworkPolicy, STRICT_NETWORK_POLICY } from '../../../src/scraper/safety/ssrf-policy';
@@ -80,6 +81,68 @@ describe('Chromium rendering (spec §3/§5)', () => {
     expect(result.pages[0].dataResponses).toEqual([{ url: server.url(HOST, '/api/store'), json: { name: 'Sushi Stop', deals: ['Sushi Sunday'] } }]);
     expect(server.requestsFor(HOST).map((r) => r.path)).not.toContain('/api/private');
   }, 60_000);
+
+  describe('an app that spends a while loading before it asks for its data', () => {
+    const original = { settleMs: RENDER.settleMs, patientMs: RENDER.patientMs, quietMs: RENDER.quietMs, giveUpQuietMs: RENDER.giveUpQuietMs };
+    const limits = RENDER as unknown as Record<string, number>;
+    beforeEach(() => Object.assign(limits, { settleMs: 2_000, patientMs: 20_000, quietMs: 800, giveUpQuietMs: 3_000 }));
+    afterEach(() => Object.assign(limits, original));
+
+    const json = (body: unknown) => (_req: unknown, res: import('node:http').ServerResponse) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+    // Twelve small requests half a second apart (its script bundles), then, unless told otherwise, the store.
+    const app = (asksForStore: boolean) => (_req: unknown, res: import('node:http').ServerResponse) => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(
+        page(`<div id="root">Loading</div><script>
+          let n = 0;
+          const tick = () => {
+            fetch('/api/chunk?' + n).catch(() => null);
+            if (++n < 12) return setTimeout(tick, 500);
+            ${asksForStore ? "fetch('/api/consumer/store').then((r) => r.json()).then((s) => { document.getElementById('root').textContent = s.name; });" : ''}
+          };
+          tick();
+        </script>`),
+      );
+    };
+    const STORE = /\/api\/consumer\/store$/;
+
+    it('stops waiting at the ordinary settle time when it is not told what to wait for', async () => {
+      server.route(HOST, '/app', app(true));
+      server.route(HOST, '/api/chunk', json({ chunk: true }));
+      server.route(HOST, '/api/consumer/store', json({ name: 'Marco Pizza' }));
+      const logs: string[] = [];
+      const result = await renderer.render(request('/app', { log: (m) => void logs.push(m) }));
+      expect(result.pages[0].$('#root').text()).toBe('Loading');
+      expect(result.pages[0].dataResponses?.some((d) => d.url.endsWith('/api/consumer/store'))).toBe(false);
+      expect(logs.join(' ')).toMatch(/was still loading after \d+s/);
+    }, 60_000);
+
+    it('waits for the data an adapter expects, however long the app spends loading first', async () => {
+      server.route(HOST, '/app', app(true));
+      server.route(HOST, '/api/chunk', json({ chunk: true }));
+      server.route(HOST, '/api/consumer/store', json({ name: 'Marco Pizza' }));
+      const logs: string[] = [];
+      const result = await renderer.render(request('/app', { expectData: STORE, log: (m) => void logs.push(m) }));
+      expect(result.pages[0].$('#root').text()).toBe('Marco Pizza');
+      expect(result.pages[0].dataResponses).toEqual(expect.arrayContaining([{ url: server.url(HOST, '/api/consumer/store'), json: { name: 'Marco Pizza' } }]));
+      expect(logs.join(' ')).not.toMatch(/never loaded|still loading/);
+    }, 60_000);
+
+    it('says so, and gives up once the page goes quiet, when the expected data never comes', async () => {
+      server.route(HOST, '/app', app(false));
+      server.route(HOST, '/api/chunk', json({ chunk: true }));
+      const logs: string[] = [];
+      const started = Date.now();
+      const result = await renderer.render(request('/app', { expectData: STORE, log: (m) => void logs.push(m) }));
+      expect(result.pages).toHaveLength(1);
+      expect(logs.join(' ')).toMatch(/never loaded the data this platform normally loads/);
+      // It gave up when the page went quiet, well before the 20 seconds it was allowed.
+      expect(Date.now() - started).toBeLessThan(15_000);
+    }, 60_000);
+  });
 
   it('never requests images, media or fonts, and blocks analytics hosts', async () => {
     server.route(HOST, '/with-assets', (_req, res) => {

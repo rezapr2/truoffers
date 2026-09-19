@@ -8,6 +8,11 @@ export const RENDER = {
   // A page counts as loaded once nothing has been in flight for this long: apps often start fetching their
   // data a moment after the page itself goes quiet.
   quietMs: 3_000,
+  // A platform app can spend 20 seconds or more loading its script bundles before it asks for its data. When the
+  // adapter names that data (BuiltinAdapter.renderExpects), the page gets this long to load it...
+  patientMs: 75_000,
+  // ...but if the page goes quiet for this long without it, the data isn't coming.
+  giveUpQuietMs: 10_000,
   // JSON the page's own scripts load from the website (a client-side app's store and menu), kept for the
   // adapters in memory only.
   maxDataResponses: 40,

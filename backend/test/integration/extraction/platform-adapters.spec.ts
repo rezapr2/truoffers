@@ -65,6 +65,14 @@ describe('ordering platform adapters (spec §2.3/§5)', () => {
       }
     });
 
+    it('tells a render which data to wait for: the store, not the menu or other requests', () => {
+      const expects = adapter.renderExpects!;
+      expect(expects.test('/api/consumer/store')).toBe(true);
+      expect(expects.test('/api/consumer/store/9002/menu/foodhub/friday.json')).toBe(false);
+      expect(expects.test('/api/consumer/offer/banner')).toBe(false);
+      expect(new Grub24Adapter().renderExpects).toBeUndefined();
+    });
+
     it('reads the discounts whatever the store’s offer_status says', () => {
       // A live Foodhub site showed its discount to visitors while its data said INACTIVE.
       const { offers } = adapter.extractFromPage(pageOf('fh-app.test'), ['home'], { checkedAt });
