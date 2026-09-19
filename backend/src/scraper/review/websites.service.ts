@@ -252,7 +252,7 @@ export class WebsitesService {
         authorisationNote: note,
       });
     } else {
-      site.set({ authorisationStatus: DomainAuthorisationStatus.OPTED_OUT, authorisationNote: note ?? 'Authorisation denied' });
+      site.set({ authorisationStatus: DomainAuthorisationStatus.OPTED_OUT, authorisationNote: note ?? 'Authorisation denied', robotsOverride: undefined });
     }
     await site.save();
     await this.audit.record({
@@ -264,6 +264,47 @@ export class WebsitesService {
       note,
     });
     return site;
+  }
+
+  /**
+   * Reads the website despite its robots.txt, on the owner's written consent (the note says who agreed, how and
+   * when). Never set in bulk, by an import or by discovery; an opt-out or a denial clears it, and the crawl gate
+   * still applies everything else, including opt-outs, the never-crawl list and the rate limit.
+   */
+  async setRobotsOverride(id: string, note: string, userId: string) {
+    const site = await this.find(id);
+    if (site.authorisationStatus === DomainAuthorisationStatus.OPTED_OUT || (await this.registry.activeOptOutFor(site.domain))) {
+      throw new BadRequestException(`${site.domain} has opted out, so it can't be read`);
+    }
+    const before = site.robotsOverride ? { note: site.robotsOverride.note } : undefined;
+    site.set('robotsOverride', { note: note.trim(), recordedBy: new Types.ObjectId(userId), recordedAt: new Date() });
+    await site.save();
+    await this.audit.record({
+      action: AuditAction.WEBSITE_ROBOTS_OVERRIDE_SET,
+      targetType: 'ScrapedWebsite',
+      targetId: site._id,
+      before,
+      after: { domain: site.domain, note: note.trim() },
+      note: note.trim(),
+    });
+    return site.robotsOverride;
+  }
+
+  async clearRobotsOverride(id: string, userId: string) {
+    const site = await this.find(id);
+    if (!site.robotsOverride) throw new BadRequestException(`${site.domain} has no robots.txt exception to remove`);
+    const before = { note: site.robotsOverride.note };
+    site.set('robotsOverride', undefined);
+    await site.save();
+    await this.audit.record({
+      action: AuditAction.WEBSITE_ROBOTS_OVERRIDE_REMOVED,
+      targetType: 'ScrapedWebsite',
+      targetId: site._id,
+      before,
+      after: { domain: site.domain },
+      note: `Removed by ${userId}`,
+    });
+    return { removed: true };
   }
 
   async setPaused(id: string, paused: boolean, userId: string, reason?: string) {

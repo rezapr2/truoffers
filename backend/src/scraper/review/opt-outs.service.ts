@@ -74,7 +74,7 @@ export class OptOutsService {
     if (siteIds.length) {
       await this.sites.updateMany(
         { _id: { $in: siteIds } },
-        { $set: { authorisationStatus: DomainAuthorisationStatus.OPTED_OUT }, $unset: OPTED_OUT_MATCH_FIELDS },
+        { $set: { authorisationStatus: DomainAuthorisationStatus.OPTED_OUT }, $unset: { ...OPTED_OUT_MATCH_FIELDS, robotsOverride: 1 } },
       );
       const active = await this.jobs.distinct('runId', { scrapedWebsiteRef: { $in: siteIds }, status: { $in: ACTIVE_IMPORT_JOB_STATUSES } });
       for (const runId of active) await this.runs.cancelRun(String(runId));

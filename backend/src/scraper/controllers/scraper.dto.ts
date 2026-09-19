@@ -81,6 +81,11 @@ export class PauseDto {
   @IsOptional() @IsString() @MaxLength(300) reason?: string;
 }
 
+export class RobotsOverrideDto {
+  // Who at the business agreed, how (email, WhatsApp, call) and when: what an auditor would need to see.
+  @IsString() @MinLength(10) @MaxLength(500) note: string;
+}
+
 export class CrawlConfigDto {
   @IsOptional() @IsInt() @Min(250) @Max(60_000) rateLimitMs?: number;
   @IsOptional() @IsInt() @Min(1) @Max(1000) pageCap?: number;

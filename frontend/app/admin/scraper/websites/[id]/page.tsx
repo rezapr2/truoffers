@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { use, useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import type { WebsiteDetail } from '@/lib/scraper-types';
 import BranchDecision from '../../_components/BranchDecision';
 import { useOverview } from '../../_components/overview';
@@ -14,6 +15,8 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
   const [data, setData] = useState<WebsiteDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [config, setConfig] = useState({ rateLimitMs: '', pageCap: '', recheckIntervalHours: '' });
+  const [consent, setConsent] = useState('');
+  const { user } = useAuth();
   const { busy, error, run } = useAction();
 
   const load = useCallback(() => {
@@ -62,7 +65,10 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
               <div>Source: {humanise(site.authorisationSource)}{site.discoveredFrom ? ` (from ${site.discoveredFrom})` : ''}</div>
               <div>Provider: {provider ? `${provider.name} · ${provider.status}` : 'none detected'}</div>
               <div>Adapter: {site.adapterId ? `${site.adapterId} ${site.adapterVersion}` : '—'}</div>
-              <div>robots.txt: {site.robots?.status ?? '—'}{site.robots?.crawlDelaySec ? ` · crawl delay ${site.robots.crawlDelaySec}s` : ''}</div>
+              <div>
+                robots.txt: {site.robots?.status ?? '—'}{site.robots?.crawlDelaySec ? ` · crawl delay ${site.robots.crawlDelaySec}s` : ''}
+                {site.robotsOverride && ' · not applied (owner’s consent on record)'}
+              </div>
               <div>Last checked: {formatDate(site.lastSuccessfulCheckAt)}</div>
               <div>Failures: {site.failureCount}{site.lastError ? ` · ${site.lastError}` : ''}</div>
               <div>Next check: {formatDate(site.nextCheckAt)}</div>
@@ -103,6 +109,61 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="mt-4"><ErrorNote error={error} /></div>
       </Card>
+
+      {(site.robotsOverride || (user?.role === 'super_admin' && site.authorisationStatus === 'authorised')) && (
+        <Card>
+          <SectionTitle>Read despite robots.txt</SectionTitle>
+          {site.robotsOverride ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-[13px] font-semibold text-ink-soft">
+                robots.txt is not applied to this website. Every other check still is: opt-outs, the never-crawl list, pauses, blocked paths
+                and the rate limit. An opt-out or a removal request ends this at once.
+              </p>
+              <blockquote className="border-l-4 border-line pl-3 text-sm font-semibold">
+                {site.robotsOverride.note}
+                <span className="block text-[12px] text-muted mt-1">Recorded {formatDate(site.robotsOverride.recordedAt)}</span>
+              </blockquote>
+              {user?.role === 'super_admin' && (
+                <div>
+                  <button disabled={busy} className={btn.outline} onClick={() => act(`/admin/scraper/websites/${id}/robots-override`, 'DELETE')}>
+                    Apply robots.txt again
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!confirm(`Read ${site.domain} even though its robots.txt asks bots to stay away? Only do this with the owner’s written consent.`)) return;
+                void act(`/admin/scraper/websites/${id}/robots-override`, 'PUT', { note: consent }).then(() => setConsent(''));
+              }}
+              className="flex flex-col gap-3"
+            >
+              <p className="text-[13px] font-semibold text-ink-soft">
+                Only with the owner’s written consent to list their offers, for example when their platform’s robots.txt blocks every bot by mistake.
+                It applies to this website alone, is recorded in the audit log, and doesn’t change the rate limit or any other check.
+              </p>
+              <label className="flex flex-col gap-1">
+                <span className="text-[12px] font-extrabold">Who agreed, how and when *</span>
+                <textarea
+                  required
+                  minLength={10}
+                  maxLength={500}
+                  rows={2}
+                  value={consent}
+                  onChange={(e) => setConsent(e.target.value)}
+                  placeholder="e.g. Owner replied “yes” to our WhatsApp message on 19 Sep 2026"
+                  className={inputClass}
+                />
+              </label>
+              <div>
+                <button disabled={busy || consent.trim().length < 10} className={btn.dark}>Read despite robots.txt</button>
+              </div>
+            </form>
+          )}
+        </Card>
+      )}
 
       <Card>
         <SectionTitle>Crawl limits for this domain</SectionTitle>

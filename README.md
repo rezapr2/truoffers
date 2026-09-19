@@ -185,6 +185,11 @@ data the page already carries for its own JavaScript, and never calls the platfo
 - **Grub24:** the offers list, plus the deals in the menu's offer categories.
 - **Foodhub offers need one check before approving:** Foodhub's data doesn't say whether an offer is
   for collection or delivery, so those offers are flagged for you to set before approving.
+- **If a platform's robots.txt blocks every bot** (as happened to one Foodhub site), the robot leaves
+  it alone. When the *owner* tells you in writing that they want their offers listed anyway, a super
+  admin can record that on the website's page (**Read despite robots.txt**, with who agreed, how and
+  when). It applies to that one website, is audited, and an opt-out ends it; the rate limit and every
+  other check still apply.
 - **Platform policies:** each platform (or other provider) the robot finds is listed under
   **Policies & opt-outs** as *unknown*, and its websites are crawled.
   - *Block* a platform there to stop crawling all of its websites.

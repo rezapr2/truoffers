@@ -280,4 +280,6 @@ export enum AuditAction {
   CLAIM_INVITATION_CREATED = 'claim_invitation.created',
   CLAIM_INVITATION_REVOKED = 'claim_invitation.revoked',
   OUTREACH_CONTACT_RECORDED = 'outreach.contact_recorded',
+  WEBSITE_ROBOTS_OVERRIDE_SET = 'website.robots_override_set',
+  WEBSITE_ROBOTS_OVERRIDE_REMOVED = 'website.robots_override_removed',
 }

@@ -65,7 +65,7 @@ describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
     await server.close();
   });
 
-  async function runOnce(host = HOST) {
+  async function runOnce(host = HOST, extra: Record<string, unknown> = {}) {
     const site = await sites.findOneAndUpdate(
       { domain: host },
       {
@@ -76,6 +76,7 @@ describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
           authorisationStatus: DomainAuthorisationStatus.AUTHORISED,
           authorisationSource: AuthorisationSource.ADMIN_MANUAL,
           businesses: [],
+          ...extra,
         },
       },
       { upsert: true, new: true },
@@ -160,5 +161,31 @@ describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
     expect(found.find((c) => c.title.startsWith('Offer 1'))).toMatchObject({ collectionEligible: true, deliveryEligible: false });
     // The app's data was only read in memory: nothing of the menu itself was stored with the run.
     expect(JSON.stringify(await jobs.find({ runId: render.runId }).lean())).not.toMatch(/subcat|Staff Deal|Margherita/);
+  });
+
+  it('renders a website that disallows all bots when its owner has consented, including the requests its own app makes', async () => {
+    const json = (body: unknown) => (_req: unknown, res: import('node:http').ServerResponse) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+    // Start this website afresh, closed to every bot.
+    await candidates.deleteMany({ domain: FOODHUB });
+    await sites.deleteMany({ domain: FOODHUB });
+    await moduleRef.get<Connection>(getConnectionToken()).collection('robotscaches').deleteMany({});
+    server.reset();
+    server.route(FOODHUB, '/robots.txt', (_req, res) => res.writeHead(200, { 'Content-Type': 'text/plain' }).end('User-agent: *\nDisallow: /\n'));
+    server.route(FOODHUB, '/api/consumer/store', json(foodhubStoreResponse()));
+    server.route(FOODHUB, '/api/consumer/store/9002/menu/foodhub/friday.json', json(foodhubMenuResponse()));
+
+    const note = 'Owner replied "yes" to our message on 2026-09-19';
+    await runOnce(FOODHUB, { robotsOverride: { note, recordedBy: new Types.ObjectId(), recordedAt: new Date() } });
+
+    const found = await candidates.find({ domain: FOODHUB }).lean();
+    expect(found.map((c) => c.title)).toEqual(expect.arrayContaining(['10% off orders over £15', 'Meal Deal 1: Any 10" Pizza, Fries & Can of Drink']));
+    const requests = server.requestsFor(FOODHUB);
+    // The app's own store and menu requests went through, and the robot never needed robots.txt for this website.
+    expect(requests.map((r) => r.path)).toEqual(expect.arrayContaining(['/', '/api/consumer/store', '/api/consumer/store/9002/menu/foodhub/friday.json']));
+    expect(requests.map((r) => r.path)).not.toContain('/robots.txt');
+    expect(requests.every((r) => r.userAgent?.startsWith('TruOffersBot/1.0'))).toBe(true);
   });
 });

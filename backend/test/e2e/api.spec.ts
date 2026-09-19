@@ -57,8 +57,9 @@ describe('scraper API, end to end', () => {
   const adminId = new Types.ObjectId();
   const merchantId = new Types.ObjectId();
   const strangerId = new Types.ObjectId();
+  const supportId = new Types.ObjectId();
   const tokens: Record<string, string> = {};
-  const as = (who: 'admin' | 'merchant' | 'stranger') => ({ Authorization: `Bearer ${tokens[who]}` });
+  const as = (who: 'admin' | 'support' | 'merchant' | 'stranger') => ({ Authorization: `Bearer ${tokens[who]}` });
 
   beforeAll(async () => {
     server = await startFixtureServer();
@@ -94,9 +95,10 @@ describe('scraper API, end to end', () => {
       { _id: adminId, name: 'Ada Admin', email: 'admin@example.test', role: Role.SUPER_ADMIN },
       { _id: merchantId, name: 'Mo Merchant', email: 'owner@pizza-palace.test', role: Role.BUSINESS_OWNER },
       { _id: strangerId, name: 'Sam Stranger', email: 'owner@elsewhere.test', role: Role.BUSINESS_OWNER },
+      { _id: supportId, name: 'Sue Support', email: 'support@example.test', role: Role.SUPPORT_ADMIN },
     ];
     await users.insertMany(people);
-    for (const [key, person] of [['admin', people[0]], ['merchant', people[1]], ['stranger', people[2]]] as const) {
+    for (const [key, person] of [['admin', people[0]], ['merchant', people[1]], ['stranger', people[2]], ['support', people[3]]] as const) {
       tokens[key] = jwt.sign({ sub: String(person._id), email: person.email, role: person.role, name: person.name });
     }
 
@@ -183,6 +185,57 @@ describe('scraper API, end to end', () => {
 
     await sites.deleteMany({ _id: { $in: [onUnknown._id, linkOnly._id, onBlocked._id] } });
     await policies.deleteMany({ _id: { $in: [unknown._id, blocked._id] } });
+  });
+
+  it('records the owner’s consent to read a website despite its robots.txt, and clears it on an opt-out', async () => {
+    const closed = (domain: string) =>
+      sites.create({
+        domain,
+        registrableDomain: domain,
+        seedUrl: `https://${domain}/`,
+        authorisationStatus: DomainAuthorisationStatus.AUTHORISED,
+        authorisationSource: AuthorisationSource.ADMIN_MANUAL,
+      });
+    const [consenting, denied, optedOut] = await Promise.all([closed('closed-a.test'), closed('closed-b.test'), closed('closed-c.test')]);
+    const path = (site: { _id: Types.ObjectId }) => `/api/admin/scraper/websites/${site._id}/robots-override`;
+    const note = 'Owner replied "yes" by WhatsApp on 2026-09-19';
+
+    // Only a super admin can set or remove it, and the note has to say who agreed and how.
+    await request(http).put(path(consenting)).set(as('merchant')).send({ note }).expect(403);
+    await request(http).put(path(consenting)).set(as('support')).send({ note }).expect(403);
+    await request(http).delete(path(consenting)).set(as('support')).expect(403);
+    await request(http).put(path(consenting)).set(as('admin')).send({}).expect(400);
+    await request(http).put(path(consenting)).set(as('admin')).send({ note: 'yes' }).expect(400);
+    expect((await sites.findById(consenting._id).lean())?.robotsOverride).toBeUndefined();
+
+    const set = await request(http).put(path(consenting)).set(as('admin')).send({ note }).expect(200);
+    expect(set.body).toMatchObject({ note, recordedBy: String(adminId) });
+    const detail = await request(http).get(`/api/admin/scraper/websites/${consenting._id}`).set(as('admin')).expect(200);
+    expect(detail.body.site.robotsOverride).toMatchObject({ note });
+    const setEntry = await audit.findOne({ action: AuditAction.WEBSITE_ROBOTS_OVERRIDE_SET }).lean();
+    expect(setEntry).toMatchObject({ targetId: String(consenting._id), note, after: { domain: 'closed-a.test', note } });
+
+    // Nothing else sets it: a submission, a CSV or an import never carries one.
+    await request(http).post('/api/admin/scraper/websites').set(as('admin')).send({ urls: ['https://closed-d.test/'], robotsOverride: { note } }).expect((res) => expect(res.status).toBeLessThan(500));
+    expect((await sites.findOne({ domain: 'closed-d.test' }).lean())?.robotsOverride).toBeUndefined();
+
+    await request(http).delete(path(consenting)).set(as('admin')).expect(200);
+    await request(http).delete(path(consenting)).set(as('admin')).expect(400);
+    expect((await sites.findById(consenting._id).lean())?.robotsOverride).toBeUndefined();
+    expect(await auditActions()).toContain(AuditAction.WEBSITE_ROBOTS_OVERRIDE_REMOVED);
+
+    // Denying the website, or an opt-out (a removal request), takes the exception away with the access.
+    await request(http).put(path(denied)).set(as('admin')).send({ note }).expect(200);
+    await request(http).patch(`/api/admin/scraper/websites/${denied._id}/authorise`).set(as('admin')).send({ decision: 'deny' }).expect(200);
+    expect((await sites.findById(denied._id).lean())?.robotsOverride).toBeUndefined();
+
+    await request(http).put(path(optedOut)).set(as('admin')).send({ note }).expect(200);
+    await request(http).post('/api/admin/scraper/opt-outs').set(as('admin')).send({ domain: 'closed-c.test', reason: 'Owner changed their mind' }).expect(201);
+    expect((await sites.findById(optedOut._id).lean())?.robotsOverride).toBeUndefined();
+    await request(http).put(path(optedOut)).set(as('admin')).send({ note }).expect(400);
+
+    await sites.deleteMany({ domain: { $in: ['closed-a.test', 'closed-b.test', 'closed-c.test', 'closed-d.test'] } });
+    await optOuts.deleteMany({ domain: 'closed-c.test' });
   });
 
   it('refuses a provider client list without an allowed written-agreement policy', async () => {

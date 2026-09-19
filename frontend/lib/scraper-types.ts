@@ -94,6 +94,8 @@ export interface ScrapedWebsite {
   adapterId?: string;
   adapterVersion?: string;
   robots?: { status?: string; crawlDelaySec?: number; fetchedAt?: string };
+  // The owner's written consent to read this website despite its robots.txt.
+  robotsOverride?: { note: string; recordedBy: string; recordedAt: string };
   businesses: WebsiteBranch[];
   lastSuccessfulCheckAt?: string;
   lastFailedCheckAt?: string;

@@ -175,6 +175,71 @@ describe('robots, page directives and the crawl gate', () => {
       await expect(h.gate.assertSiteCrawlable(SITE, 'generic-html')).rejects.toMatchObject({ denial: 'adapter_paused' });
     });
 
+    describe('a robots.txt exception, on the website owner’s written consent', () => {
+      const CLOSED = 'User-agent: *\nDisallow: /\n';
+      const consent = { note: 'Owner replied "yes" to our message on 2026-09-19', recordedBy: '64b0000000000000000000aa', recordedAt: new Date() };
+      const closedSite = (extra: Record<string, unknown> = {}) => {
+        server.route(SITE, '/robots.txt', (_req, res) => res.writeHead(200, { 'Content-Type': 'text/plain' }).end(CLOSED));
+        server.route(SITE, '/', html('10% off collection'));
+        return h.authorise(SITE, extra);
+      };
+
+      it('reads a website that disallows all bots only while the exception is recorded', async () => {
+        await closedSite();
+        await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'robots_disallowed' });
+
+        await h.models.sites.updateOne({ domain: SITE }, { $set: { robotsOverride: consent } });
+        await expect(h.gate.assertRequestAllowed(url('/'), ctx)).resolves.toBeUndefined();
+        const page = await h.loader({ runId: RUN, siteDomain: SITE }).load(server.url(SITE));
+        expect(page?.html).toContain('10% off collection');
+
+        await h.models.sites.updateOne({ domain: SITE }, { $unset: { robotsOverride: 1 } });
+        await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'robots_disallowed' });
+      });
+
+      it('is also what lets it through when robots.txt cannot be fetched at all', async () => {
+        server.route(SITE, '/robots.txt', (_req, res) => res.writeHead(503).end());
+        await h.authorise(SITE, { robotsOverride: consent });
+        await expect(h.gate.assertRequestAllowed(url('/'), ctx)).resolves.toBeUndefined();
+      });
+
+      it('never overrides an opt-out, the never-crawl list, a pause or a blocked provider', async () => {
+        await closedSite({ robotsOverride: consent });
+        await h.models.optOuts.create({ domain: SITE, activeKey: SITE, source: OptOutSource.PUBLIC_FORM });
+        await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'opted_out' });
+        await h.models.optOuts.deleteMany({});
+
+        await h.models.configs.create({ domain: SITE, paused: true });
+        await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'domain_paused' });
+        await h.models.configs.deleteMany({});
+
+        await h.models.configs.create({ domain: SITE, blockedPaths: ['/private'] });
+        await expect(h.gate.assertRequestAllowed(url('/private/menu'), ctx)).rejects.toMatchObject({ denial: 'blocked_path' });
+        await h.models.configs.deleteMany({});
+
+        const policy = await h.models.policies.create({ name: 'OrderNest', status: ProviderPolicyStatus.BLOCKED });
+        await h.models.sites.updateOne({ domain: SITE }, { $set: { providerRef: policy._id } });
+        await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'provider_not_allowed' });
+
+        await h.models.sites.updateOne({ domain: SITE }, { $set: { authorisationStatus: DomainAuthorisationStatus.PENDING_AUTHORISATION }, $unset: { providerRef: 1 } });
+        await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'pending_authorisation' });
+      });
+
+      it('applies only to the website it was recorded on', async () => {
+        await closedSite({ robotsOverride: consent });
+        server.route(OTHER, '/robots.txt', (_req, res) => res.writeHead(200, { 'Content-Type': 'text/plain' }).end(CLOSED));
+        await h.authorise(OTHER);
+        await expect(h.gate.assertRequestAllowed(url('/', OTHER), { ...ctx, siteDomain: OTHER })).rejects.toMatchObject({ denial: 'robots_disallowed' });
+      });
+
+      it('keeps the page-level directives: a noindex page is still not used', async () => {
+        await closedSite({ robotsOverride: consent });
+        server.route(SITE, '/hidden', html('secret 50% off', '<meta name="robots" content="noindex">'));
+        const loaded = await h.loader({ runId: RUN, siteDomain: SITE }).load(server.url(SITE, '/hidden'));
+        expect(loaded?.html ?? '').not.toContain('secret');
+      });
+    });
+
     it('stops immediately on emergency stop or cancellation', async () => {
       await h.authorise(SITE);
       await h.control.halt();

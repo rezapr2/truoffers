@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseInterceptors,
@@ -44,6 +45,7 @@ import {
   ProviderClientListDto,
   ProviderPolicyDto,
   ReasonDto,
+  RobotsOverrideDto,
   SubmitWebsitesDto,
   UpdateSettingsDto,
 } from './scraper.dto';
@@ -108,6 +110,19 @@ export class AdminWebsitesController {
   @Patch(':id/pause')
   pause(@Param('id') id: string, @Body() dto: PauseDto, @CurrentUser('userId') userId: string) {
     return this.websites.setPaused(id, dto.paused, userId, dto.reason);
+  }
+
+  // The owner's written consent to read the website despite its robots.txt. Super admins only.
+  @Roles(Role.SUPER_ADMIN)
+  @Put(':id/robots-override')
+  setRobotsOverride(@Param('id') id: string, @Body() dto: RobotsOverrideDto, @CurrentUser('userId') userId: string) {
+    return this.websites.setRobotsOverride(id, dto.note, userId);
+  }
+
+  @Roles(Role.SUPER_ADMIN)
+  @Delete(':id/robots-override')
+  clearRobotsOverride(@Param('id') id: string, @CurrentUser('userId') userId: string) {
+    return this.websites.clearRobotsOverride(id, userId);
   }
 
   @Patch(':id/crawl-config')

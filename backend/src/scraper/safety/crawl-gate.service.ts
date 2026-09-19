@@ -162,13 +162,15 @@ export class CrawlGateService {
       throw new CrawlDeniedError('cross_site', `${url.toString()} is on ${domain}, outside ${ctx.siteDomain}`);
     }
 
-    await this.assertSiteCrawlable(domain, ctx.adapterKey);
+    const site = await this.assertSiteCrawlable(domain, ctx.adapterKey);
 
     const policy = await this.crawlPolicyFor(url.hostname);
     const blockedPath = policy.blockedPaths.find((prefix) => url.pathname.startsWith(prefix));
     if (blockedPath) throw new CrawlDeniedError('blocked_path', `${url.pathname} is blocked (${blockedPath})`);
 
-    if (ctx.checkRobots) {
+    // Everything above still applies. Only robots.txt is set aside, and only for a website whose owner has told us in
+    // writing that they want their offers listed; the rate limit stays.
+    if (ctx.checkRobots && !site.robotsOverride) {
       const rules = await this.robots.rulesFor(url, {
         signal: ctx.signal,
         beforeRequest: async (hop) => {

@@ -30,7 +30,7 @@ import { ScrapedWebsite } from '../../src/schemas/scraped-website.schema';
 import { EVIDENCED_OFFER_FIELDS } from '../../src/scraper/extraction/adapter.types';
 import { FixtureServer, startFixtureServer, testResolver } from '../helpers/fixture-server';
 
-const SITES = ['pizza-palace.test', 'curry-house.test', 'kebab-king.test', 'ordernest-bella.test', 'pizza-palace-friends.test', 'fh-sultan.test', 'g24-caspian.test'];
+const SITES = ['pizza-palace.test', 'curry-house.test', 'kebab-king.test', 'ordernest-bella.test', 'pizza-palace-friends.test', 'fh-sultan.test', 'g24-caspian.test', 'robots-blocked.test'];
 const STAGE_ORDER = [
   ImportJobType.ANALYSE_SEED_WEBSITE,
   ImportJobType.DISCOVER_OFFER_PAGES,
@@ -292,6 +292,29 @@ describe('scraping pipeline, end to end', () => {
       expect(found).toHaveLength(offers);
       expect(found.every((c) => c.adapterId === adapterId && c.evidence.title.method.startsWith(`provider:${adapterId}@`))).toBe(true);
     }
+  });
+
+  it('reads a website that disallows the bot only once the owner’s consent is recorded, and says so in the run log', async () => {
+    const host = 'robots-blocked.test';
+    const site = await authorise(host);
+    const refused = await waitForRun((await runs.startRun(site)).job.runId, finished);
+    expect(refused.map((s) => s.type)).toEqual([ImportJobType.ANALYSE_SEED_WEBSITE]);
+    expect(refused[0].logs.map((l) => l.message).join(' ')).toMatch(/robots\.txt disallows \//);
+    // Only robots.txt itself was requested, and nothing was extracted.
+    expect(server.requestsFor(host).map((r) => r.path)).toEqual(['/robots.txt']);
+    expect(await candidates.countDocuments()).toBe(0);
+
+    const note = 'Owner replied "yes" to our message on 2026-09-19';
+    await sites.updateOne({ _id: site._id }, { $set: { robotsOverride: { note, recordedBy: new Types.ObjectId(), recordedAt: new Date() } } });
+    server.reset();
+    const imported = await waitForRun((await runs.startRun(site)).job.runId, finished);
+    expect(imported.map((s) => s.type)).toEqual(STAGE_ORDER);
+    const analyse = imported[0].logs.find((l) => /robots\.txt is not applied/.test(l.message));
+    expect(analyse?.data).toMatchObject({ agreedNote: note });
+    // It reads the pages a visitor sees, at the normal rate, and says so as the same bot.
+    expect(server.requestsFor(host).every((r) => r.userAgent?.startsWith('TruOffersBot/1.0'))).toBe(true);
+    const found = await candidates.find({ domain: host }).lean();
+    expect(found.map((c) => c.title)).toEqual(expect.arrayContaining([expect.stringMatching(/free fries/i)]));
   });
 
   it('never contacts a domain that is pending authorisation', async () => {

@@ -26,6 +26,15 @@ The robot only visits websites an administrator has authorised. It never visits:
 It obeys robots.txt, `X-Robots-Tag` and `<meta name="robots">`, and identifies itself with a fixed
 User-Agent that links to `/bot`.
 
+**The one exception to robots.txt.** A business owner may tell us they want their offers listed even
+though their website's robots.txt asks every bot to stay away, for example because the ordering
+platform that hosts the site set it that way. A super administrator can then record that consent
+(who agreed, how, and when) against that one website. The record is written to the audit log, only a
+super administrator can create or remove it, and it applies to that website alone. It changes nothing
+else: opt-outs and removal requests (which delete it), the never-crawl list, pauses, blocked paths,
+page-level `noindex`/`nofollow`, the rate limit and the fixed User-Agent all still apply. `/bot`
+tells site owners about the exception.
+
 **Websites on a shared template.** Administrators can teach the robot one website template, for
 example a web studio's theme, and reuse that across every authorised website built on it. To do
 this the robot records the template's structural traits: generator tag, footer attribution,

@@ -240,6 +240,12 @@ export class PipelineService {
   private async analyse(ctx: StageContext): Promise<StageOutcome> {
     const site = await this.site(ctx);
     await this.gate.assertSiteCrawlable(site.domain);
+    if (site.robotsOverride) {
+      await ctx.log('robots.txt is not applied to this website: its owner asked for their offers to be listed', {
+        agreedNote: site.robotsOverride.note,
+        recordedAt: site.robotsOverride.recordedAt,
+      });
+    }
 
     const seed = new URL(site.seedUrl);
     const before = await this.providers.detectBeforeFetch(seed.hostname);
