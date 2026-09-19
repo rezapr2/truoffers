@@ -92,6 +92,24 @@ describe('ordering platform adapters (spec §2.3/§5)', () => {
         expect(offers[1].flags).toContain('single_item_unconfirmed');
       });
 
+      it('does not report the store’s discount a second time when the page’s structured data restates it', () => {
+        const ld = JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Restaurant',
+          name: 'Marco Pizza',
+          makesOffer: [
+            { '@type': 'Offer', name: 'Get 10% Off', description: 'Order online today' },
+            { '@type': 'Offer', name: '15% off orders over £40', description: 'Weekends only' },
+          ],
+        });
+        const html = `<html><head><link rel="preconnect" href="https://assets.foodhub.com/"><script type="application/ld+json">${ld}</script></head><body></body></html>`;
+        const url = 'https://fh-app.test/';
+        const page: LoadedPage = { url, finalUrl: url, status: 200, html, $: cheerio.load(html), nofollow: false, fetchedAt: checkedAt, dataResponses: [store] };
+        const titles = adapter.extractFromPage(page, ['home'], { checkedAt }).offers.map((o) => o.offer.title);
+        // The store's 10% is reported once; a different percentage the page mentions still is.
+        expect(titles).toEqual(['10% off orders over £15', '15% off orders over £40']);
+      });
+
       it('reads the deals in the menu’s offer categories, with the order types and days the menu states', () => {
         const { offers } = adapter.extractFromPage(renderedPage([store, menu]), ['home'], { checkedAt });
         const byTitle = Object.fromEntries(offers.map((o) => [o.offer.title, o.offer]));

@@ -290,6 +290,7 @@ describe('scraping pipeline, end to end', () => {
       expect(await sites.findById(site._id).lean()).toMatchObject({ adapterId, providerRef: policy!._id, authorisationStatus: DomainAuthorisationStatus.AUTHORISED });
       const found = await candidates.find({ domain: host }).lean();
       expect(found).toHaveLength(offers);
+      expect(found.filter((c) => c.status !== CandidateStatus.PENDING_REVIEW).map((c) => c.title)).toEqual([]);
       expect(found.every((c) => c.adapterId === adapterId && c.evidence.title.method.startsWith(`provider:${adapterId}@`))).toBe(true);
     }
   });

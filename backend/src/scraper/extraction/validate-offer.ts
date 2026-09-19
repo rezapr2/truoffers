@@ -4,7 +4,9 @@ import { isIsoDate, londonDate } from './london-time';
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_PRICE = 500;
 
-export function validateExtractedOffer(offer: ExtractedOffer, checkedAt: Date = offer.lastCheckedAt): OfferValidationResult {
+export function validateExtractedOffer(input: ExtractedOffer, checkedAt: Date = input.lastCheckedAt): OfferValidationResult {
+  // A field stored as null (an unset one that went through MongoDB as `undefined`) is absent, not a value.
+  const offer = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null)) as unknown as ExtractedOffer;
   const errors: string[] = [];
   const warnings: string[] = [];
 

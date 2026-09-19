@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Worker } from 'bullmq';
 import type Redis from 'ioredis';
 import { Connection, Model, Types } from 'mongoose';
-import { AuthorisationSource, DomainAuthorisationStatus, ImportJobStatus, ImportJobType } from '../../src/common/scraper.enums';
+import { AuthorisationSource, CandidateStatus, DomainAuthorisationStatus, ImportJobStatus, ImportJobType } from '../../src/common/scraper.enums';
 import { bullConnectionOptions } from '../../src/scraper/infra/redis';
 import { RENDER_WORKER_HEARTBEAT_PREFIX, SCRAPER_QUEUES, StageJobData } from '../../src/scraper/queue/queue.constants';
 import { RunsService } from '../../src/scraper/queue/runs.service';
@@ -159,6 +159,8 @@ describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
       'Weekday Saver: Any 12" Pizza',
     ]);
     expect(found.find((c) => c.title.startsWith('Offer 1'))).toMatchObject({ collectionEligible: true, deliveryEligible: false });
+    // Every one can be reviewed: a multi-buy's unset fields survive the trip through the stage output as absent, not null.
+    expect(found.map((c) => [c.title, c.status]).filter(([, status]) => status !== CandidateStatus.PENDING_REVIEW)).toEqual([]);
     // The app's data was only read in memory: nothing of the menu itself was stored with the run.
     expect(JSON.stringify(await jobs.find({ runId: render.runId }).lean())).not.toMatch(/subcat|Staff Deal|Margherita/);
   });
@@ -182,6 +184,7 @@ describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
 
     const found = await candidates.find({ domain: FOODHUB }).lean();
     expect(found.map((c) => c.title)).toEqual(expect.arrayContaining(['10% off orders over £15', 'Meal Deal 1: Any 10" Pizza, Fries & Can of Drink']));
+    expect(found.filter((c) => c.status !== CandidateStatus.PENDING_REVIEW).map((c) => c.title)).toEqual([]);
     const requests = server.requestsFor(FOODHUB);
     // The app's own store and menu requests went through, and the robot never needed robots.txt for this website.
     expect(requests.map((r) => r.path)).toEqual(expect.arrayContaining(['/', '/api/consumer/store', '/api/consumer/store/9002/menu/foodhub/friday.json']));

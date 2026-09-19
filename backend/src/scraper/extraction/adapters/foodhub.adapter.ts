@@ -72,6 +72,14 @@ function inflated(encoded: string): unknown {
   }
 }
 
+// The page's structured data or text restating a store discount more loosely ("Get 35% Off" for the store's
+// "35% off orders over £20") is the same promotion, not another one.
+function restatesDiscount(other: OfferExtraction, discounts: OfferExtraction[]): boolean {
+  const a = other.offer;
+  if (a.offerType !== 'percentage_discount' || a.discountPercentage === undefined || a.promoCode) return false;
+  return discounts.some((d) => d.offer.offerType === 'percentage_discount' && d.offer.discountPercentage === a.discountPercentage && (a.minimumOrder === undefined || a.minimumOrder === d.offer.minimumOrder));
+}
+
 /**
  * Code adapter for Foodhub, a white-label ordering platform (spec §2.3). Foodhub pages are built in the
  * browser, so their HTML holds no offer text. It reads, and never calls Foodhub's API for:
@@ -108,9 +116,10 @@ export class FoodhubAdapter extends GenericHtmlAdapter {
 
   extractFromPage(page: LoadedPage, roles: PageRole[], ctx: Pick<WebsiteContext, 'checkedAt'>): PageExtraction {
     const base = this.structured.extractFromPage(page, roles, ctx);
-    const offers = [...this.discounts(page, roles, ctx), ...this.menuDeals(page, roles, ctx)];
+    const discounts = this.discounts(page, roles, ctx);
+    const offers = [...discounts, ...this.menuDeals(page, roles, ctx)];
     const known = new Set(offers.map((d) => d.offer.contentFingerprint));
-    return { businesses: base.businesses, offers: [...offers, ...base.offers.filter((o) => !known.has(o.offer.contentFingerprint))] };
+    return { businesses: base.businesses, offers: [...offers, ...base.offers.filter((o) => !known.has(o.offer.contentFingerprint) && !restatesDiscount(o, discounts))] };
   }
 
   private discounts(page: LoadedPage, roles: PageRole[], ctx: Pick<WebsiteContext, 'checkedAt'>): OfferExtraction[] {
