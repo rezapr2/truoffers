@@ -126,7 +126,7 @@ function OffersPageInner() {
         />
         <button
           type="submit"
-          className="bg-ink text-cream text-[15px] font-bold px-6 py-3 rounded-full cursor-pointer hover:bg-primary transition-colors"
+          className="btn-soft text-[15px] font-bold px-6 py-3 rounded-full cursor-pointer"
         >
           Search
         </button>
@@ -137,7 +137,7 @@ function OffersPageInner() {
         <button
           onClick={() => updateParam('category', null)}
           className={`text-sm font-bold px-4 py-2.5 rounded-full transition-colors cursor-pointer ${
-            !activeCategory ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
+            !activeCategory ? 'bg-tint-blue text-primary' : 'bg-card border border-line hover:border-primary'
           }`}
         >
           All cuisines
@@ -148,7 +148,7 @@ function OffersPageInner() {
             onClick={() => updateParam('category', activeCategory === cat.slug ? null : cat.slug)}
             className={`text-sm font-bold px-4 py-2.5 rounded-full transition-colors cursor-pointer ${
               activeCategory === cat.slug
-                ? 'bg-ink text-surface'
+                ? 'bg-tint-blue text-primary'
                 : 'bg-card border border-line hover:border-primary'
             }`}
           >
@@ -176,7 +176,7 @@ function OffersPageInner() {
                   key={v}
                   onClick={() => setView(v)}
                   className={`text-sm font-bold px-4 py-1.5 rounded-full cursor-pointer transition-colors ${
-                    view === v ? 'bg-ink text-surface' : 'text-muted'
+                    view === v ? 'bg-tint-blue text-primary' : 'text-muted'
                   }`}
                 >
                   {v === 'list' ? 'List' : 'Map'}
@@ -188,7 +188,7 @@ function OffersPageInner() {
       </div>
 
       {error && (
-        <div className="bg-peach-2/40 border border-primary/30 text-primary-dark font-bold rounded-2xl px-6 py-4 mb-6">
+        <div className="bg-danger/10 border border-danger/25 text-danger-dark font-bold rounded-2xl px-6 py-4 mb-6">
           {error}
         </div>
       )}
@@ -210,7 +210,7 @@ function OffersPageInner() {
             ))}
           </div>
           {offers.length === 0 && !error && (
-            <div className="bg-card rounded-2xl p-10 text-center text-muted font-semibold">
+            <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
               No offers found{result?.searchedArea ? ` near ${result.searchedArea}` : ''}. Try a wider
               search or different filters.
             </div>

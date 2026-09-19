@@ -89,7 +89,7 @@ export default function BillingTab({ business }: { business: Business }) {
               key={i}
               onClick={() => setInterval_(i)}
               className={`text-[13px] font-bold px-4 py-2 rounded-full cursor-pointer transition-colors ${
-                interval === i ? 'bg-ink text-surface' : 'text-muted'
+                interval === i ? 'bg-tint-blue text-primary' : 'text-muted'
               }`}
             >
               {i === 'monthly' ? 'Monthly' : 'Annual (2 months free)'}
@@ -105,7 +105,7 @@ export default function BillingTab({ business }: { business: Business }) {
           return (
             <div
               key={plan._id}
-              className={`bg-card rounded-3xl p-6 flex flex-col ${
+              className={`bg-card border border-line rounded-3xl p-6 flex flex-col ${
                 isCurrent ? 'ring-2 ring-primary' : ''
               }`}
             >
@@ -130,10 +130,10 @@ export default function BillingTab({ business }: { business: Business }) {
               <button
                 onClick={() => choose(plan)}
                 disabled={isCurrent || busy !== null}
-                className={`mt-auto font-bold py-3 rounded-full transition-colors cursor-pointer disabled:opacity-50 ${
+                className={`mt-auto font-bold py-3 rounded-2xl transition-colors cursor-pointer disabled:opacity-50 ${
                   isCurrent
                     ? 'bg-page text-muted'
-                    : 'bg-ink text-surface hover:bg-primary'
+                    : 'btn-soft'
                 }`}
               >
                 {busy === plan.key ? 'Processing…' : isCurrent ? 'Your plan' : plan.monthlyPrice === 0 ? 'Downgrade' : 'Choose plan'}

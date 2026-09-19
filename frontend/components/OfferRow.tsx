@@ -17,7 +17,7 @@ export default function OfferRow({ offer }: { offer: Offer }) {
       : 'Weekly offer';
 
   return (
-    <div className="bg-card rounded-2xl px-5 py-4 md:px-7 md:py-5 grid grid-cols-[80px_1fr_auto] md:grid-cols-[140px_1fr_auto_auto] gap-4 md:gap-6 items-center hover:shadow-lg transition-shadow">
+    <div className="bg-card border border-line rounded-2xl px-5 py-4 md:px-7 md:py-5 grid grid-cols-[80px_1fr_auto] md:grid-cols-[140px_1fr_auto_auto] gap-4 md:gap-6 items-center hover:shadow-lg transition-shadow">
       <div className="font-display text-lg md:text-2xl font-extrabold text-primary">
         {offer.displayLabel}
       </div>
@@ -34,7 +34,7 @@ export default function OfferRow({ offer }: { offer: Offer }) {
       <div className="hidden md:block text-[13px] font-bold text-primary">{endsLabel}</div>
       <Link
         href={`/offer/${offer._id}`}
-        className="border-[1.5px] border-ink text-ink text-[13px] md:text-sm font-bold px-4 md:px-5 py-2 md:py-2.5 rounded-full hover:bg-ink hover:text-surface transition-colors whitespace-nowrap"
+        className="border border-line bg-card text-ink text-[13px] md:text-sm font-bold px-4 md:px-5 py-2 md:py-2.5 rounded-full hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
       >
         View offer
       </Link>

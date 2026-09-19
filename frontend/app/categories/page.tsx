@@ -23,7 +23,7 @@ export default async function CategoriesPage() {
           <Link
             key={cat._id}
             href={`/offers?category=${cat.slug}`}
-            className="bg-card rounded-3xl p-7 text-center hover:shadow-lg hover:-translate-y-0.5 transition-all"
+            className="bg-card border border-line rounded-3xl p-7 text-center hover:shadow-lg hover:-translate-y-0.5 transition-all"
           >
             <div className="text-4xl mb-3">{cat.emoji || '🍽️'}</div>
             <div className="font-display text-lg font-extrabold">{cat.name}</div>

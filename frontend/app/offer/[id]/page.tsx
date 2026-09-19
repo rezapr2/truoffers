@@ -40,7 +40,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
           It was not on {checking.business?.name ?? 'the takeaway'}’s website the last time we looked, so it is hidden until we can confirm it.
         </p>
         {checking.business?.slug && (
-          <Link href={`/takeaway/${checking.business.slug}`} className="bg-ink text-surface font-bold px-6 py-3 rounded-full">
+          <Link href={`/takeaway/${checking.business.slug}`} className="btn-soft font-bold px-6 py-3 rounded-2xl">
             See {checking.business.name}’s other offers
           </Link>
         )}
@@ -53,7 +53,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
       <div className="mx-auto max-w-3xl px-5 py-20 text-center">
         <h1 className="font-display text-3xl font-extrabold mb-3">Offer not found</h1>
         <p className="text-muted font-semibold mb-6">It may have expired or been removed.</p>
-        <Link href="/offers" className="bg-ink text-surface font-bold px-6 py-3 rounded-full">
+        <Link href="/offers" className="btn-soft font-bold px-6 py-3 rounded-2xl">
           Browse live offers
         </Link>
       </div>
@@ -84,13 +84,13 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="mx-auto max-w-4xl px-5 md:px-10 py-10">
-      <div className="bg-primary text-cream rounded-3xl px-7 py-10 md:px-12 mb-6">
-        <div className="font-display text-5xl md:text-6xl font-extrabold mb-3">{offer.displayLabel}</div>
+      <div className="bg-gradient-to-br from-tint-blue via-surface to-card border border-line rounded-3xl px-7 py-10 md:px-12 mb-6">
+        <div className="font-display text-5xl md:text-6xl font-extrabold text-primary mb-3">{offer.displayLabel}</div>
         <h1 className="font-display text-2xl md:text-3xl font-extrabold tracking-tight mb-2">
           {offer.title}
         </h1>
         {offer.description && (
-          <p className="text-peach font-medium max-w-xl leading-relaxed">{offer.description}</p>
+          <p className="text-muted-2 max-w-xl leading-relaxed">{offer.description}</p>
         )}
       </div>
 
@@ -98,7 +98,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
 
       <div className="grid md:grid-cols-[1fr_320px] gap-5">
         {/* Redemption */}
-        <div className="bg-card rounded-3xl p-7">
+        <div className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-4">How to redeem</h2>
           {offer.redemptionType === 'code' && offer.code && (
             <button
@@ -158,7 +158,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => track('order_click', { offerId: offer._id, businessId: business._id })}
-                className="bg-primary text-cream font-bold px-7 py-3.5 rounded-full hover:bg-primary-dark transition-colors"
+                className="btn-soft font-bold px-7 py-3.5 rounded-2xl"
               >
                 Order now
               </a>
@@ -167,7 +167,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
               <a
                 href={`tel:${business.phone}`}
                 onClick={() => track('call_click', { businessId: business._id })}
-                className="border-[1.5px] border-ink font-bold px-7 py-3.5 rounded-full hover:bg-ink hover:text-surface transition-colors"
+                className="border border-line bg-card font-bold px-7 py-3.5 rounded-full hover:border-primary hover:text-primary transition-colors"
               >
                 Call {business.phone}
               </a>
@@ -176,7 +176,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Business card */}
-        <aside className="bg-card rounded-3xl p-7 h-fit">
+        <aside className="bg-card border border-line rounded-3xl p-7 h-fit">
           <div className="w-16 h-16 rounded-full bg-page flex items-center justify-center font-display font-extrabold text-2xl text-primary mb-3">
             {business.name?.charAt(0)}
           </div>
@@ -201,7 +201,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
           )}
           <Link
             href={`/takeaway/${business.slug}`}
-            className="mt-5 block text-center border-[1.5px] border-ink font-bold px-5 py-3 rounded-full hover:bg-ink hover:text-surface transition-colors"
+            className="mt-5 block text-center border border-line bg-card font-bold px-5 py-3 rounded-full hover:border-primary hover:text-primary transition-colors"
           >
             View full profile
           </Link>

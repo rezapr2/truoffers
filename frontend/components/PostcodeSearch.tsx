@@ -41,7 +41,7 @@ export default function PostcodeSearch({
     <div>
       <form
         onSubmit={submit}
-        className={`flex gap-2 bg-cream rounded-full items-center ${
+        className={`flex gap-2 bg-card border border-line shadow-sm rounded-full items-center ${
           size === 'lg' ? 'p-1.5 pl-6 max-w-xl' : 'p-1 pl-4 max-w-md'
         }`}
       >
@@ -56,7 +56,7 @@ export default function PostcodeSearch({
         />
         <button
           type="submit"
-          className={`bg-ink text-cream font-bold rounded-full cursor-pointer hover:bg-primary-dark transition-colors flex-none ${
+          className={`btn-soft font-bold rounded-full cursor-pointer flex-none ${
             size === 'lg' ? 'text-[15px] px-6 py-3.5' : 'text-sm px-4 py-2.5'
           }`}
         >
@@ -66,7 +66,7 @@ export default function PostcodeSearch({
       <button
         onClick={useLocation}
         disabled={locating}
-        className="mt-3.5 text-sm font-bold text-peach-2 hover:text-cream cursor-pointer disabled:opacity-60"
+        className="mt-3.5 text-sm font-bold text-primary hover:text-primary-dark cursor-pointer disabled:opacity-60"
       >
         {locating ? 'Locating…' : 'Use my current location'}
       </button>

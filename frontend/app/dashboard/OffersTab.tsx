@@ -10,7 +10,7 @@ const STATUS_STYLES: Record<string, string> = {
   active: 'bg-verified/10 text-verified',
   pending: 'bg-star/10 text-star',
   paused: 'bg-page text-muted',
-  rejected: 'bg-primary/10 text-primary',
+  rejected: 'bg-danger/10 text-danger',
   expired: 'bg-page text-muted',
   draft: 'bg-page text-muted',
 };
@@ -167,9 +167,9 @@ function OfferForm({ business, offer, onDone }: { business: Business; offer?: Of
   }
 
   return (
-    <form onSubmit={submit} className="bg-card rounded-3xl p-7 flex flex-col gap-4">
+    <form onSubmit={submit} className="bg-card border border-line rounded-3xl p-7 flex flex-col gap-4">
       {error && (
-        <div className="bg-peach-2/40 border border-primary/30 text-primary-dark text-sm font-bold rounded-xl px-4 py-3">
+        <div className="bg-danger/10 border border-danger/25 text-danger-dark text-sm font-bold rounded-xl px-4 py-3">
           {error}
         </div>
       )}
@@ -186,7 +186,7 @@ function OfferForm({ business, offer, onDone }: { business: Business; offer?: Of
             type="button"
             onClick={writeWithAi}
             disabled={writing}
-            className="text-[13px] font-bold text-primary border border-primary/40 px-3 py-1.5 rounded-full hover:bg-primary hover:text-cream transition-colors cursor-pointer disabled:opacity-60"
+            className="text-[13px] font-bold text-danger border border-danger/40 px-3 py-1.5 rounded-full hover:bg-danger hover:text-white transition-colors cursor-pointer disabled:opacity-60"
           >
             {writing ? 'Writing…' : '✨ Write it for me'}
           </button>
@@ -317,7 +317,7 @@ function OfferForm({ business, offer, onDone }: { business: Business; offer?: Of
         <button
           type="submit"
           disabled={busy}
-          className="flex-1 bg-ink text-surface font-bold py-3.5 rounded-full hover:bg-primary transition-colors cursor-pointer disabled:opacity-60"
+          className="flex-1 btn-soft font-bold py-3.5 rounded-2xl cursor-pointer disabled:opacity-60"
         >
           {busy ? 'Saving…' : offer ? 'Save changes' : 'Publish offer'}
         </button>
@@ -374,9 +374,9 @@ function FoundOnYourWebsite({ business, onChange }: { business: Business; onChan
           We found these on your website. Confirm the ones that are right and they’ll be published as yours; you can edit them afterwards.
         </p>
       </div>
-      {error && <div className="text-sm font-bold text-primary-dark">{error}</div>}
+      {error && <div className="text-sm font-bold text-danger-dark">{error}</div>}
       {pending.map((item) => (
-        <div key={item._id} className="bg-card rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center gap-4">
+        <div key={item._id} className="bg-card border border-line rounded-2xl px-5 py-4 flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex-1 min-w-0">
             <div className="font-extrabold">{item.title}</div>
             <div className="text-[13px] font-semibold text-muted">
@@ -406,7 +406,7 @@ function FoundOnYourWebsite({ business, onChange }: { business: Business; onChan
             <button
               disabled={busyId === item._id}
               onClick={() => answer(item, 'reject')}
-              className="text-[13px] font-bold text-primary border border-primary/40 px-4 py-2 rounded-full hover:bg-primary hover:text-cream transition-colors cursor-pointer disabled:opacity-60"
+              className="text-[13px] font-bold text-danger border border-danger/40 px-4 py-2 rounded-full hover:bg-danger hover:text-white transition-colors cursor-pointer disabled:opacity-60"
             >
               Not ours
             </button>
@@ -462,7 +462,7 @@ export default function OffersTab({ business }: { business: Business }) {
         <h2 className="font-display text-xl font-extrabold">Your offers ({offers.length})</h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-primary text-cream text-sm font-bold px-6 py-3 rounded-full hover:bg-primary-dark transition-colors cursor-pointer"
+          className="btn-soft text-sm font-bold px-6 py-3 rounded-2xl cursor-pointer"
         >
           {showForm ? 'Close' : '+ Create offer'}
         </button>
@@ -493,7 +493,7 @@ export default function OffersTab({ business }: { business: Business }) {
               }}
             />
           ) : (
-            <div key={offer._id} className="bg-card rounded-2xl px-6 py-5 flex flex-col md:flex-row md:items-center gap-4">
+            <div key={offer._id} className="bg-card border border-line rounded-2xl px-6 py-5 flex flex-col md:flex-row md:items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-display text-lg font-extrabold text-primary">{offer.displayLabel}</span>
@@ -564,7 +564,7 @@ export default function OffersTab({ business }: { business: Business }) {
                     QR code
                   </a>
                 )}
-                <button onClick={() => remove(offer)} className="text-[13px] font-bold text-primary border border-primary/40 px-4 py-2 rounded-full hover:bg-primary hover:text-cream transition-colors cursor-pointer">
+                <button onClick={() => remove(offer)} className="text-[13px] font-bold text-danger border border-danger/40 px-4 py-2 rounded-full hover:bg-danger hover:text-white transition-colors cursor-pointer">
                   {offer.imported ? 'Remove' : 'Delete'}
                 </button>
               </div>
@@ -572,7 +572,7 @@ export default function OffersTab({ business }: { business: Business }) {
           ),
         )}
         {offers.length === 0 && !showForm && (
-          <div className="bg-card rounded-2xl p-10 text-center text-muted font-semibold">
+          <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
             No offers yet. Your first offer is the fastest way to get found.
           </div>
         )}

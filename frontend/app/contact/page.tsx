@@ -10,7 +10,7 @@ export default function ContactPage() {
           ['📈 Sales', 'Plans, featured placement, supplier sponsorship', 'sales@truoffers.co.uk'],
           ['🤝 Partnerships', 'Foodbell integration, franchises, media', 'partners@truoffers.co.uk'],
         ].map(([title, desc, email]) => (
-          <div key={email} className="bg-card rounded-3xl p-7">
+          <div key={email} className="bg-card border border-line rounded-3xl p-7">
             <h2 className="font-display text-lg font-extrabold mb-1">{title}</h2>
             <p className="text-sm font-semibold text-muted mb-3">{desc}</p>
             <a href={`mailto:${email}`} className="text-primary font-bold">

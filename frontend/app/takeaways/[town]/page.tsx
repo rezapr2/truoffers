@@ -40,7 +40,7 @@ export default async function TownPage({ params }: { params: Promise<{ town: str
         ))}
       </div>
       {(!data || data.items.length === 0) && (
-        <div className="bg-card rounded-2xl p-10 text-center text-muted font-semibold">
+        <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
           No takeaways listed in {title} yet.{' '}
           <Link href="/claim-your-business" className="text-primary font-bold">
             Add your business →

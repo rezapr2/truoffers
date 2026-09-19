@@ -42,7 +42,7 @@ export default async function SuppliersPage({
         <Link
           href="/suppliers"
           className={`text-sm font-bold px-4 py-2.5 rounded-full ${
-            !category ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
+            !category ? 'bg-tint-blue text-primary' : 'bg-card border border-line hover:border-primary'
           }`}
         >
           All
@@ -52,7 +52,7 @@ export default async function SuppliersPage({
             key={c}
             href={`/suppliers?category=${c}`}
             className={`text-sm font-bold px-4 py-2.5 rounded-full capitalize ${
-              category === c ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
+              category === c ? 'bg-tint-blue text-primary' : 'bg-card border border-line hover:border-primary'
             }`}
           >
             {CATEGORY_LABELS[c] || c}
@@ -65,7 +65,7 @@ export default async function SuppliersPage({
           <Link
             key={s._id}
             href={`/suppliers/${s.slug}`}
-            className="bg-card rounded-3xl p-7 hover:shadow-lg transition-shadow flex flex-col"
+            className="bg-card border border-line rounded-3xl p-7 hover:shadow-lg transition-shadow flex flex-col"
           >
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <h2 className="font-display text-lg font-extrabold">{s.name}</h2>
@@ -87,16 +87,16 @@ export default async function SuppliersPage({
         ))}
       </div>
 
-      <div className="mt-14 bg-ink text-surface rounded-3xl px-8 py-10 md:px-14 flex flex-col md:flex-row items-start md:items-center gap-6">
+      <div className="mt-14 bg-gradient-to-br from-tint-blue to-card border border-line rounded-3xl px-8 py-10 md:px-12 flex flex-col md:flex-row items-start md:items-center gap-6">
         <div className="flex-1">
           <h2 className="font-display text-2xl font-extrabold mb-2">Are you a supplier?</h2>
-          <p className="text-[15px] text-[#C9B8AC] font-semibold">
+          <p className="text-[15px] text-muted-2">
             Reach thousands of independent takeaways actively looking for partners.
           </p>
         </div>
         <Link
           href="/register?role=supplier"
-          className="bg-surface text-ink font-extrabold px-7 py-3.5 rounded-full hover:bg-peach-2 transition-colors"
+          className="btn-soft font-extrabold px-7 py-3.5 rounded-2xl"
         >
           List your business
         </Link>

@@ -4,13 +4,13 @@ import { useCallback, useState } from 'react';
 
 export const btn = {
   primary:
-    'bg-primary text-cream text-sm font-bold px-5 py-2.5 rounded-full hover:bg-primary-dark transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
-  dark: 'bg-ink text-surface text-sm font-bold px-5 py-2.5 rounded-full hover:bg-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+    'btn-soft text-sm font-bold px-5 py-2.5 rounded-2xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+  dark: 'btn-soft text-sm font-bold px-5 py-2.5 rounded-2xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
   good: 'bg-verified text-white text-sm font-bold px-5 py-2.5 rounded-full hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
   outline:
     'text-[13px] font-bold border border-line bg-card px-4 py-2 rounded-full hover:border-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
   danger:
-    'text-[13px] font-bold text-primary border border-primary/40 px-4 py-2 rounded-full hover:bg-primary hover:text-cream transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+    'text-[13px] font-bold text-danger border border-danger/40 px-4 py-2 rounded-full hover:bg-danger hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
 };
 
 export const inputClass =
@@ -19,8 +19,8 @@ export const inputClass =
 const TONES = {
   good: 'bg-verified/10 text-verified',
   warn: 'bg-star/15 text-[#9a6210]',
-  bad: 'bg-primary/10 text-primary',
-  info: 'bg-ink/10 text-ink',
+  bad: 'bg-danger/10 text-danger',
+  info: 'bg-tint-blue text-primary',
   neutral: 'bg-page text-muted-2',
 };
 
@@ -109,7 +109,7 @@ export function formatDate(value?: string | null, withTime = true) {
 }
 
 export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`bg-card rounded-2xl p-6 ${className}`}>{children}</div>;
+  return <div className={`bg-card border border-line rounded-2xl p-6 ${className}`}>{children}</div>;
 }
 
 export function SectionTitle({ children, aside }: { children: React.ReactNode; aside?: React.ReactNode }) {
@@ -122,13 +122,13 @@ export function SectionTitle({ children, aside }: { children: React.ReactNode; a
 }
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
-  return <div className="bg-card rounded-2xl p-10 text-center text-muted font-semibold">{children}</div>;
+  return <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">{children}</div>;
 }
 
 export function ErrorNote({ error }: { error: string | null }) {
   if (!error) return null;
   return (
-    <div className="bg-peach-2/40 border border-primary/30 text-primary-dark text-sm font-bold rounded-xl px-4 py-3">{error}</div>
+    <div className="bg-danger/10 border border-danger/25 text-danger-dark text-sm font-bold rounded-xl px-4 py-3">{error}</div>
   );
 }
 
@@ -151,34 +151,7 @@ export function useAction() {
   return { busy, error, setError, run };
 }
 
-export function Tabs<T extends string>({
-  tabs,
-  active,
-  onChange,
-  counts = {},
-}: {
-  tabs: readonly { value: T; label: string }[];
-  active: T;
-  onChange: (value: T) => void;
-  counts?: Partial<Record<T, number>>;
-}) {
-  return (
-    <div className="flex gap-2 flex-wrap">
-      {tabs.map((tab) => (
-        <button
-          key={tab.value}
-          onClick={() => onChange(tab.value)}
-          className={`text-sm font-bold px-4 py-2 rounded-full transition-colors cursor-pointer ${
-            active === tab.value ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
-          }`}
-        >
-          {tab.label}
-          {counts[tab.value] ? ` · ${counts[tab.value]}` : ''}
-        </button>
-      ))}
-    </div>
-  );
-}
+export { Tabs } from '@/components/ui';
 
 export function Pager({ page, pages, onChange }: { page: number; pages: number; onChange: (page: number) => void }) {
   if (pages <= 1) return null;

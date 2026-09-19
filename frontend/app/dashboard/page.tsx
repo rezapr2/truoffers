@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
 import type { Business } from '@/lib/types';
+import { DateChip, PageHeader, Tabs } from '@/components/ui';
 import OverviewTab from './OverviewTab';
 import OffersTab from './OffersTab';
 import PromoteTab from './PromoteTab';
@@ -60,7 +61,7 @@ export default function DashboardPage() {
         </p>
         <Link
           href="/claim-your-business"
-          className="bg-primary text-cream font-bold px-8 py-3.5 rounded-full hover:bg-primary-dark transition-colors"
+          className="btn-soft inline-block font-bold px-8 py-3.5 rounded-2xl"
         >
           Claim or add your business
         </Link>
@@ -76,49 +77,37 @@ export default function DashboardPage() {
       : [...BIZ_TABS];
 
   return (
-    <div className="mx-auto max-w-6xl px-5 md:px-10 py-8">
-      <div className="flex flex-col md:flex-row md:items-center gap-4 mb-8">
-        <div className="flex-1">
-          <h1 className="font-display text-3xl font-extrabold tracking-tight">
-            {isSupplier ? 'Supplier dashboard' : 'Business dashboard'}
-          </h1>
-          <p className="text-muted font-semibold text-sm mt-1">Welcome back, {user.name}</p>
-        </div>
-        {!isSupplier && businesses.length > 1 && (
-          <select
-            value={selectedId ?? ''}
-            onChange={(e) => setSelectedId(e.target.value)}
-            className="border border-line rounded-full px-5 py-3 font-bold bg-card outline-none"
-          >
-            {businesses.map((b) => (
-              <option key={b._id} value={b._id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        )}
-        {selected && (
-          <Link
-            href={`/takeaway/${selected.slug}`}
-            className="border-[1.5px] border-ink text-sm font-bold px-5 py-3 rounded-full hover:bg-ink hover:text-surface transition-colors"
-          >
-            View public profile
-          </Link>
-        )}
-      </div>
+    <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
+      <PageHeader
+        title={`Hello, ${user.name.split(' ')[0]}`}
+        subtitle={
+          isSupplier
+            ? 'Leads from takeaways appear here as they come in.'
+            : 'Here is how your takeaway is doing on TruOffers.'
+        }
+        actions={
+          <>
+            {!isSupplier && businesses.length > 1 && (
+              <select
+                value={selectedId ?? ''}
+                onChange={(e) => setSelectedId(e.target.value)}
+                aria-label="Business"
+                className="bg-surface rounded-xl px-4 py-2.5 text-sm font-bold outline-none cursor-pointer"
+              >
+                {businesses.map((b) => (
+                  <option key={b._id} value={b._id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <DateChip />
+          </>
+        }
+      />
 
-      <div className="flex gap-2 mb-7 flex-wrap">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`text-sm font-bold px-5 py-2.5 rounded-full transition-colors cursor-pointer ${
-              activeTab === t ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="mb-7">
+        <Tabs tabs={tabs.map((t) => ({ value: t, label: t }))} active={activeTab} onChange={setTab} />
       </div>
 
       {activeTab === 'Overview' && selected && <OverviewTab business={selected} />}

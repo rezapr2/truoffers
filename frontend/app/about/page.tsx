@@ -26,10 +26,10 @@ export default function AboutPage() {
         </p>
       </div>
       <div className="mt-10 flex gap-3 flex-wrap">
-        <Link href="/offers" className="bg-primary text-cream font-bold px-7 py-3.5 rounded-full hover:bg-primary-dark transition-colors">
+        <Link href="/offers" className="btn-soft font-bold px-7 py-3.5 rounded-2xl">
           Find offers near you
         </Link>
-        <Link href="/claim-your-business" className="border-[1.5px] border-ink font-bold px-7 py-3.5 rounded-full hover:bg-ink hover:text-surface transition-colors">
+        <Link href="/claim-your-business" className="border border-line bg-card font-bold px-7 py-3.5 rounded-full hover:border-primary hover:text-primary transition-colors">
           List your takeaway
         </Link>
       </div>

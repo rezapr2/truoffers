@@ -61,7 +61,7 @@ export default async function TakeawaysPage({
               key={i}
               href={`/takeaways?page=${i + 1}${q ? `&q=${q}` : ''}`}
               className={`w-10 h-10 flex items-center justify-center rounded-full font-bold text-sm ${
-                data.page === i + 1 ? 'bg-ink text-surface' : 'bg-card border border-line'
+                data.page === i + 1 ? 'bg-tint-blue text-primary' : 'bg-card border border-line'
               }`}
             >
               {i + 1}

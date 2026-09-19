@@ -4,6 +4,7 @@ import type { Category, Offer, Business } from '@/lib/types';
 import PostcodeSearch from '@/components/PostcodeSearch';
 import OfferRow from '@/components/OfferRow';
 import BusinessCard from '@/components/BusinessCard';
+import { OffersIcon, PricingIcon, ShieldIcon, StoreIcon } from '@/components/icons';
 
 export default async function HomePage() {
   const [categories, offers, featured] = await Promise.all([
@@ -13,19 +14,19 @@ export default async function HomePage() {
   ]);
 
   const heroOffers = (offers || []).slice(0, 3);
-  const tilts = ['-rotate-[1.5deg]', 'rotate-[1deg] ml-8', '-rotate-[0.5deg]'];
+  const offsets = ['', 'ml-8', ''];
 
   return (
     <div className="mx-auto max-w-7xl">
       {/* Hero */}
-      <section className="mx-3 md:mx-6 mt-3 bg-primary rounded-3xl px-6 py-10 md:px-16 md:py-18 text-cream grid md:grid-cols-[1.2fr_1fr] gap-10 md:gap-12 items-center">
+      <section className="mx-5 md:mx-10 mt-3 md:mt-8 bg-gradient-to-br from-tint-blue via-surface to-card border border-line rounded-3xl px-6 py-10 md:px-14 md:py-16 grid md:grid-cols-[1.2fr_1fr] gap-10 md:gap-12 items-center">
         <div>
-          <h1 className="font-display text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.05] mb-5">
+          <h1 className="font-display text-4xl md:text-5xl font-extrabold tracking-tight leading-[1.1] mb-5">
             The deal comes first.
             <br />
             Then dinner.
           </h1>
-          <p className="text-base md:text-lg font-medium text-peach mb-8 leading-relaxed max-w-lg">
+          <p className="text-base md:text-lg text-muted-2 mb-8 leading-relaxed max-w-lg">
             Every live takeaway offer near you, in one search. Verified businesses, real reviews,
             direct ordering.
           </p>
@@ -39,7 +40,7 @@ export default async function HomePage() {
               <Link
                 key={offer._id}
                 href={`/offer/${offer._id}`}
-                className={`bg-cream text-ink rounded-2xl px-6 py-4 flex items-center gap-4 hover:scale-[1.02] transition-transform ${tilts[i % 3]}`}
+                className={`bg-card text-ink border border-line shadow-sm rounded-2xl px-6 py-4 flex items-center gap-4 hover:shadow-lg transition-shadow ${offsets[i % 3]}`}
               >
                 <span className="font-display text-2xl font-extrabold text-primary flex-none">
                   {offer.displayLabel}
@@ -59,22 +60,30 @@ export default async function HomePage() {
       </section>
 
       {/* Stats strip */}
-      <section className="flex flex-wrap justify-center gap-x-16 gap-y-6 px-6 pt-10 pb-2">
+      <section className="mx-5 md:mx-10 mt-8 grid grid-cols-2 md:grid-cols-4 gap-y-6 border-y border-line py-6 md:divide-x md:divide-line">
         {[
-          ['2,000+', 'takeaways listed'],
-          ['500+', 'verified businesses'],
-          ['£0', 'cost to customers'],
-          ['0%', 'commission taken'],
-        ].map(([num, label]) => (
-          <div key={label} className="text-center">
-            <div className="font-display text-3xl font-extrabold">{num}</div>
-            <div className="text-[13px] font-bold text-muted">{label}</div>
-          </div>
-        ))}
+          [StoreIcon, 'bg-tint-blue text-primary', '2,000+', 'takeaways listed'],
+          [ShieldIcon, 'bg-tint-mint text-verified', '500+', 'verified businesses'],
+          [PricingIcon, 'bg-tint-peach text-star', '£0', 'cost to customers'],
+          [OffersIcon, 'bg-tint-lilac text-primary', '0%', 'commission taken'],
+        ].map(([Icon, tint, num, label]) => {
+          const StatIcon = Icon as typeof StoreIcon;
+          return (
+            <div key={label as string} className="flex items-center gap-4 md:px-7">
+              <span className={`w-12 h-12 rounded-full flex items-center justify-center flex-none ${tint as string}`}>
+                <StatIcon className="w-5 h-5" />
+              </span>
+              <div>
+                <div className="text-[13px] text-muted">{label as string}</div>
+                <div className="font-display text-2xl font-extrabold leading-tight">{num as string}</div>
+              </div>
+            </div>
+          );
+        })}
       </section>
 
       {/* Cuisines */}
-      <section className="px-6 md:px-14 pt-10 pb-2">
+      <section className="px-5 md:px-10 pt-10 pb-2">
         <h2 className="font-display text-2xl md:text-3xl font-extrabold tracking-tight mb-5">
           What are you craving?
         </h2>
@@ -85,7 +94,7 @@ export default async function HomePage() {
               href={`/offers?category=${cat.slug}`}
               className={`text-[15px] font-bold px-5 py-3 rounded-full transition-colors ${
                 i === 0
-                  ? 'bg-ink text-surface hover:bg-primary'
+                  ? 'bg-tint-blue text-primary'
                   : 'bg-card border border-line text-ink hover:border-primary'
               }`}
             >
@@ -97,7 +106,7 @@ export default async function HomePage() {
       </section>
 
       {/* Fresh offers */}
-      <section className="px-6 md:px-14 py-12">
+      <section className="px-5 md:px-10 py-12">
         <div className="flex items-baseline justify-between mb-5">
           <h2 className="font-display text-2xl md:text-3xl font-extrabold tracking-tight">
             Fresh offers near you
@@ -111,7 +120,7 @@ export default async function HomePage() {
             <OfferRow key={offer._id} offer={offer} />
           ))}
           {(!offers || offers.length === 0) && (
-            <div className="bg-card rounded-2xl p-8 text-center text-muted font-semibold">
+            <div className="bg-card border border-line rounded-2xl p-8 text-center text-muted font-semibold">
               No live offers yet — start the API and run the seed script.
             </div>
           )}
@@ -119,7 +128,7 @@ export default async function HomePage() {
       </section>
 
       {/* Featured takeaways */}
-      <section className="px-6 md:px-14 pb-12">
+      <section className="px-5 md:px-10 pb-12">
         <div className="flex items-baseline justify-between mb-5">
           <h2 className="font-display text-2xl md:text-3xl font-extrabold tracking-tight">
             Featured takeaways
@@ -136,7 +145,7 @@ export default async function HomePage() {
       </section>
 
       {/* How it works */}
-      <section className="mx-3 md:mx-6 bg-card rounded-3xl px-7 py-9 md:px-14 md:py-14">
+      <section className="mx-5 md:mx-10 bg-surface rounded-3xl px-7 py-9 md:px-12 md:py-12">
         <h2 className="font-display text-2xl md:text-3xl font-extrabold tracking-tight mb-8">
           How it works
         </h2>
@@ -147,7 +156,7 @@ export default async function HomePage() {
             ['3', 'Order direct', 'Straight to the takeaway — no marketplace mark-ups.'],
           ].map(([n, title, body]) => (
             <div key={n} className="flex gap-4">
-              <div className="font-display text-4xl font-extrabold text-primary leading-none">{n}</div>
+              <div className="w-11 h-11 flex-none rounded-full bg-tint-blue text-primary font-display font-extrabold text-lg flex items-center justify-center">{n}</div>
               <div>
                 <div className="text-[17px] font-extrabold mb-1.5">{title}</div>
                 <div className="text-sm text-muted font-semibold leading-relaxed">{body}</div>
@@ -158,20 +167,20 @@ export default async function HomePage() {
       </section>
 
       {/* App / follow banner */}
-      <section className="mx-3 md:mx-6 mt-6 bg-ink text-surface rounded-3xl px-7 py-9 md:px-14 md:py-11 flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-10">
+      <section className="mx-5 md:mx-10 mt-6 bg-gradient-to-br from-tint-blue to-card border border-line rounded-3xl px-7 py-9 md:px-12 md:py-10 flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-10">
         <div className="flex-1">
           <h2 className="font-display text-2xl md:text-3xl font-extrabold tracking-tight mb-2">
             Never miss a deal
           </h2>
-          <p className="text-[15px] text-[#C9B8AC] font-semibold">
+          <p className="text-[15px] text-muted-2">
             Follow your favourite takeaways — we&apos;ll notify you the moment they post a new offer.
           </p>
         </div>
         <div className="flex gap-3">
-          <span className="bg-surface text-ink text-sm font-extrabold px-6 py-3 rounded-full">
+          <span className="btn-soft text-sm font-extrabold px-6 py-3 rounded-2xl">
             App Store
           </span>
-          <span className="bg-surface text-ink text-sm font-extrabold px-6 py-3 rounded-full">
+          <span className="btn-soft text-sm font-extrabold px-6 py-3 rounded-2xl">
             Google Play
           </span>
         </div>

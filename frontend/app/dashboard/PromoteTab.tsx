@@ -127,14 +127,14 @@ export default function PromoteTab({ business }: { business: Business }) {
         </div>
       )}
       {error && (
-        <div className="bg-peach-2/40 border border-primary/30 text-primary-dark font-bold rounded-2xl px-6 py-4">
+        <div className="bg-danger/10 border border-danger/25 text-danger-dark font-bold rounded-2xl px-6 py-4">
           {error}
         </div>
       )}
 
       {/* Ad wallet */}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-card rounded-3xl p-7">
+        <div className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-1">Ad wallet</h2>
           <p className="text-[13px] font-semibold text-muted mb-4">
             Prepaid balance that funds your promoted placements.
@@ -157,7 +157,7 @@ export default function PromoteTab({ business }: { business: Business }) {
             <button
               type="submit"
               disabled={busy !== null}
-              className="bg-ink text-surface font-bold px-6 py-3 rounded-full hover:bg-primary transition-colors cursor-pointer disabled:opacity-60"
+              className="btn-soft font-bold px-6 py-3 rounded-2xl cursor-pointer disabled:opacity-60"
             >
               {busy === 'topup' ? 'Processing…' : 'Top up'}
             </button>
@@ -165,7 +165,7 @@ export default function PromoteTab({ business }: { business: Business }) {
         </div>
 
         {/* Start a promotion */}
-        <div className="bg-card rounded-3xl p-7">
+        <div className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-1">Promoted placement</h2>
           <p className="text-[13px] font-semibold text-muted mb-4">
             Boost your ranking in local searches with a Sponsored tag. Charged daily from your
@@ -201,7 +201,7 @@ export default function PromoteTab({ business }: { business: Business }) {
             <button
               type="submit"
               disabled={busy !== null}
-              className="bg-primary text-cream font-bold py-3 rounded-full hover:bg-primary-dark transition-colors cursor-pointer disabled:opacity-60"
+              className="btn-soft font-bold py-3 rounded-2xl cursor-pointer disabled:opacity-60"
             >
               {busy === 'promote' ? 'Starting…' : 'Start promotion'}
             </button>
@@ -211,7 +211,7 @@ export default function PromoteTab({ business }: { business: Business }) {
 
       {/* Active promotions */}
       {promotions.length > 0 && (
-        <div className="bg-card rounded-3xl p-7">
+        <div className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-4">Your promotions</h2>
           <div className="flex flex-col gap-3">
             {promotions.map((p) => (
@@ -244,7 +244,7 @@ export default function PromoteTab({ business }: { business: Business }) {
                     </button>
                   )}
                   {p.status !== 'ended' && (
-                    <button onClick={() => setPromotionStatus(p, 'ended')} className="text-[13px] font-bold text-primary border border-primary/40 px-4 py-2 rounded-full hover:bg-primary hover:text-cream transition-colors cursor-pointer">
+                    <button onClick={() => setPromotionStatus(p, 'ended')} className="text-[13px] font-bold text-danger border border-danger/40 px-4 py-2 rounded-full hover:bg-danger hover:text-white transition-colors cursor-pointer">
                       End
                     </button>
                   )}
@@ -257,7 +257,7 @@ export default function PromoteTab({ business }: { business: Business }) {
 
       {/* Marketing tools: QR + review sync */}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-card rounded-3xl p-7">
+        <div className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-1">Your QR code</h2>
           <p className="text-[13px] font-semibold text-muted mb-4">
             Print it on menus, flyers and window stickers — it opens your TruOffers profile.
@@ -272,14 +272,14 @@ export default function PromoteTab({ business }: { business: Business }) {
             <a
               href={`${businessQrUrl}?size=1024`}
               download={`${business.slug}-qr.png`}
-              className="bg-ink text-surface text-sm font-bold px-5 py-3 rounded-full hover:bg-primary transition-colors"
+              className="btn-soft text-sm font-bold px-5 py-3 rounded-2xl"
             >
               Download print size
             </a>
           </div>
         </div>
 
-        <div className="bg-card rounded-3xl p-7">
+        <div className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-1">Google reviews</h2>
           <p className="text-[13px] font-semibold text-muted mb-4">
             Your public rating: {business.reviews?.rating || '—'}★ from {business.reviews?.count || 0}{' '}
@@ -288,7 +288,7 @@ export default function PromoteTab({ business }: { business: Business }) {
           <button
             onClick={syncReviews}
             disabled={syncing}
-            className="bg-ink text-surface text-sm font-bold px-5 py-3 rounded-full hover:bg-primary transition-colors cursor-pointer disabled:opacity-60"
+            className="btn-soft text-sm font-bold px-5 py-3 rounded-2xl cursor-pointer disabled:opacity-60"
           >
             {syncing ? 'Syncing…' : 'Sync Google reviews'}
           </button>
@@ -297,7 +297,7 @@ export default function PromoteTab({ business }: { business: Business }) {
 
       {/* Recent transactions */}
       {transactions.length > 0 && (
-        <div className="bg-card rounded-3xl p-7">
+        <div className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-4">Recent wallet activity</h2>
           <div className="flex flex-col divide-y divide-line">
             {transactions.map((t) => (

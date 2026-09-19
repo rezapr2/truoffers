@@ -14,7 +14,7 @@ function PlanGrid({ plans, note }: { plans: Plan[]; note?: string }) {
       {plans.map((plan) => (
         <div
           key={plan._id}
-          className={`bg-card rounded-3xl p-7 flex flex-col ${
+          className={`bg-card border border-line rounded-3xl p-7 flex flex-col ${
             plan.key === 'standard' || plan.key === 'supplier_pro' ? 'ring-2 ring-primary' : ''
           }`}
         >
@@ -47,7 +47,7 @@ function PlanGrid({ plans, note }: { plans: Plan[]; note?: string }) {
                   ? '/claim-your-business'
                   : '/register?role=business_owner'
             }
-            className="mt-auto text-center bg-ink text-surface font-bold py-3.5 rounded-full hover:bg-primary transition-colors"
+            className="mt-auto text-center btn-soft font-bold py-3.5 rounded-2xl"
           >
             {plan.monthlyPrice === 0 ? 'Start free' : 'Get started'}
           </Link>

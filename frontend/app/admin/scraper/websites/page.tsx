@@ -192,7 +192,7 @@ export default function WebsitesPage() {
         {data?.items.map((site) => {
           const provider = typeof site.providerRef === 'object' ? site.providerRef : null;
           return (
-            <div key={site._id} className="bg-card rounded-2xl px-6 py-4 flex flex-col md:flex-row md:items-center gap-3">
+            <div key={site._id} className="bg-card border border-line rounded-2xl px-6 py-4 flex flex-col md:flex-row md:items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
                   <Link href={`/admin/scraper/websites/${site._id}`} className="font-extrabold hover:text-primary break-all">

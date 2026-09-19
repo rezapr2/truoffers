@@ -41,9 +41,9 @@ function LoginInner() {
     <div className="mx-auto max-w-md px-5 py-16">
       <h1 className="font-display text-3xl font-extrabold tracking-tight mb-2">Welcome back</h1>
       <p className="text-muted font-semibold mb-8">Log in to manage your offers and favourites.</p>
-      <form onSubmit={submit} className="bg-card rounded-3xl p-7 flex flex-col gap-4">
+      <form onSubmit={submit} className="bg-card border border-line rounded-3xl p-7 flex flex-col gap-4">
         {error && (
-          <div className="bg-peach-2/40 border border-primary/30 text-primary-dark text-sm font-bold rounded-xl px-4 py-3">
+          <div className="bg-danger/10 border border-danger/25 text-danger-dark text-sm font-bold rounded-xl px-4 py-3">
             {error}
           </div>
         )}
@@ -70,7 +70,7 @@ function LoginInner() {
         <button
           type="submit"
           disabled={busy}
-          className="bg-ink text-surface font-bold py-3.5 rounded-full hover:bg-primary transition-colors cursor-pointer disabled:opacity-60 mt-2"
+          className="btn-soft font-bold py-3.5 rounded-2xl cursor-pointer disabled:opacity-60 mt-2"
         >
           {busy ? 'Logging in…' : 'Log in'}
         </button>

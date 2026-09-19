@@ -45,7 +45,7 @@ function MatchesView() {
   return (
     <div className="flex flex-col gap-4">
       {branches.map((item) => (
-        <div key={`${item.websiteId}${item.branch.branchPath}`} className="bg-card rounded-2xl p-5 flex flex-col gap-3">
+        <div key={`${item.websiteId}${item.branch.branchPath}`} className="bg-card border border-line rounded-2xl p-5 flex flex-col gap-3">
           <Link href={`/admin/scraper/websites/${item.websiteId}`} className="text-sm font-extrabold hover:text-primary">
             {item.domain}
           </Link>
@@ -120,7 +120,7 @@ export default function CandidatesPage() {
               <Link
                 key={c._id}
                 href={`/admin/scraper/candidates/${c._id}`}
-                className="bg-card rounded-2xl px-6 py-4 flex flex-col md:flex-row md:items-center gap-3 hover:shadow-lg transition-shadow"
+                className="bg-card border border-line rounded-2xl px-6 py-4 flex flex-col md:flex-row md:items-center gap-3 hover:shadow-lg transition-shadow"
               >
                 <ConfidenceBadge score={c.confidenceScore} band={c.confidenceBand} />
                 <div className="flex-1 min-w-0">

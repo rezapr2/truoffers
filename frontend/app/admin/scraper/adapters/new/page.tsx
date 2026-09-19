@@ -27,7 +27,7 @@ function StepHeader({ step }: { step: number }) {
       {STEPS.map((label, i) => (
         <li
           key={label}
-          className={`text-[13px] font-bold px-3 py-1.5 rounded-full ${i === step ? 'bg-ink text-surface' : i < step ? 'bg-verified/10 text-verified' : 'bg-card border border-line text-muted'}`}
+          className={`text-[13px] font-bold px-3 py-1.5 rounded-full ${i === step ? 'bg-tint-blue text-primary' : i < step ? 'bg-verified/10 text-verified' : 'bg-card border border-line text-muted'}`}
         >
           {i + 1}. {label}
         </li>

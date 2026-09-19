@@ -63,7 +63,7 @@ export default function SupplierPage({ params }: { params: Promise<{ slug: strin
       <nav className="text-sm font-bold text-muted mb-4">
         <Link href="/suppliers" className="hover:text-primary">Suppliers</Link> / {supplier.name}
       </nav>
-      <div className="bg-card rounded-3xl p-8 md:p-10 mb-5">
+      <div className="bg-card border border-line rounded-3xl p-8 md:p-10 mb-5">
         <div className="flex items-center gap-3 flex-wrap mb-2">
           <h1 className="font-display text-3xl font-extrabold tracking-tight">{supplier.name}</h1>
           <VerifiedBadge status={supplier.verificationStatus} />
@@ -86,7 +86,7 @@ export default function SupplierPage({ params }: { params: Promise<{ slug: strin
         )}
       </div>
 
-      <div className="bg-card rounded-3xl p-8">
+      <div className="bg-card border border-line rounded-3xl p-8">
         <h2 className="font-display text-xl font-extrabold mb-1">Request a quote</h2>
         <p className="text-sm font-semibold text-muted mb-6">
           Your enquiry goes straight to {supplier.name}&apos;s lead inbox.
@@ -98,7 +98,7 @@ export default function SupplierPage({ params }: { params: Promise<{ slug: strin
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-4">
             {error && (
-              <div className="bg-peach-2/40 border border-primary/30 text-primary-dark text-sm font-bold rounded-xl px-4 py-3">
+              <div className="bg-danger/10 border border-danger/25 text-danger-dark text-sm font-bold rounded-xl px-4 py-3">
                 {error}
               </div>
             )}
@@ -137,7 +137,7 @@ export default function SupplierPage({ params }: { params: Promise<{ slug: strin
             <button
               type="submit"
               disabled={busy}
-              className="bg-primary text-cream font-bold py-3.5 rounded-full hover:bg-primary-dark transition-colors cursor-pointer disabled:opacity-60"
+              className="btn-soft font-bold py-3.5 rounded-2xl cursor-pointer disabled:opacity-60"
             >
               {busy ? 'Sending…' : 'Send enquiry'}
             </button>

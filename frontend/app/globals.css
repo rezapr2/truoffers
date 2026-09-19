@@ -1,30 +1,59 @@
 @import "tailwindcss";
 
 @theme {
-  --color-page: #EDE8E2;
-  --color-surface: #F7F1E8;
+  /* The grey backdrop the white app canvas floats on */
+  --color-backdrop: #DCDADE;
+  /* Light grey fill for chips, progress tracks and avatars on white */
+  --color-page: #ECEEF2;
+  /* Soft grey panels, inputs and inner tiles */
+  --color-surface: #F5F6F8;
   --color-card: #FFFFFF;
-  --color-primary: #C63D1A;
-  --color-primary-dark: #9E2E10;
-  --color-ink: #241812;
-  --color-ink-soft: #5C4D42;
-  --color-muted: #8A7666;
-  --color-muted-2: #6E625A;
-  --color-cream: #FFF6EF;
-  --color-peach: #F6CDBC;
-  --color-peach-2: #FFD9C9;
-  --color-line: #E5D9CB;
+  --color-primary: #2F6FD0;
+  --color-primary-dark: #2559AB;
+  --color-ink: #161821;
+  --color-ink-soft: #4A4F5E;
+  --color-muted: #737888;
+  --color-muted-2: #5B6070;
+  /* Text on primary and ink backgrounds */
+  --color-cream: #FFFFFF;
+  --color-peach: #C9DCF7;
+  /* Pale blue fill: chat-bubble blue in the reference */
+  --color-peach-2: #E4EEFC;
+  --color-line: #EDEEF2;
   --color-verified: #1E8A5A;
   --color-star: #E2941B;
+  --color-danger: #DD3B3B;
+  --color-danger-dark: #B02A2A;
+  /* Second series colour, used beside primary */
+  --color-accent: #F0A24B;
 
-  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-bricolage), var(--font-manrope), ui-sans-serif, sans-serif;
+  /* Pastel circles behind icons */
+  --color-tint-blue: #E3EEFC;
+  --color-tint-peach: #FCEBD6;
+  --color-tint-mint: #DDF5EA;
+  --color-tint-lilac: #ECEAF8;
+
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+
+  /* Poppins reads heavier than the previous typeface, so the weight scale sits one step lighter */
+  --font-weight-semibold: 400;
+  --font-weight-bold: 500;
+  --font-weight-extrabold: 600;
+
+  --radius-3xl: 1.75rem;
+  --radius-4xl: 2.25rem;
+
+  --shadow-sm: 0 1px 2px rgb(20 24 40 / 0.04), 0 6px 16px -8px rgb(20 24 40 / 0.08);
+  --shadow-lg: 0 14px 36px -14px rgb(30 60 130 / 0.28);
+  --shadow-canvas: 0 40px 80px -40px rgb(30 30 50 / 0.35);
 }
 
 body {
-  background: var(--color-surface);
+  background: var(--color-card);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-weight: 400;
 }
 
 .font-display {
@@ -32,7 +61,24 @@ body {
 }
 
 ::placeholder {
-  color: #a79a90;
+  color: #A3A8B5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* The light-blue gradient pill from the reference's "Upgrade" button */
+.btn-soft {
+  background: linear-gradient(180deg, #D6E7FB 0%, #9CC4F2 100%);
+  color: #14294A;
+  box-shadow: 0 10px 20px -10px rgb(70 130 220 / 0.6);
+  transition: filter 0.15s, transform 0.15s;
+}
+.btn-soft:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
 }
 
 /* Offer flip card */

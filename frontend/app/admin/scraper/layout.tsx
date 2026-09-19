@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { DateChip, PageHeader } from '@/components/ui';
 import { OverviewProvider, useOverview } from './_components/overview';
 
 const ADMIN_ROLES = ['super_admin', 'support_admin', 'sales_admin'];
@@ -34,34 +35,42 @@ function ScraperNav() {
   };
 
   return (
-    <>
-      {overview?.halted && (
-        <div className="bg-primary text-cream rounded-2xl px-6 py-4 mb-6 font-bold flex flex-col sm:flex-row sm:items-center gap-3">
-          <span className="flex-1">Emergency stop is active: no website is being crawled.</span>
-          <Link href="/admin/scraper/jobs" className="underline underline-offset-4 whitespace-nowrap">
-            Review and resume
+    <nav className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 lg:bg-surface lg:rounded-3xl lg:p-3 lg:sticky lg:top-8 lg:self-start">
+      {NAV.map((item) => {
+        const active = 'exact' in item ? pathname === item.href : pathname.startsWith(item.href);
+        const count = 'badge' in item ? badges[item.badge] : 0;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? 'page' : undefined}
+            className={`text-sm font-bold px-4 py-2.5 rounded-2xl transition-colors whitespace-nowrap flex items-center justify-between gap-3 ${
+              active ? 'bg-card text-primary shadow-sm' : 'text-ink-soft hover:bg-card/70'
+            }`}
+          >
+            {item.label}
+            {count > 0 && (
+              <span className="bg-tint-blue text-primary text-[11px] font-extrabold min-w-5 h-5 px-1.5 rounded-full inline-flex items-center justify-center">
+                {count}
+              </span>
+            )}
           </Link>
-        </div>
-      )}
-      <nav className="flex gap-2 mb-8 flex-wrap">
-        {NAV.map((item) => {
-          const active = 'exact' in item ? pathname === item.href : pathname.startsWith(item.href);
-          const count = 'badge' in item ? badges[item.badge] : 0;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`text-sm font-bold px-4 py-2 rounded-full transition-colors ${
-                active ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
-              }`}
-            >
-              {item.label}
-              {count > 0 && <span className={`ml-1.5 ${active ? 'text-peach' : 'text-primary'}`}>{count}</span>}
-            </Link>
-          );
-        })}
-      </nav>
-    </>
+        );
+      })}
+    </nav>
+  );
+}
+
+function HaltBanner() {
+  const { overview } = useOverview();
+  if (!overview?.halted) return null;
+  return (
+    <div className="bg-danger text-white rounded-2xl px-6 py-4 mb-6 font-bold flex flex-col sm:flex-row sm:items-center gap-3">
+      <span className="flex-1">Emergency stop is active: no website is being crawled.</span>
+      <Link href="/admin/scraper/jobs" className="underline underline-offset-4 whitespace-nowrap">
+        Review and resume
+      </Link>
+    </div>
   );
 }
 
@@ -85,17 +94,21 @@ export default function ScraperAdminLayout({ children }: { children: React.React
 
   return (
     <OverviewProvider>
-      <div className="mx-auto max-w-6xl px-5 md:px-10 py-8">
-        <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
-          <div>
-            <Link href="/admin" className="text-[13px] font-bold text-muted hover:text-primary">
+      <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
+        <PageHeader
+          title="Website import robot"
+          subtitle={
+            <Link href="/admin" className="hover:text-primary">
               ← Admin panel
             </Link>
-            <h1 className="font-display text-3xl font-extrabold tracking-tight">Website import robot</h1>
-          </div>
+          }
+          actions={<DateChip />}
+        />
+        <HaltBanner />
+        <div className="grid lg:grid-cols-[220px_minmax(0,1fr)] gap-x-8 gap-y-6">
+          <ScraperNav />
+          <div className="min-w-0">{children}</div>
         </div>
-        <ScraperNav />
-        {children}
       </div>
     </OverviewProvider>
   );

@@ -99,7 +99,7 @@ export default function OutreachPage() {
           These takeaways have offers we imported from their own website, and nobody has claimed the listing. Generate an invitation, then
           send it yourself: TruOffers never contacts a business automatically.
         </p>
-        <p className="text-[13px] font-bold text-primary-dark bg-peach-2/40 border border-primary/30 rounded-xl px-4 py-3 mt-4">
+        <p className="text-[13px] font-bold text-danger-dark bg-danger/10 border border-danger/25 rounded-xl px-4 py-3 mt-4">
           Marketing by email, text or WhatsApp to sole traders is covered by PECR. Check you have a lawful basis and include an opt-out before
           you send anything, and record the contact here afterwards.
         </p>

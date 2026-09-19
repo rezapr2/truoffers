@@ -25,7 +25,7 @@ export default function BlogPage() {
       <p className="text-muted font-semibold mb-10">Guides, city round-ups and product news.</p>
       <div className="grid gap-4">
         {POSTS.map((post) => (
-          <article key={post.title} className="bg-card rounded-3xl p-8 hover:shadow-lg transition-shadow">
+          <article key={post.title} className="bg-card border border-line rounded-3xl p-8 hover:shadow-lg transition-shadow">
             <span className="text-[11px] font-extrabold uppercase text-primary">{post.tag}</span>
             <h2 className="font-display text-xl font-extrabold mt-1 mb-2">{post.title}</h2>
             <p className="text-sm font-semibold text-muted">{post.excerpt}</p>

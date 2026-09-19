@@ -1,20 +1,14 @@
 import type { Metadata } from 'next';
-import { Manrope, Bricolage_Grotesque } from 'next/font/google';
+import { Poppins } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
-import Header from '@/components/Header';
+import AppShell from '@/components/AppShell';
 import Footer from '@/components/Footer';
 
-const manrope = Manrope({
+const poppins = Poppins({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-manrope',
-});
-
-const bricolage = Bricolage_Grotesque({
-  subsets: ['latin'],
-  weight: ['500', '600', '700', '800'],
-  variable: '--font-bricolage',
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-poppins',
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://truoffers.co.uk';
@@ -42,12 +36,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-GB" className={`${manrope.variable} ${bricolage.variable}`}>
-      <body className="min-h-screen flex flex-col antialiased">
+    <html lang="en-GB" className={poppins.variable}>
+      <body className="min-h-screen antialiased">
         <AuthProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <AppShell>
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </AppShell>
         </AuthProvider>
       </body>
     </html>

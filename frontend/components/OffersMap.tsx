@@ -12,7 +12,7 @@ export default function OffersMap({ businesses }: { businesses: Business[] }) {
   const located = businesses.filter((b) => b.location?.coordinates?.length === 2);
   if (located.length === 0) {
     return (
-      <div className="bg-card rounded-2xl p-10 text-center text-muted font-semibold">
+      <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
         No mappable takeaways in this search.
       </div>
     );
@@ -44,7 +44,7 @@ export default function OffersMap({ businesses }: { businesses: Business[] }) {
             pathOptions={{
               color: '#ffffff',
               weight: 2,
-              fillColor: b.sponsored ? '#e05a33' : '#1a1a1a',
+              fillColor: b.sponsored ? '#F0A24B' : '#2F6FD0',
               fillOpacity: 0.95,
             }}
           >

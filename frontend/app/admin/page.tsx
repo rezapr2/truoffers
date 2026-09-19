@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
+import { DateChip, PageHeader, StatStrip, Tabs } from '@/components/ui';
+import { ClickIcon, DashboardIcon, EyeIcon, OffersIcon, PricingIcon, SearchIcon, ShieldIcon, StoreIcon, UsersIcon } from '@/components/icons';
 
 interface Dashboard {
   supply: { listedBusinesses: number; claimedBusinesses: number; activeOffers: number; claimedRate: number };
@@ -85,69 +87,83 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-5 md:px-10 py-8">
-      <div className="flex items-center justify-between gap-4 flex-wrap mb-8">
-        <h1 className="font-display text-3xl font-extrabold tracking-tight">Admin panel</h1>
-        <Link
-          href="/admin/scraper"
-          className="bg-ink text-surface text-sm font-bold px-5 py-2.5 rounded-full hover:bg-primary transition-colors"
-        >
-          Website import robot →
-        </Link>
-      </div>
+    <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
+      <PageHeader
+        title={`Hello, ${user.name.split(' ')[0]}`}
+        subtitle="Keep an eye on supply, demand and the review queues."
+        actions={
+          <>
+            <Link href="/admin/scraper" className="btn-soft text-sm font-bold px-5 py-3 rounded-2xl">
+              Website import robot →
+            </Link>
+            <DateChip />
+          </>
+        }
+      />
 
-      <div className="flex gap-2 mb-7 flex-wrap">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`text-sm font-bold px-5 py-2.5 rounded-full transition-colors cursor-pointer ${
-              tab === t ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
-            }`}
-          >
-            {t}
-            {t === 'Claim queue' && claims.length > 0 ? ` · ${claims.length}` : ''}
-            {t === 'Offer queue' && offers.length > 0 ? ` · ${offers.length}` : ''}
-          </button>
-        ))}
+      <div className="mb-7">
+        <Tabs
+          tabs={TABS.map((t) => ({ value: t, label: t }))}
+          active={tab}
+          onChange={setTab}
+          counts={{ 'Claim queue': claims.length, 'Offer queue': offers.length }}
+        />
       </div>
 
       {tab === 'Overview' && dashboard && (
-        <div className="flex flex-col gap-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              ['Listed businesses', dashboard.supply.listedBusinesses],
-              ['Claimed', `${dashboard.supply.claimedBusinesses} (${dashboard.supply.claimedRate}%)`],
-              ['Active offers', dashboard.supply.activeOffers],
-              ['Users', dashboard.demand.users],
-              ['Searches (30d)', dashboard.demand.searches30d],
-              ['Order clicks (30d)', dashboard.demand.orderClicks30d],
-              ['Paid accounts', dashboard.revenue.paidAccounts],
-              ['MRR', `£${dashboard.revenue.mrr}`],
-            ].map(([label, value]) => (
-              <div key={label as string} className="bg-card rounded-2xl p-5">
-                <div className="font-display text-2xl font-extrabold">{value}</div>
-                <div className="text-[13px] font-bold text-muted">{label}</div>
-              </div>
-            ))}
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-x-8 gap-y-8">
+          <div className="min-w-0 flex flex-col gap-6">
+            <StatStrip
+              stats={[
+                { icon: StoreIcon, tint: 'blue', label: 'Listed businesses', value: dashboard.supply.listedBusinesses },
+                {
+                  icon: ShieldIcon,
+                  tint: 'mint',
+                  label: 'Claimed',
+                  value: dashboard.supply.claimedBusinesses,
+                  note: { text: `${dashboard.supply.claimedRate}%`, tone: 'neutral' },
+                },
+                { icon: OffersIcon, tint: 'peach', label: 'Active offers', value: dashboard.supply.activeOffers },
+                { icon: UsersIcon, tint: 'lilac', label: 'Users', value: dashboard.demand.users },
+              ]}
+            />
+            <StatStrip
+              stats={[
+                { icon: SearchIcon, tint: 'blue', label: 'Searches (30d)', value: dashboard.demand.searches30d },
+                { icon: ClickIcon, tint: 'mint', label: 'Order clicks (30d)', value: dashboard.demand.orderClicks30d },
+                { icon: PricingIcon, tint: 'peach', label: 'Paid accounts', value: dashboard.revenue.paidAccounts },
+                { icon: DashboardIcon, tint: 'lilac', label: 'MRR', value: `£${dashboard.revenue.mrr}` },
+              ]}
+            />
           </div>
-          <div className="bg-card rounded-2xl p-6">
-            <h2 className="font-display text-lg font-extrabold mb-4">Top search areas (30 days)</h2>
-            <div className="flex gap-2 flex-wrap">
-              {dashboard.demand.topSearchAreas.map((a) => (
-                <span key={a._id || 'unknown'} className="bg-surface border border-line text-sm font-bold px-4 py-2 rounded-full">
-                  {a._id || '—'} · {a.count}
-                </span>
-              ))}
+
+          <aside>
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className="font-display text-[15px] font-extrabold">Top search areas</h2>
+              <span className="text-[13px] text-muted">30 days</span>
             </div>
-          </div>
+            <ul>
+              {dashboard.demand.topSearchAreas.map((a) => (
+                <li key={a._id || 'unknown'} className="flex items-center gap-3 py-3 border-b border-line last:border-0">
+                  <span className="w-9 h-9 rounded-full bg-tint-blue text-primary flex items-center justify-center flex-none">
+                    <EyeIcon className="w-4 h-4" />
+                  </span>
+                  <span className="flex-1 text-sm font-bold">{a._id || '—'}</span>
+                  <span className="text-sm text-muted">{a.count}</span>
+                </li>
+              ))}
+              {dashboard.demand.topSearchAreas.length === 0 && (
+                <li className="text-sm text-muted">No searches yet.</li>
+              )}
+            </ul>
+          </aside>
         </div>
       )}
 
       {tab === 'Claim queue' && (
         <div className="flex flex-col gap-3">
           {claims.map((claim) => (
-            <div key={claim._id} className="bg-card rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-4">
+            <div key={claim._id} className="bg-card border border-line rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="font-extrabold">
                   {claim.businessId?.name}{' '}
@@ -173,7 +189,7 @@ export default function AdminPage() {
                 </button>
                 <button
                   onClick={() => reviewClaim(claim, false)}
-                  className="border border-primary text-primary text-sm font-bold px-5 py-2.5 rounded-full cursor-pointer hover:bg-primary hover:text-cream transition-colors"
+                  className="border border-danger text-danger text-sm font-bold px-5 py-2.5 rounded-full cursor-pointer hover:bg-danger hover:text-white transition-colors"
                 >
                   Reject
                 </button>
@@ -181,7 +197,7 @@ export default function AdminPage() {
             </div>
           ))}
           {claims.length === 0 && (
-            <div className="bg-card rounded-2xl p-10 text-center text-muted font-semibold">
+            <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
               Claim queue is empty. 🎉
             </div>
           )}
@@ -191,7 +207,7 @@ export default function AdminPage() {
       {tab === 'Offer queue' && (
         <div className="flex flex-col gap-3">
           {offers.map((offer) => (
-            <div key={offer._id} className="bg-card rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-4">
+            <div key={offer._id} className="bg-card border border-line rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-display text-lg font-extrabold text-primary">{offer.displayLabel}</span>
@@ -212,7 +228,7 @@ export default function AdminPage() {
                 </button>
                 <button
                   onClick={() => moderateOffer(offer, false)}
-                  className="border border-primary text-primary text-sm font-bold px-5 py-2.5 rounded-full cursor-pointer hover:bg-primary hover:text-cream transition-colors"
+                  className="border border-danger text-danger text-sm font-bold px-5 py-2.5 rounded-full cursor-pointer hover:bg-danger hover:text-white transition-colors"
                 >
                   Reject
                 </button>
@@ -220,7 +236,7 @@ export default function AdminPage() {
             </div>
           ))}
           {offers.length === 0 && (
-            <div className="bg-card rounded-2xl p-10 text-center text-muted font-semibold">
+            <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
               No offers awaiting moderation.
             </div>
           )}

@@ -13,13 +13,13 @@ export default function NotFound() {
       <div className="flex gap-3 justify-center flex-wrap">
         <Link
           href="/"
-          className="bg-ink text-surface font-bold px-7 py-3.5 rounded-full hover:bg-primary transition-colors"
+          className="btn-soft font-bold px-7 py-3.5 rounded-2xl"
         >
           Back home
         </Link>
         <Link
           href="/offers"
-          className="border-[1.5px] border-ink font-bold px-7 py-3.5 rounded-full hover:bg-ink hover:text-surface transition-colors"
+          className="border border-line bg-card font-bold px-7 py-3.5 rounded-full hover:border-primary hover:text-primary transition-colors"
         >
           Browse offers
         </Link>

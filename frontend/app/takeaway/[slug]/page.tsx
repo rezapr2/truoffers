@@ -68,7 +68,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
     <div className="mx-auto max-w-5xl px-5 md:px-10 py-8">
       <BusinessJsonLd business={business} offers={offers} />
       {/* Header */}
-      <div className="bg-card rounded-3xl p-7 md:p-10 mb-5">
+      <div className="bg-card border border-line rounded-3xl p-7 md:p-10 mb-5">
         <div className="flex flex-col md:flex-row gap-6 md:items-center">
           <div className="w-20 h-20 md:w-24 md:h-24 flex-none rounded-full bg-page flex items-center justify-center font-display font-extrabold text-3xl text-primary">
             {business.name.charAt(0)}
@@ -105,7 +105,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => track('order_click', { businessId: business._id })}
-              className="bg-primary text-cream font-bold px-7 py-3.5 rounded-full hover:bg-primary-dark transition-colors"
+              className="btn-soft font-bold px-7 py-3.5 rounded-2xl"
             >
               Order online
             </a>
@@ -114,7 +114,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
             <a
               href={`tel:${business.phone}`}
               onClick={() => track('call_click', { businessId: business._id })}
-              className="border-[1.5px] border-ink font-bold px-7 py-3.5 rounded-full hover:bg-ink hover:text-surface transition-colors"
+              className="border border-line bg-card font-bold px-7 py-3.5 rounded-full hover:border-primary hover:text-primary transition-colors"
             >
               Call
             </a>
@@ -124,7 +124,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => track('directions_click', { businessId: business._id })}
-            className="border-[1.5px] border-ink font-bold px-7 py-3.5 rounded-full hover:bg-ink hover:text-surface transition-colors"
+            className="border border-line bg-card font-bold px-7 py-3.5 rounded-full hover:border-primary hover:text-primary transition-colors"
           >
             Directions
           </a>
@@ -141,7 +141,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
             key={t}
             onClick={() => setTab(t)}
             className={`text-sm font-bold px-5 py-2.5 rounded-full transition-colors cursor-pointer ${
-              tab === t ? 'bg-ink text-surface' : 'bg-card border border-line hover:border-primary'
+              tab === t ? 'bg-tint-blue text-primary' : 'bg-card border border-line hover:border-primary'
             }`}
           >
             {t}
@@ -161,7 +161,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
             </div>
           )}
           {offers.length === 0 && checkingAvailability === 0 && (
-            <div className="bg-card rounded-2xl p-8 text-muted font-semibold sm:col-span-2 text-center">
+            <div className="bg-card border border-line rounded-2xl p-8 text-muted font-semibold sm:col-span-2 text-center">
               No live offers right now — follow to be notified when one drops.
             </div>
           )}
@@ -171,7 +171,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
       {tab === 'Menu' && (
         <div className="flex flex-col gap-6">
           {sections.map((section) => (
-            <div key={section} className="bg-card rounded-2xl p-6">
+            <div key={section} className="bg-card border border-line rounded-2xl p-6">
               <h3 className="font-display text-lg font-extrabold mb-4">{section}</h3>
               <div className="flex flex-col gap-3">
                 {menu
@@ -193,7 +193,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
             </div>
           ))}
           {menu.length === 0 && (
-            <div className="bg-card rounded-2xl p-8 text-muted font-semibold text-center">
+            <div className="bg-card border border-line rounded-2xl p-8 text-muted font-semibold text-center">
               Menu not added yet.
             </div>
           )}
@@ -201,7 +201,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
       )}
 
       {tab === 'Reviews' && (
-        <div className="bg-card rounded-2xl p-8">
+        <div className="bg-card border border-line rounded-2xl p-8">
           {business.reviews?.rating > 0 ? (
             <div className="text-center">
               <div className="font-display text-5xl font-extrabold text-star mb-2">
@@ -214,7 +214,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
                 href={mapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block mt-5 border-[1.5px] border-ink font-bold px-6 py-3 rounded-full hover:bg-ink hover:text-surface transition-colors"
+                className="inline-block mt-5 border border-line bg-card font-bold px-6 py-3 rounded-full hover:border-primary hover:text-primary transition-colors"
               >
                 Read reviews on Google
               </a>
@@ -226,7 +226,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
       )}
 
       {tab === 'Info' && (
-        <div className="bg-card rounded-2xl p-8 grid md:grid-cols-2 gap-8">
+        <div className="bg-card border border-line rounded-2xl p-8 grid md:grid-cols-2 gap-8">
           <div>
             <h3 className="font-display text-lg font-extrabold mb-3">About</h3>
             <p className="text-[15px] font-semibold text-ink-soft leading-relaxed">

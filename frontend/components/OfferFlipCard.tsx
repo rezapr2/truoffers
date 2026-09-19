@@ -84,7 +84,7 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
         {/* FRONT */}
         <div
           onClick={flip}
-          className="flip-face h-full bg-card rounded-2xl p-6 flex flex-col cursor-pointer shadow-sm hover:shadow-lg transition-shadow"
+          className="flip-face h-full bg-card border border-line rounded-2xl p-6 flex flex-col cursor-pointer shadow-sm hover:shadow-lg transition-shadow"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="font-display text-3xl font-extrabold text-primary">{offer.displayLabel}</div>
@@ -108,7 +108,7 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
           </div>
           <div className="mt-auto flex items-center justify-between">
             <span className="text-[13px] font-bold text-primary">{endsLabel}</span>
-            <span className="text-[13px] font-bold text-ink-soft border-[1.5px] border-ink rounded-full px-4 py-2">
+            <span className="text-[13px] font-bold text-ink-soft border border-line bg-card rounded-full px-4 py-2">
               Tap to redeem
             </span>
           </div>
@@ -156,7 +156,7 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={orderClick}
-                className="bg-primary text-cream text-[13px] font-bold px-4 py-2 rounded-full hover:bg-primary-dark transition-colors"
+                className="btn-soft text-[13px] font-bold px-4 py-2 rounded-2xl"
               >
                 Order now
               </a>

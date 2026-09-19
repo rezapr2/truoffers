@@ -37,7 +37,7 @@ export default function ScraperOverviewPage() {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {tiles.map((tile) => (
-          <Link key={tile.label} href={tile.href} className="bg-card rounded-2xl p-5 hover:shadow-lg transition-shadow">
+          <Link key={tile.label} href={tile.href} className="bg-card border border-line rounded-2xl p-5 hover:shadow-lg transition-shadow">
             <div className="font-display text-3xl font-extrabold">{tile.value}</div>
             <div className="text-[13px] font-bold text-muted">{tile.label}</div>
             {tile.detail && <div className="text-[12px] font-semibold text-muted mt-1">{tile.detail}</div>}

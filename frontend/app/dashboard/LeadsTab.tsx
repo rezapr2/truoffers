@@ -42,7 +42,7 @@ export default function LeadsTab() {
     <div className="flex flex-col gap-4">
       <h2 className="font-display text-xl font-extrabold">Lead inbox ({leads.length})</h2>
       {leads.map((lead) => (
-        <div key={lead._id} className="bg-card rounded-2xl p-6">
+        <div key={lead._id} className="bg-card border border-line rounded-2xl p-6">
           <div className="flex items-center gap-3 flex-wrap mb-2">
             <span className="font-extrabold">{lead.contactName}</span>
             <a href={`mailto:${lead.contactEmail}`} className="text-sm font-bold text-primary">
@@ -63,7 +63,7 @@ export default function LeadsTab() {
                 key={s}
                 onClick={() => setStatus(lead, s)}
                 className={`text-[12px] font-bold capitalize px-3.5 py-1.5 rounded-full cursor-pointer transition-colors ${
-                  lead.status === s ? 'bg-ink text-surface' : 'bg-surface border border-line hover:border-primary'
+                  lead.status === s ? 'bg-tint-blue text-primary' : 'bg-surface border border-line hover:border-primary'
                 }`}
               >
                 {s}
@@ -73,7 +73,7 @@ export default function LeadsTab() {
         </div>
       ))}
       {loaded && leads.length === 0 && (
-        <div className="bg-card rounded-2xl p-10 text-center text-muted font-semibold">
+        <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
           No leads yet. Takeaways will find you through the supplier marketplace.
         </div>
       )}

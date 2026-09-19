@@ -48,7 +48,7 @@ export default function RemovalRequestForm({ offerId, businessSlug }: { offerId?
 
   if (status === 'sent') {
     return (
-      <div className="bg-card rounded-3xl p-8">
+      <div className="bg-card border border-line rounded-3xl p-8">
         <h2 className="font-display text-2xl font-extrabold mb-3">Request received</h2>
         <p className="text-[15px] font-semibold text-ink-soft leading-relaxed">
           If the listing includes offers imported from your website, they have been removed and we won’t import from
@@ -61,9 +61,9 @@ export default function RemovalRequestForm({ offerId, businessSlug }: { offerId?
 
   const input = 'border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface';
   return (
-    <form onSubmit={submit} className="bg-card rounded-3xl p-7 flex flex-col gap-4">
+    <form onSubmit={submit} className="bg-card border border-line rounded-3xl p-7 flex flex-col gap-4">
       {error && (
-        <div className="bg-peach-2/40 border border-primary/30 text-primary-dark text-sm font-bold rounded-xl px-4 py-3">{error}</div>
+        <div className="bg-danger/10 border border-danger/25 text-danger-dark text-sm font-bold rounded-xl px-4 py-3">{error}</div>
       )}
       {!hasTarget && (
         <label className="flex flex-col gap-1.5">
@@ -124,7 +124,7 @@ export default function RemovalRequestForm({ offerId, businessSlug }: { offerId?
       <button
         type="submit"
         disabled={status === 'sending'}
-        className="bg-ink text-surface font-bold py-3.5 rounded-full hover:bg-primary transition-colors cursor-pointer disabled:opacity-60"
+        className="btn-soft font-bold py-3.5 rounded-2xl cursor-pointer disabled:opacity-60"
       >
         {status === 'sending' ? 'Sending…' : 'Send removal request'}
       </button>

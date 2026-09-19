@@ -7,7 +7,7 @@ import VerifiedBadge from './VerifiedBadge';
 
 export default function BusinessCard({ business }: { business: Business }) {
   return (
-    <div className="bg-card rounded-2xl p-6 flex gap-4 items-center hover:shadow-lg transition-shadow">
+    <div className="bg-card border border-line rounded-2xl p-6 flex gap-4 items-center hover:shadow-lg transition-shadow">
       <div className="w-16 h-16 flex-none rounded-full bg-page flex items-center justify-center font-display font-extrabold text-xl text-primary">
         {business.name.charAt(0)}
       </div>

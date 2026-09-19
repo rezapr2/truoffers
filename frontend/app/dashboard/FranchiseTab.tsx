@@ -37,7 +37,7 @@ export default function FranchiseTab() {
       {/* Totals */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {tiles.map(([label, value]) => (
-          <div key={label} className="bg-card rounded-2xl p-5">
+          <div key={label} className="bg-card border border-line rounded-2xl p-5">
             <div className="font-display text-2xl font-extrabold">{value.toLocaleString()}</div>
             <div className="text-[12px] font-bold text-muted uppercase tracking-wide mt-1">{label}</div>
           </div>
@@ -45,7 +45,7 @@ export default function FranchiseTab() {
       </div>
 
       {/* Per-location table */}
-      <div className="bg-card rounded-3xl p-7 overflow-x-auto">
+      <div className="bg-card border border-line rounded-3xl p-7 overflow-x-auto">
         <h2 className="font-display text-xl font-extrabold mb-4">Locations</h2>
         <table className="w-full text-left min-w-[720px]">
           <thead>

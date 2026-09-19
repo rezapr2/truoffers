@@ -37,7 +37,7 @@ function LogsDrawer({ jobId, onClose }: { jobId: string; onClose: () => void }) 
               )}
             </div>
             {job.errorLog && job.errorLog.length > 0 && (
-              <div className="bg-card rounded-xl p-4">
+              <div className="bg-card border border-line rounded-xl p-4">
                 <div className="text-[12px] font-extrabold uppercase text-primary mb-2">Errors</div>
                 {job.errorLog.map((e, i) => (
                   <div key={i} className="text-[13px] font-semibold">
@@ -48,7 +48,7 @@ function LogsDrawer({ jobId, onClose }: { jobId: string; onClose: () => void }) 
             )}
             <div className="bg-ink text-surface rounded-xl p-4 font-mono text-[12px] leading-relaxed">
               {(job.logs ?? []).map((line, i) => (
-                <div key={i} className={line.level === 'error' ? 'text-peach' : line.level === 'warn' ? 'text-star' : ''}>
+                <div key={i} className={line.level === 'error' ? 'text-red-300' : line.level === 'warn' ? 'text-star' : ''}>
                   {new Date(line.at).toLocaleTimeString('en-GB')} {line.level.toUpperCase()} {line.message}
                   {line.data ? ` ${JSON.stringify(line.data)}` : ''}
                 </div>
@@ -105,7 +105,7 @@ export default function JobsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className={status?.halted ? 'border-2 border-primary' : ''}>
+      <Card className={status?.halted ? 'border-2 border-danger' : ''}>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h2 className="font-display text-lg font-extrabold">

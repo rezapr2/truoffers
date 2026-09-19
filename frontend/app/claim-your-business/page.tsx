@@ -167,7 +167,7 @@ function ClaimInner() {
       </p>
 
       {error && (
-        <div className="bg-peach-2/40 border border-primary/30 text-primary-dark text-sm font-bold rounded-xl px-4 py-3 mb-5">
+        <div className="bg-danger/10 border border-danger/25 text-danger-dark text-sm font-bold rounded-xl px-4 py-3 mb-5">
           {error}
         </div>
       )}
@@ -199,7 +199,7 @@ function ClaimInner() {
             <button
               type="submit"
               disabled={busy}
-              className="bg-ink text-cream text-sm font-bold px-6 py-3 rounded-full cursor-pointer hover:bg-primary transition-colors disabled:opacity-60"
+              className="btn-soft text-sm font-bold px-6 py-3 rounded-full cursor-pointer disabled:opacity-60"
             >
               Search
             </button>
@@ -215,7 +215,7 @@ function ClaimInner() {
                   }
                 }}
                 disabled={b.verificationStatus !== 'unclaimed'}
-                className={`bg-card rounded-2xl p-5 text-left flex items-center gap-4 transition-shadow ${
+                className={`bg-card border border-line rounded-2xl p-5 text-left flex items-center gap-4 transition-shadow ${
                   b.verificationStatus === 'unclaimed'
                     ? 'hover:shadow-lg cursor-pointer'
                     : 'opacity-60'
@@ -239,14 +239,14 @@ function ClaimInner() {
             ))}
           </div>
           {canClaim && (
-            <div className="bg-card rounded-2xl p-6 text-center">
+            <div className="bg-card border border-line rounded-2xl p-6 text-center">
               <div className="font-extrabold mb-1">Can&apos;t find your takeaway?</div>
               <div className="text-sm font-semibold text-muted mb-4">
                 Add it to TruOffers in two minutes — free.
               </div>
               <button
                 onClick={() => setStep('add')}
-                className="bg-primary text-cream font-bold px-7 py-3 rounded-full hover:bg-primary-dark transition-colors cursor-pointer"
+                className="btn-soft font-bold px-7 py-3 rounded-2xl cursor-pointer"
               >
                 Add your business
               </button>
@@ -256,7 +256,7 @@ function ClaimInner() {
       )}
 
       {step === 'method' && selected && (
-        <div className="bg-card rounded-3xl p-7">
+        <div className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-1">Verify you own {selected.name}</h2>
           <p className="text-sm font-semibold text-muted mb-6">
             Choose a verification method (blueprint-approved options).
@@ -297,7 +297,7 @@ function ClaimInner() {
       )}
 
       {step === 'otp' && (
-        <form onSubmit={verifyOtp} className="bg-card rounded-3xl p-7">
+        <form onSubmit={verifyOtp} className="bg-card border border-line rounded-3xl p-7">
           <h2 className="font-display text-xl font-extrabold mb-1">Enter the 6-digit code</h2>
           <p className="text-sm font-semibold text-muted mb-5">
             We called/texted the business number ending in{' '}
@@ -319,7 +319,7 @@ function ClaimInner() {
           <button
             type="submit"
             disabled={busy || otp.length !== 6}
-            className="w-full bg-ink text-surface font-bold py-3.5 rounded-full hover:bg-primary transition-colors cursor-pointer disabled:opacity-60"
+            className="w-full btn-soft font-bold py-3.5 rounded-2xl cursor-pointer disabled:opacity-60"
           >
             Verify
           </button>
@@ -327,7 +327,7 @@ function ClaimInner() {
       )}
 
       {step === 'done' && (
-        <div className="bg-card rounded-3xl p-10 text-center">
+        <div className="bg-card border border-line rounded-3xl p-10 text-center">
           <div className="text-5xl mb-4">{pendingReview ? '🕓' : '🎉'}</div>
           <h2 className="font-display text-2xl font-extrabold mb-2">
             {pendingReview ? 'Claim submitted' : 'You’re verified!'}
@@ -339,7 +339,7 @@ function ClaimInner() {
           </p>
           <Link
             href="/dashboard"
-            className="bg-primary text-cream font-bold px-8 py-3.5 rounded-full hover:bg-primary-dark transition-colors"
+            className="btn-soft font-bold px-8 py-3.5 rounded-2xl"
           >
             Go to dashboard
           </Link>
@@ -347,7 +347,7 @@ function ClaimInner() {
       )}
 
       {step === 'add' && (
-        <form onSubmit={addBusiness} className="bg-card rounded-3xl p-7 flex flex-col gap-4">
+        <form onSubmit={addBusiness} className="bg-card border border-line rounded-3xl p-7 flex flex-col gap-4">
           <h2 className="font-display text-xl font-extrabold">Add your business</h2>
           {user.role !== 'business_owner' && (
             <div className="bg-surface border border-line rounded-xl px-4 py-3 text-sm font-bold">
@@ -443,14 +443,14 @@ function ClaimInner() {
             <button
               type="button"
               onClick={() => setStep('search')}
-              className="border-[1.5px] border-ink font-bold px-6 py-3 rounded-full cursor-pointer"
+              className="border border-line bg-card font-bold px-6 py-3 rounded-full cursor-pointer"
             >
               Back
             </button>
             <button
               type="submit"
               disabled={busy || user.role !== 'business_owner'}
-              className="flex-1 bg-ink text-surface font-bold py-3 rounded-full hover:bg-primary transition-colors cursor-pointer disabled:opacity-60"
+              className="flex-1 btn-soft font-bold py-3 rounded-2xl cursor-pointer disabled:opacity-60"
             >
               {busy ? 'Adding…' : 'Add business'}
             </button>
