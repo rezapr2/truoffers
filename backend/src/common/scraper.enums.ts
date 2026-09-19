@@ -282,4 +282,7 @@ export enum AuditAction {
   OUTREACH_CONTACT_RECORDED = 'outreach.contact_recorded',
   WEBSITE_ROBOTS_OVERRIDE_SET = 'website.robots_override_set',
   WEBSITE_ROBOTS_OVERRIDE_REMOVED = 'website.robots_override_removed',
+  WEBSITE_PROVIDER_LINKED = 'website.provider_linked',
+  PROVIDER_ROBOTS_OVERRIDE_SET = 'provider_policy.robots_override_set',
+  PROVIDER_ROBOTS_OVERRIDE_REMOVED = 'provider_policy.robots_override_removed',
 }

@@ -5,7 +5,7 @@ import { AuditAction, ProviderPolicyBasis, ProviderPolicyStatus } from '../../co
 import { ProviderDetection, ProviderPolicy, ProviderPolicyDocument } from '../../schemas/provider-policy.schema';
 import { ScrapedWebsite, ScrapedWebsiteDocument } from '../../schemas/scraped-website.schema';
 import { AuditService } from '../audit/audit.service';
-import { releaseHeldWebsites } from '../safety/provider-permission';
+import { canHoldRobotsException, releaseHeldWebsites } from '../safety/provider-permission';
 import { ScraperSettingsService } from './scraper-settings.service';
 
 export interface ProviderPolicyInput {
@@ -73,14 +73,63 @@ export class ProviderPoliciesService {
 
     // Sites held only because of this provider can proceed once it permits crawling (the policy change is the admin action).
     const released = before.status !== policy.status ? await this.releaseHeldWebsites(policy._id) : 0;
+    // The robots.txt exception rests on the written agreement: change what it rests on and it goes, to be recorded
+    // again deliberately.
+    const exceptionCleared = !!policy.robotsOverride && !canHoldRobotsException(policy);
+    if (exceptionCleared) {
+      policy.set('robotsOverride', undefined);
+      await this.save(policy);
+    }
     await this.audit.record({
       action: AuditAction.PROVIDER_POLICY_UPDATED,
       targetType: 'ProviderPolicy',
       targetId: policy._id,
       before,
-      after: { ...this.snapshot(policy), websitesReleased: released },
+      after: { ...this.snapshot(policy), websitesReleased: released, ...(exceptionCleared ? { robotsExceptionCleared: true } : {}) },
     });
     return policy;
+  }
+
+  /**
+   * Reads every website on this provider despite its robots.txt, because the provider agreed to that in writing.
+   * Needs an allowed policy on a written agreement with its reference, and goes if that changes. Websites are
+   * covered only once they are linked to the provider (a client-list import, detection, or a super admin's link).
+   */
+  async setRobotsOverride(id: string, note: string, userId: string) {
+    const policy = await this.find(id);
+    if (!canHoldRobotsException(policy)) {
+      throw new BadRequestException(`${policy.name} needs an allowed policy on a written agreement, with its reference, before its websites can be read despite robots.txt`);
+    }
+    const before = policy.robotsOverride ? { note: policy.robotsOverride.note } : undefined;
+    policy.set('robotsOverride', { note: note.trim(), recordedBy: new Types.ObjectId(userId), recordedAt: new Date() });
+    await this.save(policy);
+    const websites = await this.sites.countDocuments({ providerRef: policy._id });
+    await this.audit.record({
+      action: AuditAction.PROVIDER_ROBOTS_OVERRIDE_SET,
+      targetType: 'ProviderPolicy',
+      targetId: policy._id,
+      before,
+      after: { name: policy.name, agreementReference: policy.agreementReference, note: note.trim(), websites },
+      note: note.trim(),
+    });
+    return policy.robotsOverride;
+  }
+
+  async clearRobotsOverride(id: string, userId: string) {
+    const policy = await this.find(id);
+    if (!policy.robotsOverride) throw new BadRequestException(`${policy.name} has no robots.txt exception to remove`);
+    const before = { note: policy.robotsOverride.note };
+    policy.set('robotsOverride', undefined);
+    await this.save(policy);
+    await this.audit.record({
+      action: AuditAction.PROVIDER_ROBOTS_OVERRIDE_REMOVED,
+      targetType: 'ProviderPolicy',
+      targetId: policy._id,
+      before,
+      after: { name: policy.name },
+      note: `Removed by ${userId}`,
+    });
+    return { removed: true };
   }
 
   // Releases every held website whose provider now permits crawling, e.g. after provider review is turned off.
@@ -122,7 +171,13 @@ export class ProviderPoliciesService {
   }
 
   private snapshot(policy: ProviderPolicyDocument) {
-    return { name: policy.name, status: policy.status, basis: policy.basis, agreementReference: policy.agreementReference };
+    return {
+      name: policy.name,
+      status: policy.status,
+      basis: policy.basis,
+      agreementReference: policy.agreementReference,
+      robotsException: !!policy.robotsOverride,
+    };
   }
 
   private async find(id: string) {

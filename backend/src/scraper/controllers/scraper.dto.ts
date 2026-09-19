@@ -86,6 +86,11 @@ export class RobotsOverrideDto {
   @IsString() @MinLength(10) @MaxLength(500) note: string;
 }
 
+export class LinkProviderDto {
+  // Null says the website isn't hosted by any provider.
+  @ValidateIf((_, value) => value !== null) @IsMongoId() providerId: string | null;
+}
+
 export class CrawlConfigDto {
   @IsOptional() @IsInt() @Min(250) @Max(60_000) rateLimitMs?: number;
   @IsOptional() @IsInt() @Min(1) @Max(1000) pageCap?: number;

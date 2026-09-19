@@ -35,6 +35,12 @@ else: opt-outs and removal requests (which delete it), the never-crawl list, pau
 page-level `noindex`/`nofollow`, the rate limit and the fixed User-Agent all still apply. `/bot`
 tells site owners about the exception.
 
+The same exception can be recorded on an ordering platform's policy, for the platform's own websites.
+It requires that the platform has agreed in writing that we may read its clients' websites: the policy
+must be allowed on a written agreement, with the agreement's reference, and the exception is removed
+automatically if that changes. It covers only websites linked to that platform, and an opt-out by a
+business still ends it for that business's website.
+
 **Websites on a shared template.** Administrators can teach the robot one website template, for
 example a web studio's theme, and reuse that across every authorised website built on it. To do
 this the robot records the template's structural traits: generator tag, footer attribution,

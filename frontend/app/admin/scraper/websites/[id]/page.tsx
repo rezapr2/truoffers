@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { use, useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
-import type { WebsiteDetail } from '@/lib/scraper-types';
+import type { ProviderPolicy, WebsiteDetail } from '@/lib/scraper-types';
 import BranchDecision from '../../_components/BranchDecision';
 import { useOverview } from '../../_components/overview';
 import { btn, Card, ErrorNote, formatDate, humanise, inputClass, SectionTitle, StatusPill, useAction } from '../../_components/ui';
@@ -16,6 +16,9 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
   const [notFound, setNotFound] = useState(false);
   const [config, setConfig] = useState({ rateLimitMs: '', pageCap: '', recheckIntervalHours: '' });
   const [consent, setConsent] = useState('');
+  const [providers, setProviders] = useState<ProviderPolicy[]>([]);
+  // null: the provider dropdown hasn't been touched, so it shows the website's current one.
+  const [linkTo, setLinkTo] = useState<string | null>(null);
   const { user } = useAuth();
   const { busy, error, run } = useAction();
 
@@ -33,11 +36,18 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
   }, [id]);
 
   useEffect(load, [load]);
+  // Linking a website to a provider is for super admins, who can also extend the provider's agreement that way.
+  useEffect(() => {
+    if (user?.role === 'super_admin') void api<ProviderPolicy[]>('/admin/scraper/provider-policies').then(setProviders).catch(() => {});
+  }, [user?.role]);
 
   if (notFound) return <Card>Website not found.</Card>;
   if (!data) return <div className="py-16 text-center text-muted font-bold">Loading…</div>;
   const { site } = data;
   const provider = typeof site.providerRef === 'object' ? site.providerRef : null;
+  // The provider's written agreement sets robots.txt aside for every website linked to it.
+  const providerCovers = !!provider?.robotsOverride && provider.status === 'allowed' && provider.basis === 'written_agreement' && !!provider.agreementReference;
+  const isSuperAdmin = user?.role === 'super_admin';
   const paused = data.config?.paused;
 
   async function act(path: string, method: string, body?: unknown) {
@@ -68,6 +78,7 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
               <div>
                 robots.txt: {site.robots?.status ?? '—'}{site.robots?.crawlDelaySec ? ` · crawl delay ${site.robots.crawlDelaySec}s` : ''}
                 {site.robotsOverride && ' · not applied (owner’s consent on record)'}
+                {!site.robotsOverride && providerCovers && ` · not applied (${provider!.name}’s agreement)`}
               </div>
               <div>Last checked: {formatDate(site.lastSuccessfulCheckAt)}</div>
               <div>Failures: {site.failureCount}{site.lastError ? ` · ${site.lastError}` : ''}</div>
@@ -110,9 +121,36 @@ export default function WebsiteDetailPage({ params }: { params: Promise<{ id: st
         <div className="mt-4"><ErrorNote error={error} /></div>
       </Card>
 
-      {(site.robotsOverride || (user?.role === 'super_admin' && site.authorisationStatus === 'authorised')) && (
+      {(site.robotsOverride || providerCovers || (isSuperAdmin && site.authorisationStatus === 'authorised')) && (
         <Card>
           <SectionTitle>Read despite robots.txt</SectionTitle>
+          {providerCovers && (
+            <p className="mb-3 text-[13px] font-semibold text-ink-soft">
+              robots.txt is not applied here because {provider!.name}’s written agreement ({provider!.agreementReference}) covers reading the websites it hosts:{' '}
+              <span className="text-ink">{provider!.robotsOverride!.note}</span>. An opt-out or a removal request still ends it at once.
+            </p>
+          )}
+          {isSuperAdmin && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act(`/admin/scraper/websites/${id}/provider`, 'PUT', { providerId: linkTo || null }).then(() => setLinkTo(null));
+              }}
+              className="mb-4 flex flex-wrap items-end gap-2"
+            >
+              <label className="flex flex-col gap-1">
+                <span className="text-[12px] font-extrabold">Hosted by</span>
+                <select value={linkTo ?? provider?._id ?? ''} onChange={(e) => setLinkTo(e.target.value)} className={`${inputClass} w-56`}>
+                  <option value="">No provider</option>
+                  {providers.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+                </select>
+              </label>
+              <button disabled={busy || (linkTo ?? provider?._id ?? '') === (provider?._id ?? '')} className={btn.outline}>Save</button>
+              <span className="basis-full text-[12px] font-semibold text-muted">
+                Set this when a website blocks the robot from reading its homepage, so it can’t be recognised as the provider’s and the provider’s agreement can apply.
+              </span>
+            </form>
+          )}
           {site.robotsOverride ? (
             <div className="flex flex-col gap-3">
               <p className="text-[13px] font-semibold text-ink-soft">

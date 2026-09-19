@@ -1,6 +1,6 @@
 import { Model, Types } from 'mongoose';
-import { AuthorisationSource, DomainAuthorisationStatus, ProviderPolicyStatus } from '../../common/scraper.enums';
-import { ProviderPolicyDocument } from '../../schemas/provider-policy.schema';
+import { AuthorisationSource, DomainAuthorisationStatus, ProviderPolicyBasis, ProviderPolicyStatus } from '../../common/scraper.enums';
+import { ProviderPolicy, ProviderPolicyDocument } from '../../schemas/provider-policy.schema';
 import { ScrapedWebsiteDocument } from '../../schemas/scraped-website.schema';
 
 /**
@@ -34,4 +34,24 @@ export async function releaseHeldWebsites(
     { $set: { authorisationStatus: DomainAuthorisationStatus.AUTHORISED }, $unset: { lastError: 1 } },
   );
   return result.modifiedCount;
+}
+
+type PolicyAgreement = Pick<ProviderPolicy, 'status' | 'basis' | 'agreementReference'> & Partial<Pick<ProviderPolicy, 'robotsOverride'>>;
+
+/**
+ * Whether a policy could carry a robots.txt exception: allowed, on a written agreement, with its reference. A terms
+ * review isn't enough: this needs the provider itself to have agreed to being read.
+ */
+export function canHoldRobotsException(policy: PolicyAgreement | null | undefined): boolean {
+  return (
+    !!policy &&
+    policy.status === ProviderPolicyStatus.ALLOWED &&
+    policy.basis === ProviderPolicyBasis.WRITTEN_AGREEMENT &&
+    !!policy.agreementReference?.trim()
+  );
+}
+
+/** Whether the provider's robots.txt exception is in force right now. */
+export function agreementCoversRobots(policy: PolicyAgreement | null | undefined): boolean {
+  return canHoldRobotsException(policy) && !!policy?.robotsOverride;
 }

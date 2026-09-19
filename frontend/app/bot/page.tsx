@@ -46,8 +46,9 @@ export default function BotPage() {
           <Code>{`User-agent: TruOffersBot\nDisallow: /members/`}</Code>
           <p>
             The one exception: if a takeaway’s owner has told us they want their offers listed, but their website’s robots.txt asks all
-            bots to stay away (a website platform’s setting, for example), we record that consent and read that website anyway. It
-            applies to that website alone, at the same slow rate, and it ends as soon as the owner opts out or asks us to stop.
+            bots to stay away (a website platform’s setting, for example), we record that consent and read that website anyway. The same
+            goes for websites hosted by an ordering platform that has agreed in writing that we may read its clients’ websites. It
+            applies to those websites only, at the same slow rate, and it ends as soon as the owner opts out or asks us to stop.
           </p>
           <p>
             It also respects <code className="font-mono text-ink">noindex</code> and{' '}

@@ -73,12 +73,20 @@ export interface WebsiteBranch {
   decidedAt?: string;
 }
 
+// Written consent to read websites despite their robots.txt, recorded by a super admin.
+export interface RobotsOverride {
+  note: string;
+  recordedBy: string;
+  recordedAt: string;
+}
+
 export interface ProviderRef {
   _id: string;
   name: string;
   status: PolicyStatus;
   basis?: string;
   agreementReference?: string;
+  robotsOverride?: RobotsOverride;
 }
 
 export interface ScrapedWebsite {
@@ -95,7 +103,7 @@ export interface ScrapedWebsite {
   adapterVersion?: string;
   robots?: { status?: string; crawlDelaySec?: number; fetchedAt?: string };
   // The owner's written consent to read this website despite its robots.txt.
-  robotsOverride?: { note: string; recordedBy: string; recordedAt: string };
+  robotsOverride?: RobotsOverride;
   businesses: WebsiteBranch[];
   lastSuccessfulCheckAt?: string;
   lastFailedCheckAt?: string;
@@ -253,6 +261,7 @@ export interface ProviderPolicy {
   basis?: 'written_agreement' | 'terms_review';
   agreementReference?: string;
   basisNotes?: string;
+  robotsOverride?: RobotsOverride;
   autoCreated?: boolean;
   detection: { hostSuffixes: string[]; cnameSuffixes: string[]; footerPatterns: string[]; generatorPatterns: string[]; assetHosts: string[] };
   reviewedAt?: string;

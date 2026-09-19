@@ -3,15 +3,18 @@ import path from 'node:path';
 
 const SRC = path.join(__dirname, '..', '..', 'src');
 
-// The robots.txt exception is recorded in one place (a super admin's request), read by the crawl gate and the
-// analysis log, and taken away when a website opts out or is denied. Nothing else may touch it.
+// The robots.txt exception, on a website or on a provider's policy, is recorded in one place each (a super admin's
+// request), read by the crawl gate, and taken away when a website opts out or is denied, or when the provider's
+// agreement changes. Nothing else may touch it.
 const ALLOWED = new Set(
   [
     'schemas/scraped-website.schema.ts',
+    'schemas/provider-policy.schema.ts',
     'scraper/review/websites.service.ts',
+    'scraper/review/provider-policies.service.ts',
     'scraper/review/opt-outs.service.ts',
     'scraper/safety/crawl-gate.service.ts',
-    'scraper/pipeline/pipeline.service.ts',
+    'scraper/safety/provider-permission.ts',
   ].map((file) => path.join(SRC, file)),
 );
 
@@ -37,14 +40,14 @@ describe('static scan: the robots.txt exception', () => {
     expect(violations).toEqual([]);
   });
 
-  it('is only ever recorded by the super-admin service method, never by an import, a CSV, discovery or a network', () => {
-    // A recorded exception carries who agreed (`recordedBy`); only the service method builds one.
+  it('is only ever recorded by the super-admin service methods, never by an import, a CSV, discovery or a network', () => {
+    // A recorded exception carries who agreed (`recordedBy`); only these two service methods build one.
     const recorders = sourceFiles(SRC)
       .filter((file) => {
         const text = readFileSync(file, 'utf8');
         return /robotsOverride/.test(text) && /recordedBy/.test(text);
       })
       .map((file) => path.relative(SRC, file));
-    expect(recorders.sort()).toEqual(['schemas/scraped-website.schema.ts', 'scraper/review/websites.service.ts']);
+    expect(recorders.sort()).toEqual(['scraper/review/provider-policies.service.ts', 'scraper/review/websites.service.ts']);
   });
 });

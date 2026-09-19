@@ -210,7 +210,7 @@ export class WebsitesService {
   }
 
   async detail(id: string) {
-    const site = await this.find(id).then((s) => s.populate([{ path: 'providerRef', select: 'name status basis agreementReference' }, { path: 'businesses.businessRef', select: 'name slug postcode phone town verificationStatus' }, { path: 'businesses.suggestions.businessRef', select: 'name slug postcode phone town' }]));
+    const site = await this.find(id).then((s) => s.populate([{ path: 'providerRef', select: 'name status basis agreementReference robotsOverride' }, { path: 'businesses.businessRef', select: 'name slug postcode phone town verificationStatus' }, { path: 'businesses.suggestions.businessRef', select: 'name slug postcode phone town' }]));
     const [runs, candidates, config] = await Promise.all([
       this.jobs.find({ scrapedWebsiteRef: site._id }).select('runId type status progress resultCounts errorLog startedAt finishedAt createdAt').sort({ createdAt: -1 }).limit(60).lean(),
       this.candidates.aggregate([{ $match: { scrapedWebsiteRef: site._id } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
@@ -305,6 +305,37 @@ export class WebsitesService {
       note: `Removed by ${userId}`,
     });
     return { removed: true };
+  }
+
+  /**
+   * Says which provider hosts a website, or that none does. It matters most for a website whose robots.txt blocks
+   * the robot: the provider is normally learned from the homepage, which it can't read, and a provider's written
+   * agreement can only cover websites linked to it. Super admins only, since it can extend that agreement.
+   */
+  async linkProvider(id: string, providerId: string | null, userId: string) {
+    const site = await this.find(id);
+    let policy: { _id: Types.ObjectId; name: string } | null = null;
+    if (providerId !== null) {
+      policy = Types.ObjectId.isValid(providerId) ? await this.policies.findById(providerId).select('name').lean<{ _id: Types.ObjectId; name: string }>() : null;
+      if (!policy) throw new NotFoundException('Provider policy not found');
+    }
+    const before = { provider: site.providerRef ? String(site.providerRef) : null };
+    if (policy) {
+      site.set('providerRef', policy._id);
+      site.set('providerSignals', [...new Set([...(site.providerSignals ?? []), `linked by an admin to ${policy.name}`])]);
+    } else {
+      site.set('providerRef', undefined);
+    }
+    await site.save();
+    await this.audit.record({
+      action: AuditAction.WEBSITE_PROVIDER_LINKED,
+      targetType: 'ScrapedWebsite',
+      targetId: site._id,
+      before,
+      after: { provider: policy ? policy.name : null, domain: site.domain },
+      note: `Linked by ${userId}`,
+    });
+    return { provider: policy ? { _id: policy._id, name: policy.name } : null };
   }
 
   async setPaused(id: string, paused: boolean, userId: string, reason?: string) {

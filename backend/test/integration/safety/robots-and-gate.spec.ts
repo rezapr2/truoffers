@@ -225,6 +225,47 @@ describe('robots, page directives and the crawl gate', () => {
         await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'pending_authorisation' });
       });
 
+      describe('recorded on a provider whose written agreement covers it', () => {
+        const agreement = { status: ProviderPolicyStatus.ALLOWED, basis: ProviderPolicyBasis.WRITTEN_AGREEMENT, agreementReference: 'FH-2026-01' };
+        const provider = (extra: Record<string, unknown> = {}) => h.models.policies.create({ name: 'Foodhub', ...agreement, robotsOverride: consent, ...extra });
+
+        it('reads every website linked to the provider, and no other', async () => {
+          const policy = await provider();
+          await closedSite({ providerRef: policy._id });
+          await expect(h.gate.assertRequestAllowed(url('/'), ctx)).resolves.toBeUndefined();
+          expect(await h.gate.robotsExceptionFor({ robotsOverride: undefined, providerRef: policy._id })).toMatchObject({ scope: 'provider', providerName: 'Foodhub', note: consent.note });
+
+          // A website on another provider, or none, is still bound by its robots.txt.
+          const other = await h.models.policies.create({ name: 'Grub24', ...agreement });
+          await h.models.sites.updateOne({ domain: SITE }, { $set: { providerRef: other._id } });
+          await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'robots_disallowed' });
+          await h.models.sites.updateOne({ domain: SITE }, { $unset: { providerRef: 1 } });
+          await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'robots_disallowed' });
+        });
+
+        it('stands only while the policy is allowed on a written agreement with its reference', async () => {
+          const policy = await provider();
+          await closedSite({ providerRef: policy._id });
+          const denied = () => expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toBeDefined();
+          // The stored exception alone is not enough: what it rests on is checked every time.
+          await h.models.policies.updateOne({ _id: policy._id }, { $set: { basis: ProviderPolicyBasis.TERMS_REVIEW, basisNotes: 'Reviewed the terms' } });
+          await denied();
+          await h.models.policies.updateOne({ _id: policy._id }, { $set: { basis: ProviderPolicyBasis.WRITTEN_AGREEMENT }, $unset: { agreementReference: 1 } });
+          await denied();
+          await h.models.policies.updateOne({ _id: policy._id }, { $set: { agreementReference: 'FH-2026-01', status: ProviderPolicyStatus.BLOCKED } });
+          await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'provider_not_allowed' });
+          await h.models.policies.updateOne({ _id: policy._id }, { $set: { status: ProviderPolicyStatus.ALLOWED } });
+          await expect(h.gate.assertRequestAllowed(url('/'), ctx)).resolves.toBeUndefined();
+        });
+
+        it('never overrides an opt-out on one of its websites', async () => {
+          const policy = await provider();
+          await closedSite({ providerRef: policy._id });
+          await h.models.optOuts.create({ domain: SITE, activeKey: SITE, source: OptOutSource.PUBLIC_FORM });
+          await expect(h.gate.assertRequestAllowed(url('/'), ctx)).rejects.toMatchObject({ denial: 'opted_out' });
+        });
+      });
+
       it('applies only to the website it was recorded on', async () => {
         await closedSite({ robotsOverride: consent });
         server.route(OTHER, '/robots.txt', (_req, res) => res.writeHead(200, { 'Content-Type': 'text/plain' }).end(CLOSED));

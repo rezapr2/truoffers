@@ -9,6 +9,7 @@ import {
   RobotsStatus,
 } from '../common/scraper.enums';
 import type { FieldEvidence } from '../scraper/extraction/adapter.types';
+import { RobotsOverride, RobotsOverrideSchema } from './robots-override.schema';
 
 export type ScrapedWebsiteDocument = HydratedDocument<ScrapedWebsite>;
 
@@ -101,17 +102,6 @@ export class SiteMarkerRecord {
   @Prop({ required: true }) value: string;
 }
 export const SiteMarkerRecordSchema = SchemaFactory.createForClass(SiteMarkerRecord);
-
-// The website's owner has told us in writing that they want their offers listed even though its robots.txt asks
-// bots to stay away (for example a platform's fault). Recorded by a super admin; everything else still applies.
-@Schema({ _id: false })
-export class RobotsOverride {
-  // Who agreed, how, and when, in the admin's words.
-  @Prop({ required: true, minlength: 10, maxlength: 500 }) note: string;
-  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true }) recordedBy: Types.ObjectId;
-  @Prop({ required: true }) recordedAt: Date;
-}
-export const RobotsOverrideSchema = SchemaFactory.createForClass(RobotsOverride);
 
 @Schema({ timestamps: true })
 export class ScrapedWebsite {

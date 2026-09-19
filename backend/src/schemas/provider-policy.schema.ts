@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
 import { ProviderPolicyBasis, ProviderPolicyStatus } from '../common/scraper.enums';
+import { RobotsOverride, RobotsOverrideSchema } from './robots-override.schema';
 
 export type ProviderPolicyDocument = HydratedDocument<ProviderPolicy>;
 
@@ -31,6 +32,11 @@ export class ProviderPolicy {
 
   @Prop()
   basisNotes?: string;
+
+  // The provider's written agreement lets us read every website on it despite its robots.txt. Set only by a super
+  // admin, and only stands while the policy stays allowed on that agreement (see agreementCoversRobots).
+  @Prop({ type: RobotsOverrideSchema })
+  robotsOverride?: RobotsOverride;
 
   @Prop({ type: ProviderDetectionSchema, default: () => ({}) })
   detection: ProviderDetection;

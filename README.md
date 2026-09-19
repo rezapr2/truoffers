@@ -190,6 +190,13 @@ data the page already carries for its own JavaScript, and never calls the platfo
   admin can record that on the website's page (**Read despite robots.txt**, with who agreed, how and
   when). It applies to that one website, is audited, and an opt-out ends it; the rate limit and every
   other check still apply.
+- **A whole platform, on its written agreement.** If the platform itself has agreed in writing that we
+  may read its clients' websites, a super admin can record that on its policy (**Policies & opt-outs →
+  Read its websites despite robots.txt**). The policy must be *allowed* on a *written agreement* with
+  its reference, and the exception goes if that changes. It covers every website linked to the
+  platform: from a client-list import, from detection, or by a super admin's **Hosted by** on a
+  website's page (needed for a website whose robots.txt stops the robot reading its homepage, since
+  the platform is normally recognised from that page). Opt-outs still win.
 - **Platform policies:** each platform (or other provider) the robot finds is listed under
   **Policies & opt-outs** as *unknown*, and its websites are crawled.
   - *Block* a platform there to stop crawling all of its websites.

@@ -39,6 +39,7 @@ import {
   ListCandidatesQuery,
   ListJobsQuery,
   ListOptOutsQuery,
+  LinkProviderDto,
   ListWebsitesQuery,
   MergeCandidateDto,
   PauseDto,
@@ -123,6 +124,12 @@ export class AdminWebsitesController {
   @Delete(':id/robots-override')
   clearRobotsOverride(@Param('id') id: string, @CurrentUser('userId') userId: string) {
     return this.websites.clearRobotsOverride(id, userId);
+  }
+
+  @Roles(Role.SUPER_ADMIN)
+  @Put(':id/provider')
+  linkProvider(@Param('id') id: string, @Body() dto: LinkProviderDto, @CurrentUser('userId') userId: string) {
+    return this.websites.linkProvider(id, dto.providerId, userId);
   }
 
   @Patch(':id/crawl-config')
@@ -219,6 +226,19 @@ export class AdminProviderPoliciesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: ProviderPolicyDto, @CurrentUser('userId') userId: string) {
     return this.policies.update(id, dto, userId);
+  }
+
+  // The provider's written agreement lets us read its websites despite robots.txt. Super admins only.
+  @Roles(Role.SUPER_ADMIN)
+  @Put(':id/robots-override')
+  setRobotsOverride(@Param('id') id: string, @Body() dto: RobotsOverrideDto, @CurrentUser('userId') userId: string) {
+    return this.policies.setRobotsOverride(id, dto.note, userId);
+  }
+
+  @Roles(Role.SUPER_ADMIN)
+  @Delete(':id/robots-override')
+  clearRobotsOverride(@Param('id') id: string, @CurrentUser('userId') userId: string) {
+    return this.policies.clearRobotsOverride(id, userId);
   }
 
   @Delete(':id')

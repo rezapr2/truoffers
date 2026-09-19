@@ -240,11 +240,14 @@ export class PipelineService {
   private async analyse(ctx: StageContext): Promise<StageOutcome> {
     const site = await this.site(ctx);
     await this.gate.assertSiteCrawlable(site.domain);
-    if (site.robotsOverride) {
-      await ctx.log('robots.txt is not applied to this website: its owner asked for their offers to be listed', {
-        agreedNote: site.robotsOverride.note,
-        recordedAt: site.robotsOverride.recordedAt,
-      });
+    const robotsException = await this.gate.robotsExceptionFor(site);
+    if (robotsException) {
+      await ctx.log(
+        robotsException.scope === 'provider'
+          ? `robots.txt is not applied to this website: ${robotsException.providerName}'s written agreement covers reading its websites`
+          : 'robots.txt is not applied to this website: its owner asked for their offers to be listed',
+        { agreedNote: robotsException.note, recordedAt: robotsException.recordedAt },
+      );
     }
 
     const seed = new URL(site.seedUrl);

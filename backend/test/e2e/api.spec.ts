@@ -238,6 +238,57 @@ describe('scraper API, end to end', () => {
     await optOuts.deleteMany({ domain: 'closed-c.test' });
   });
 
+  it('lets a provider’s written agreement cover reading all its websites despite robots.txt, and takes it away when the agreement changes', async () => {
+    const note = 'Section 4 of the agreement lets us read client websites automatically';
+    const created = await request(http).post('/api/admin/scraper/provider-policies').set(as('admin')).send({ name: 'Fictional Platform' }).expect(201);
+    const id = created.body._id as string;
+    const path = `/api/admin/scraper/provider-policies/${id}/robots-override`;
+
+    // Only a super admin, only with a note, and only for an allowed policy on a written agreement with its reference.
+    await request(http).put(path).set(as('support')).send({ note }).expect(403);
+    await request(http).put(path).set(as('admin')).send({ note: 'yes' }).expect(400);
+    const unknown = await request(http).put(path).set(as('admin')).send({ note }).expect(400);
+    expect(unknown.body.message).toMatch(/needs an allowed policy on a written agreement/);
+    await request(http).patch(`/api/admin/scraper/provider-policies/${id}`).set(as('admin')).send({ status: 'allowed', basis: 'terms_review', basisNotes: 'Read the terms' }).expect(200);
+    await request(http).put(path).set(as('admin')).send({ note }).expect(400);
+
+    await request(http).patch(`/api/admin/scraper/provider-policies/${id}`).set(as('admin')).send({ status: 'allowed', basis: 'written_agreement', agreementReference: 'FP-2026-01' }).expect(200);
+    const set = await request(http).put(path).set(as('admin')).send({ note }).expect(200);
+    expect(set.body).toMatchObject({ note, recordedBy: String(adminId) });
+    const listed = await request(http).get('/api/admin/scraper/provider-policies').set(as('admin')).expect(200);
+    expect(listed.body.find((p: { _id: string }) => p._id === id).robotsOverride).toMatchObject({ note });
+    expect(await audit.findOne({ action: AuditAction.PROVIDER_ROBOTS_OVERRIDE_SET, targetId: id }).lean()).toMatchObject({ note, after: { agreementReference: 'FP-2026-01' } });
+
+    // Changing what it rests on takes it away, and it has to be recorded again on purpose.
+    await request(http).patch(`/api/admin/scraper/provider-policies/${id}`).set(as('admin')).send({ agreementReference: 'FP-2026-02', basis: 'terms_review', basisNotes: 'Agreement ended' }).expect(200);
+    expect((await app.get<Model<ProviderPolicy>>(getModelToken(ProviderPolicy.name)).findById(id).lean())?.robotsOverride).toBeUndefined();
+    expect((await audit.find({ action: AuditAction.PROVIDER_POLICY_UPDATED, targetId: id }).sort({ _id: -1 }).limit(1).lean())[0].after).toMatchObject({ robotsExceptionCleared: true });
+    await request(http).delete(path).set(as('admin')).expect(400);
+
+    // A website is covered only once it is linked to the provider, which only a super admin can do.
+    const website = await sites.create({
+      domain: 'linked-a.test',
+      registrableDomain: 'linked-a.test',
+      seedUrl: 'https://linked-a.test/',
+      authorisationStatus: DomainAuthorisationStatus.AUTHORISED,
+      authorisationSource: AuthorisationSource.ADMIN_MANUAL,
+    });
+    const link = `/api/admin/scraper/websites/${website._id}/provider`;
+    await request(http).put(link).set(as('support')).send({ providerId: id }).expect(403);
+    await request(http).put(link).set(as('admin')).send({ providerId: 'not-an-id' }).expect(400);
+    await request(http).put(link).set(as('admin')).send({ providerId: String(new Types.ObjectId()) }).expect(404);
+    await request(http).put(link).set(as('admin')).send({ providerId: id }).expect(200);
+    expect(await sites.findById(website._id).lean()).toMatchObject({ providerRef: new Types.ObjectId(id) });
+    expect(await audit.findOne({ action: AuditAction.WEBSITE_PROVIDER_LINKED, targetId: String(website._id) }).lean()).toMatchObject({ after: { provider: 'Fictional Platform' } });
+    const detail = await request(http).get(`/api/admin/scraper/websites/${website._id}`).set(as('admin')).expect(200);
+    expect(detail.body.site.providerRef).toMatchObject({ name: 'Fictional Platform' });
+    await request(http).put(link).set(as('admin')).send({ providerId: null }).expect(200);
+    expect((await sites.findById(website._id).lean())?.providerRef).toBeUndefined();
+
+    await sites.deleteOne({ _id: website._id });
+    await app.get<Model<ProviderPolicy>>(getModelToken(ProviderPolicy.name)).deleteOne({ _id: id });
+  });
+
   it('refuses a provider client list without an allowed written-agreement policy', async () => {
     const policy = await request(http).post('/api/admin/scraper/provider-policies').set(as('admin')).send({ name: 'OrderNest' }).expect(201);
     await request(http)

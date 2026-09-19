@@ -15,7 +15,7 @@ import { CRAWL_DEFAULTS } from '../scraper.constants';
 import { DomainRegistryService, ScrapedWebsiteLean } from './domain-registry.service';
 import { FetchDeniedError } from './errors';
 import { neverCrawlReason } from './never-crawl';
-import { providerPermitsCrawling } from './provider-permission';
+import { agreementCoversRobots, providerPermitsCrawling } from './provider-permission';
 import { RobotsService } from './robots.service';
 import { registrableDomainOf, siteDomainOf } from './url';
 
@@ -68,6 +68,14 @@ export interface HostCrawlPolicy {
 
 type ConfigLean = DomainCrawlConfig & { _id: Types.ObjectId };
 
+// Why robots.txt isn't applied to a website, for the run log.
+export interface RobotsException {
+  scope: 'website' | 'provider';
+  note: string;
+  recordedAt: Date;
+  providerName?: string;
+}
+
 /**
  * The single authorisation check made before every request, including every redirect hop.
  * Re-reads opt-outs, authorisation and provider policy each time so admin changes apply immediately.
@@ -102,6 +110,19 @@ export class CrawlGateService {
       pausedReason: paused?.pausedReason,
       blockedPaths: ordered.flatMap((c) => c.blockedPaths ?? []),
     };
+  }
+
+  /**
+   * The written consent that sets robots.txt aside for a website: its owner's, recorded on the website, or its
+   * provider's, recorded on the provider's policy and standing only while that policy is allowed on a written
+   * agreement. Null when robots.txt applies.
+   */
+  async robotsExceptionFor(site: Pick<ScrapedWebsiteLean, 'robotsOverride' | 'providerRef'>): Promise<RobotsException | null> {
+    if (site.robotsOverride) return { scope: 'website', note: site.robotsOverride.note, recordedAt: site.robotsOverride.recordedAt };
+    if (!site.providerRef) return null;
+    const policy = await this.policies.findById(site.providerRef).lean();
+    if (!policy?.robotsOverride || !agreementCoversRobots(policy)) return null;
+    return { scope: 'provider', note: policy.robotsOverride.note, recordedAt: policy.robotsOverride.recordedAt, providerName: policy.name };
   }
 
   // Site-level checks, used before a run starts and on every request.
@@ -168,9 +189,9 @@ export class CrawlGateService {
     const blockedPath = policy.blockedPaths.find((prefix) => url.pathname.startsWith(prefix));
     if (blockedPath) throw new CrawlDeniedError('blocked_path', `${url.pathname} is blocked (${blockedPath})`);
 
-    // Everything above still applies. Only robots.txt is set aside, and only for a website whose owner has told us in
-    // writing that they want their offers listed; the rate limit stays.
-    if (ctx.checkRobots && !site.robotsOverride) {
+    // Everything above still applies. Only robots.txt is set aside, and only where the website's owner, or the
+    // provider that hosts it under a written agreement, has consented in writing; the rate limit stays.
+    if (ctx.checkRobots && !(await this.robotsExceptionFor(site))) {
       const rules = await this.robots.rulesFor(url, {
         signal: ctx.signal,
         beforeRequest: async (hop) => {

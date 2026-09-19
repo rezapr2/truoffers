@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import type { OptOut, PolicyStatus, ProviderPolicy, ScraperSettings } from '@/lib/scraper-types';
 import { useOverview } from '../_components/overview';
 import { btn, Card, EmptyState, ErrorNote, formatDate, inputClass, SectionTitle, StatusPill, Tabs, useAction } from '../_components/ui';
@@ -107,10 +108,16 @@ function PolicyForm({ policy, reviewRequired, onDone }: { policy?: ProviderPolic
   );
 }
 
+// A robots.txt exception needs the provider's own written agreement, with its reference.
+const coversRobots = (policy: ProviderPolicy) => policy.status === 'allowed' && policy.basis === 'written_agreement' && !!policy.agreementReference;
+
 function Providers() {
   const [policies, setPolicies] = useState<ProviderPolicy[] | null>(null);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
+  const [exceptionFor, setExceptionFor] = useState<string | null>(null);
+  const [note, setNote] = useState('');
   const [reviewRequired, setReviewRequired] = useState(false);
+  const { user } = useAuth();
   const { error, run } = useAction();
   const load = useCallback(() => {
     void api<ProviderPolicy[]>('/admin/scraper/provider-policies').then(setPolicies).catch(() => {});
@@ -147,6 +154,65 @@ function Providers() {
                   {' · '}
                   {Object.entries(policy.websites).map(([status, n]) => `${n} ${status.replace(/_/g, ' ')}`).join(' · ') || 'no websites'}
                 </div>
+                {policy.robotsOverride && coversRobots(policy) && (
+                  <div className="mt-2 text-[13px] font-semibold text-ink-soft">
+                    <StatusPill status="delayed" label="reads despite robots.txt" /> {policy.robotsOverride.note}
+                    <span className="block text-[12px] text-muted">
+                      Recorded {formatDate(policy.robotsOverride.recordedAt)} · covers the {Object.values(policy.websites).reduce((a, b) => a + (b ?? 0), 0)} website(s) linked to this provider
+                    </span>
+                    {user?.role === 'super_admin' && (
+                      <button
+                        className={`${btn.outline} mt-2`}
+                        onClick={async () => {
+                          await run(() => api(`/admin/scraper/provider-policies/${policy._id}/robots-override`, { method: 'DELETE' }));
+                          load();
+                        }}
+                      >
+                        Apply robots.txt again
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!policy.robotsOverride && coversRobots(policy) && user?.role === 'super_admin' && (
+                  exceptionFor === policy._id ? (
+                    <form
+                      className="mt-2 flex flex-col gap-2"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!confirm(`Read every ${policy.name} website even though its robots.txt asks bots to stay away? Only if the agreement (${policy.agreementReference}) says we may.`)) return;
+                        const saved = await run(() => api(`/admin/scraper/provider-policies/${policy._id}/robots-override`, { method: 'PUT', body: JSON.stringify({ note }) }));
+                        if (saved) {
+                          setExceptionFor(null);
+                          setNote('');
+                          load();
+                        }
+                      }}
+                    >
+                      <span className="text-[12px] font-semibold text-muted">
+                        Only if the agreement says we may read this provider’s websites automatically. It covers every website linked to it, ends if the policy
+                        or agreement changes, and doesn’t change the rate limit or any other check.
+                      </span>
+                      <textarea
+                        required
+                        minLength={10}
+                        maxLength={500}
+                        rows={2}
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="e.g. Section 4 of the agreement lets us read client websites automatically"
+                        className={inputClass}
+                      />
+                      <div className="flex gap-2">
+                        <button className={btn.dark} disabled={note.trim().length < 10}>Read despite robots.txt</button>
+                        <button type="button" className={btn.outline} onClick={() => setExceptionFor(null)}>Cancel</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button className={`${btn.outline} mt-2`} onClick={() => { setExceptionFor(policy._id); setNote(''); }}>
+                      Read its websites despite robots.txt…
+                    </button>
+                  )
+                )}
               </div>
               <div className="flex gap-2">
                 <button className={btn.outline} onClick={() => setEditing(policy._id)}>Edit</button>

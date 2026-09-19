@@ -318,6 +318,32 @@ describe('scraping pipeline, end to end', () => {
     expect(found.map((c) => c.title)).toEqual(expect.arrayContaining([expect.stringMatching(/free fries/i)]));
   });
 
+  it('reads a website that disallows the bot when its provider’s written agreement covers it, and says which', async () => {
+    const host = 'robots-blocked.test';
+    const policy = await policies.create({
+      name: 'Fictional Platform',
+      status: ProviderPolicyStatus.ALLOWED,
+      basis: 'written_agreement',
+      agreementReference: 'FP-2026-01',
+      robotsOverride: { note: 'Section 4 of the agreement lets us read client websites automatically', recordedBy: new Types.ObjectId(), recordedAt: new Date() },
+    });
+    const site = await authorise(host, { providerRef: policy._id });
+    const imported = await waitForRun((await runs.startRun(site)).job.runId, finished);
+    expect(imported.map((s) => s.type)).toEqual(STAGE_ORDER);
+    const line = imported[0].logs.find((l) => /robots\.txt is not applied/.test(l.message));
+    expect(line?.message).toMatch(/Fictional Platform's written agreement covers reading its websites/);
+    expect(line?.data).toMatchObject({ agreedNote: 'Section 4 of the agreement lets us read client websites automatically' });
+    expect((await candidates.find({ domain: host }).lean()).map((c) => c.title)).toEqual(expect.arrayContaining([expect.stringMatching(/free fries/i)]));
+
+    // Withdraw the agreement and the next run is bound by robots.txt again.
+    await policies.updateOne({ _id: policy._id }, { $set: { status: ProviderPolicyStatus.BLOCKED } });
+    await sites.updateOne({ _id: site._id }, { $set: { authorisationStatus: DomainAuthorisationStatus.AUTHORISED } });
+    server.reset();
+    const refused = await waitForRun((await runs.startRun(site)).job.runId, finished);
+    expect(server.requestsFor(host).map((r) => r.path).filter((p) => p !== '/robots.txt')).toEqual([]);
+    expect(refused.some((s) => s.type === ImportJobType.EXTRACT_OFFERS)).toBe(false);
+  });
+
   it('never contacts a domain that is pending authorisation', async () => {
     const site = await authorise('pizza-palace-friends.test', { authorisationStatus: DomainAuthorisationStatus.PENDING_AUTHORISATION });
     const { job } = await runs.startRun(site);
