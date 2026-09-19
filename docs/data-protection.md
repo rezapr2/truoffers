@@ -99,8 +99,11 @@ The robot does not collect:
 - **Adapter tests create nothing.** Testing an adapter on its example websites stores a summary for
   the administrator; it never creates candidates or offers.
 - **Rendering loads as little as possible.** Rendering happens only when the ordinary page has no
-  offers, and covers at most 3 pages. Images, media and fonts are never loaded, and analytics and
-  advertising services are never contacted, so the robot never appears in the business's analytics.
+  offers (or, for an ordering platform whose menu only loads in the browser, on one page), and covers
+  at most 3 pages. Images, media and fonts are never loaded, and analytics and advertising services
+  are never contacted, so the robot never appears in the business's analytics. Data the page's own
+  scripts load from the website while it renders, such as its menu, is read in memory and never
+  stored; only the offers extracted from it, with short excerpts, are kept.
 - **Claim links are never stored.** Only a hash is kept. The messages an administrator copies are
   generated on the spot and not saved.
 - **Template matching reuses what it has.** Matching a website against templates reuses traits read

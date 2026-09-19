@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { readFileSync } from 'node:fs';
+import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import type { LoadedPage, WebsiteContext } from '../../../src/scraper/extraction/adapter.types';
 import { FoodhubAdapter } from '../../../src/scraper/extraction/adapters/foodhub.adapter';
@@ -7,6 +8,7 @@ import { Grub24Adapter } from '../../../src/scraper/extraction/adapters/grub24.a
 import { JsonLdAdapter } from '../../../src/scraper/extraction/adapters/jsonld.adapter';
 import { OrderNestAdapter } from '../../../src/scraper/extraction/adapters/ordernest.adapter';
 import { validateExtractedOffer } from '../../../src/scraper/extraction/validate-offer';
+import { FOODHUB_DISCOUNT, foodhubMenuResponse, foodhubStoreResponse } from '../../helpers/foodhub-app';
 
 const SITES = path.join(__dirname, '..', '..', 'fixtures', 'sites');
 const checkedAt = new Date('2026-09-18T12:00:00Z');
@@ -48,7 +50,7 @@ describe('ordering platform adapters (spec §2.3/§5)', () => {
       const [ten, thirtyFive] = offers.map((o) => o.offer);
       expect(ten).toMatchObject({ offerType: 'percentage_discount', discountPercentage: 10, minimumOrder: 20, terms: 'Up to £25 off', adapterId: 'provider-foodhub' });
       expect(thirtyFive).toMatchObject({ discountPercentage: 35, endDate: '2031-03-31' });
-      expect(thirtyFive.evidence.discountPercentage.method).toBe('provider:provider-foodhub@1.0.0:discountPercentage');
+      expect(thirtyFive.evidence.discountPercentage.method).toBe('provider:provider-foodhub@1.1.0:discountPercentage');
       expect(thirtyFive.evidence.discountPercentage.text).toContain('"value":35');
       expect(thirtyFive.sources[0].excerpt).toContain('"min_order":"20.00"');
       for (const offer of offers) expect(validateExtractedOffer(offer.offer, checkedAt).valid).toBe(true);
@@ -61,6 +63,62 @@ describe('ordering platform adapters (spec §2.3/§5)', () => {
         expect(offer.collectionEligible).toBeUndefined();
         expect(offer.deliveryEligible).toBeUndefined();
       }
+    });
+
+    it('reads the discounts whatever the store’s offer_status says', () => {
+      // A live Foodhub site showed its discount to visitors while its data said INACTIVE.
+      const { offers } = adapter.extractFromPage(pageOf('fh-app.test'), ['home'], { checkedAt });
+      expect(offers.map((o) => o.offer.title)).toEqual(['10% off orders over £15']);
+    });
+
+    describe('from what the app loaded while the page was rendered', () => {
+      // The page's own data is empty, as a Foodhub site's sometimes is; the app fetched the store and menu itself.
+      function renderedPage(dataResponses: LoadedPage['dataResponses']): LoadedPage {
+        const empty = Buffer.from(JSON.stringify({ initConfig: '{}', store: {} })).toString('base64');
+        const html = `<html><head><link rel="preconnect" href="https://assets.foodhub.com"></head><body><input type="hidden" id="prerender-data" value="${empty}"></body></html>`;
+        const url = 'https://fh-app.test/';
+        return { url, finalUrl: url, status: 200, html, $: cheerio.load(html), nofollow: false, fetchedAt: checkedAt, dataResponses };
+      }
+      const store = { url: 'https://fh-app.test/api/consumer/store', json: foodhubStoreResponse() };
+      const menu = { url: 'https://fh-app.test/api/consumer/store/9002/menu/foodhub/friday.json', json: foodhubMenuResponse() };
+
+      it('reads the store’s discounts, once each', () => {
+        const again = { url: 'https://fh-app.test/api/consumer/store/9002/advanced_discounts', json: { advanced_discounts: [FOODHUB_DISCOUNT, { ...FOODHUB_DISCOUNT, value: 20, menu_item_id: 777 }] } };
+        const { offers } = adapter.extractFromPage(renderedPage([store, again]), ['home'], { checkedAt });
+        expect(offers.map((o) => o.offer.title)).toEqual(['10% off orders over £15', '20% off orders over £15']);
+        expect(offers[0].offer).toMatchObject({ discountPercentage: 10, minimumOrder: 15, terms: 'Up to £20 off' });
+        expect(offers[0].offer.evidence.discountPercentage.text).toContain('"value":10');
+        // A discount tied to a menu item it doesn't name waits for the reviewer.
+        expect(offers[1].flags).toContain('single_item_unconfirmed');
+      });
+
+      it('reads the deals in the menu’s offer categories, with the order types and days the menu states', () => {
+        const { offers } = adapter.extractFromPage(renderedPage([store, menu]), ['home'], { checkedAt });
+        const byTitle = Object.fromEntries(offers.map((o) => [o.offer.title, o.offer]));
+        // Ordinary dishes, items not shown online and hidden categories are not offers.
+        expect(Object.keys(byTitle).sort()).toEqual([
+          '10" Double Saver: Any 2 X 10" Pizzas',
+          '10% off orders over £15',
+          'Meal Deal 1: Any 10" Pizza, Fries & Can of Drink',
+          'Offer 1: Any 8" pizza',
+          'Weekday Saver: Any 12" Pizza',
+        ]);
+        expect(byTitle['10" Double Saver: Any 2 X 10" Pizzas']).toMatchObject({ offerType: 'multi_buy', promotionalPrice: 15.99 });
+        expect(byTitle['Meal Deal 1: Any 10" Pizza, Fries & Can of Drink']).toMatchObject({ offerType: 'meal_deal', promotionalPrice: 11.99 });
+        expect(byTitle['Offer 1: Any 8" pizza']).toMatchObject({ promotionalPrice: 4.99, collectionEligible: true, deliveryEligible: false });
+        expect(byTitle['Weekday Saver: Any 12" Pizza'].eligibleWeekdays).toEqual(['mon', 'tue', 'wed', 'thu', 'fri']);
+        const deal = byTitle['Meal Deal 1: Any 10" Pizza, Fries & Can of Drink'];
+        expect(deal.evidence.promotionalPrice.method).toBe('provider:provider-foodhub@1.1.0:promotionalPrice');
+        expect(deal.sources[0].excerpt).toContain('"price":"11.99"');
+        for (const { offer } of offers) expect(validateExtractedOffer(offer, checkedAt).valid).toBe(true);
+      });
+
+      it('ignores a menu that would expand past its size limit, and categories outside a menu response', () => {
+        const bomb = { url: menu.url, json: { data: [deflateSync(Buffer.alloc(20 * 1024 * 1024, 32)).toString('base64')] } };
+        const elsewhere = { url: 'https://fh-app.test/api/consumer/menu-preview', json: foodhubMenuResponse() };
+        const stray = { url: 'https://fh-app.test/api/featured', json: JSON.parse(JSON.stringify(foodhubMenuResponse())) as unknown };
+        expect(adapter.extractFromPage(renderedPage([bomb, elsewhere, stray]), ['home'], { checkedAt }).offers).toEqual([]);
+      });
     });
   });
 

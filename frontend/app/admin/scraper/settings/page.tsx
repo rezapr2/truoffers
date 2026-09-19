@@ -96,9 +96,10 @@ export default function SettingsPage() {
             <span>
               <span className="font-extrabold">Render JavaScript-only websites</span>
               <span className="block text-[13px] font-semibold text-muted">
-                When a website’s offers only appear after JavaScript runs, open up to 3 of its pages in Chromium. Images, fonts and
-                trackers are never loaded, and every request passes the same permission checks. The AI fallback is skipped for a
-                website that was rendered.
+                When a website’s offers only appear after JavaScript runs, open up to 3 of its pages in Chromium. Ordering
+                platforms whose menu deals load in the browser (Foodhub) get one render as well. Images, fonts and trackers are
+                never loaded, and every request passes the same permission checks. The AI fallback is skipped for a website that
+                was rendered.
                 {settings.renderWorkers > 0
                   ? ` ${settings.renderWorkers} render worker${settings.renderWorkers === 1 ? '' : 's'} running.`
                   : ' No render worker is running, so nothing will be rendered until one is started (it needs about 1 GB of memory).'}

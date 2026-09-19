@@ -86,6 +86,9 @@ export abstract class BuiltinAdapter implements TakeawayWebsiteAdapter {
   abstract readonly name: string;
   abstract readonly version: string;
   abstract readonly priority: number;
+  // The platform loads its menu, and the deals in it, only in the browser: worth a render even when the
+  // static HTML already had some offers.
+  readonly menuNeedsRendering: boolean = false;
 
   abstract canHandle(ctx: WebsiteContext): Promise<AdapterMatchResult>;
   abstract extractFromPage(page: LoadedPage, roles: PageRole[], ctx: Pick<WebsiteContext, 'checkedAt'>): PageExtraction;

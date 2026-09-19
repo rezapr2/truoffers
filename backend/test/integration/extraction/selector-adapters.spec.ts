@@ -80,6 +80,27 @@ describe('selector adapters, the suggestion engine and adapter precedence', () =
     return result.config;
   }
 
+  it('hands a code adapter over to its new version, keeping a pause an admin set', async () => {
+    await h.models.adapters.deleteMany({ key: 'provider-foodhub' });
+    await h.models.adapters.create({
+      key: 'provider-foodhub',
+      name: 'Foodhub provider',
+      type: ScraperAdapterType.PROVIDER,
+      version: '1.0.0',
+      priority: 400,
+      status: ScraperAdapterStatus.PAUSED,
+      pausedReason: 'Checking the platform terms',
+      isCurrent: true,
+    });
+    await registry.ensureRegistered();
+    const versions = await h.models.adapters.find({ key: 'provider-foodhub' }).sort({ version: 1 }).lean();
+    expect(versions.map((v) => [v.version, v.isCurrent, v.status])).toEqual([
+      ['1.0.0', false, ScraperAdapterStatus.PAUSED],
+      ['1.1.0', true, ScraperAdapterStatus.PAUSED],
+    ]);
+    expect(versions[1].pausedReason).toBe('Checking the platform terms');
+  });
+
   it('validates selector configs without accepting regex or unknown parsers', () => {
     expect(parseSelectorConfig({ offers: { container: 'article.card', fields: { title: { selector: 'h3' } } } }).errors).toEqual([]);
     const bad = parseSelectorConfig({

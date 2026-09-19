@@ -38,6 +38,9 @@ npm run seed              # wipes + seeds demo data (idempotent, dev only)
 npm run migrate:scraper   # website import robot indexes + adapters (idempotent)
 npm run start:dev         # API at http://localhost:4000/api
 npm run start:worker      # in a second terminal: the website import robot's worker
+# Optional, a third terminal: the render worker, for JavaScript-only sites and ordering-platform menus.
+# Needs Chromium once (npx playwright-core install --only-shell chromium), then turn rendering on in Settings.
+npm run build && SCRAPER_QUEUE_ROLE=render npm run start:worker:prod
 
 # 2. Frontend (port 3000)
 cd frontend
@@ -175,7 +178,10 @@ is provider adapter, selector adapter, JSON-LD, then generic HTML.
 and the robot recognises these two from the assets their pages use. It reads the offers from the
 data the page already carries for its own JavaScript, and never calls the platform's API.
 
-- **Foodhub:** the store's discounts.
+- **Foodhub:** the store's discounts, from the page data, or from the store data its app loads when
+  the page is rendered. Also the deals in the menu's offer categories (*Meal Deals*, *Collection
+  Offers*, *Double Saver*…), with the order types and days the menu states. Foodhub's app only loads
+  the menu in the browser, so the deals need rendering turned on and a render worker running.
 - **Grub24:** the offers list, plus the deals in the menu's offer categories.
 - **Foodhub offers need one check before approving:** Foodhub's data doesn't say whether an offer is
   for collection or delivery, so those offers are flagged for you to set before approving.
@@ -217,15 +223,21 @@ are expired by `review_stale_offer`.
 
 **JavaScript-only websites.** Some takeaway sites put their offers on the page with JavaScript, so
 the static HTML has none. With **Render JavaScript-only websites** enabled in scraper settings, such
-a run renders up to 3 pages in Chromium and reads the result with the same adapter. Rendering
-happens in a separate **render worker** (`Dockerfile.render`), because the browser needs about 1 GB
-of memory:
+a run renders up to 3 pages in Chromium and reads the result with the same adapter. A site on an
+ordering platform whose menu only loads in the browser (Foodhub) gets one render of its homepage even
+when the page already had some offers. Rendering happens in a separate **render worker**
+(`Dockerfile.render`), because the browser needs about 1 GB of memory:
 
 - Every connection the browser makes, including each redirect hop, goes through a validating proxy
   with the same SSRF and never-crawl checks as normal fetching.
 - The website's own URLs also go through robots.txt, blocked paths and the rate limit.
 - Images, media, fonts and analytics hosts are never loaded.
 - A bot challenge, CAPTCHA or login page stops the render, and the website is left alone for a week.
+- A page is read once nothing has loaded for 3 seconds, or after 20 seconds at most, so an app that
+  fetches its data late is still seen.
+- The adapters also get the JSON the page's own scripts loaded from the website (an app's store or
+  menu, say). Only requests the page made itself and that passed the checks above count; nothing
+  extra is requested, and that data is read in memory and never stored.
 - The browser restarts above 512 MB. Cancelling a run or pressing the emergency stop closes its
   pages at once.
 

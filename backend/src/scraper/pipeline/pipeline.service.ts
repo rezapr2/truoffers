@@ -423,14 +423,21 @@ export class PipelineService {
     }
     await ctx.progress(targets.length, targets.length, 'Pages read');
 
-    // Spec §5: a site whose offers only exist after JavaScript runs is rendered before anything else is tried.
-    if (next === ImportJobType.MATCH_BUSINESS && this.staticOffersIn(outputs, out) === 0 && (await this.renderingAvailable())) {
-      await ctx.log('No offers in the static HTML: queueing a Chromium render');
-      return {
-        output: out as unknown as Record<string, unknown>,
-        resultCounts: { pagesFetched: loader.fetchedCount, pagesSkipped: loader.skipped.size, businesses: out.businesses.length, offers: 0 },
-        next: ImportJobType.RENDER_PAGES,
-      };
+    // Spec §5: a site whose offers only exist after JavaScript runs is rendered before anything else is tried, and
+    // so is a platform whose menu (with the deals in it) only loads in the browser.
+    const staticOffers = this.staticOffersIn(outputs, out);
+    if (next === ImportJobType.MATCH_BUSINESS && (staticOffers === 0 || adapter.menuNeedsRendering)) {
+      if (await this.renderingAvailable()) {
+        await ctx.log(staticOffers === 0 ? 'No offers in the static HTML: queueing a Chromium render' : `${adapter.name}: its menu deals only load in the browser; queueing a Chromium render`);
+        return {
+          output: out as unknown as Record<string, unknown>,
+          resultCounts: { pagesFetched: loader.fetchedCount, pagesSkipped: loader.skipped.size, businesses: out.businesses.length, offers: out.offers.length },
+          next: ImportJobType.RENDER_PAGES,
+        };
+      }
+      if (adapter.menuNeedsRendering) {
+        await ctx.log(`${adapter.name}: its menu deals only load in the browser. Turn on rendering in Settings, with a render worker running, to read them`);
+      }
     }
 
     let aiCounts: Record<string, number> = {};
@@ -507,10 +514,11 @@ export class PipelineService {
     const adapter = await this.adapterFor(analyse);
     await this.gate.assertSiteCrawlable(site.domain, adapter.id);
 
-    const targets = plan
-      .filter((p) => p.roles.some((role) => role === 'offers' || role === 'home' || role === 'menu'))
-      .sort((a, b) => b.priority - a.priority)
-      .slice(0, RENDER.pagesPerRun);
+    const candidates = plan.filter((p) => p.roles.some((role) => role === 'offers' || role === 'home' || role === 'menu')).sort((a, b) => b.priority - a.priority);
+    // A platform app loads the same store and menu on every page, so one page is enough: the homepage.
+    const targets = adapter.menuNeedsRendering
+      ? [candidates.find((p) => p.roles.includes('home')) ?? candidates[0]].filter((p): p is DiscoveredPage => !!p)
+      : candidates.slice(0, RENDER.pagesPerRun);
     const out: PageExtractionOutput = { processedUrls: [], readPages: [], gonePages: [], businesses: [], offers: [] };
     if (targets.length === 0) return { output: out as unknown as Record<string, unknown>, resultCounts: { rendered: 0 }, next: ImportJobType.MATCH_BUSINESS };
 

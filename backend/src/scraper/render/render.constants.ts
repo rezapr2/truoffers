@@ -2,7 +2,17 @@
 export const RENDER = {
   maxContexts: 2,
   navigationTimeoutMs: 30_000,
-  settleMs: 1_500,
+  // How long a page may keep loading after its HTML arrives. Most go quiet within a second; client-side
+  // ordering apps can take 15 seconds or more to fetch their store and menu.
+  settleMs: 20_000,
+  // A page counts as loaded once nothing has been in flight for this long: apps often start fetching their
+  // data a moment after the page itself goes quiet.
+  quietMs: 3_000,
+  // JSON the page's own scripts load from the website (a client-side app's store and menu), kept for the
+  // adapters in memory only.
+  maxDataResponses: 40,
+  maxDataResponseBytes: 2 * 1024 * 1024,
+  maxDataBytesPerPage: 8 * 1024 * 1024,
   // SCRAPER_RENDER_MEMORY_MB lowers the ceiling for tests; production keeps the spec's 512 MB.
   memoryCeilingMb: Number(process.env.SCRAPER_RENDER_MEMORY_MB ?? 512),
   memorySampleMs: 2_000,

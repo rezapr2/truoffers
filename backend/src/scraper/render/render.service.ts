@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import * as cheerio from 'cheerio';
-import type { Browser, BrowserContext, BrowserServer, Route } from 'playwright-core';
+import type { Browser, BrowserContext, BrowserServer, Page, Route } from 'playwright-core';
 import { registrableDomainOf, siteDomainOf } from '../safety/url';
 import { botUserAgent } from '../scraper.constants';
-import type { LoadedPage } from '../extraction/adapter.types';
+import type { LoadedPage, PageDataResponse } from '../extraction/adapter.types';
 import { FetchAbortedError, FetchDeniedError, FetchFailedError } from '../safety/errors';
 import { HOST_RESOLVER, NETWORK_POLICY } from '../scraper.tokens';
 import type { HostResolver } from '../safety/pinned-lookup';
@@ -36,6 +36,10 @@ export interface RenderResult {
   pages: LoadedPage[];
   blockedRequests: number;
   memoryMb: number;
+}
+
+function isSameSite(hostname: string, siteDomain: string): boolean {
+  return siteDomainOf(hostname) === siteDomain || registrableDomainOf(hostname) === registrableDomainOf(siteDomain);
 }
 
 export function isTrackerHost(hostname: string): boolean {
@@ -157,7 +161,7 @@ export class RenderService implements OnApplicationShutdown {
     if (BLOCKED_RESOURCE_TYPES.includes(browserRequest.resourceType() as (typeof BLOCKED_RESOURCE_TYPES)[number])) return route.abort();
     if (isTrackerHost(url.hostname)) return route.abort();
     // Scripts and styles from anywhere are needed to render; navigations stay on the website being crawled.
-    const sameSite = siteDomainOf(url.hostname) === request.siteDomain || registrableDomainOf(url.hostname) === registrableDomainOf(request.siteDomain);
+    const sameSite = isSameSite(url.hostname, request.siteDomain);
     if (navigation && !sameSite) return route.abort();
     if (sameSite) {
       try {
@@ -172,6 +176,8 @@ export class RenderService implements OnApplicationShutdown {
 
   private async renderOne(context: BrowserContext, url: string, request: RenderRequest): Promise<LoadedPage | null> {
     const page = await context.newPage();
+    const data = this.captureData(page, request);
+    const activity = this.trackActivity(page);
     try {
       let response;
       try {
@@ -186,8 +192,8 @@ export class RenderService implements OnApplicationShutdown {
         request.log(`Rendered nothing for ${url}`);
         return null;
       }
-      // Give client-side rendering a moment to put the content in, without waiting for trackers.
-      await page.waitForLoadState('networkidle', { timeout: RENDER.settleMs }).catch(() => undefined);
+      // Let client-side rendering put the content in: until the page stops loading, or the settle time runs out.
+      await activity.settled();
       const refused = response.headers()[PROXY_BLOCKED_HEADER];
       if (refused) {
         request.log(`Did not render ${url}: ${decodeURIComponent(refused)}`);
@@ -202,7 +208,8 @@ export class RenderService implements OnApplicationShutdown {
         return null;
       }
       const finalUrl = page.url();
-      request.log(`Rendered ${url}`, { status, finalUrl, bytes: html.length });
+      const dataResponses = await data.collected();
+      request.log(`Rendered ${url}`, { status, finalUrl, bytes: html.length, dataResponses: dataResponses.map((d) => new URL(d.url).pathname) });
       return {
         url,
         finalUrl,
@@ -212,10 +219,72 @@ export class RenderService implements OnApplicationShutdown {
         $: cheerio.load(html),
         nofollow: false,
         fetchedAt: new Date(),
+        dataResponses,
       };
     } finally {
       await page.close().catch(() => undefined);
     }
+  }
+
+  // Requests in flight, and when the last one started or ended; aborted requests count as ended.
+  private trackActivity(page: Page) {
+    let inFlight = 0;
+    let lastActivity = Date.now();
+    page.on('request', () => {
+      inFlight += 1;
+      lastActivity = Date.now();
+    });
+    const ended = () => {
+      inFlight = Math.max(0, inFlight - 1);
+      lastActivity = Date.now();
+    };
+    page.on('requestfinished', ended);
+    page.on('requestfailed', ended);
+    return {
+      settled: async () => {
+        const deadline = Date.now() + RENDER.settleMs;
+        while (Date.now() < deadline && !page.isClosed()) {
+          if (inFlight === 0 && Date.now() - lastActivity >= RENDER.quietMs) return;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      },
+    };
+  }
+
+  /**
+   * JSON the page's own scripts load from the website while it renders, such as a client-side ordering app's
+   * store and menu. Nothing extra is requested: these are responses to requests the page made itself, and on
+   * the website each one has already passed the crawl gate (robots.txt included). They stay in memory for the
+   * adapters and are never stored.
+   */
+  private captureData(page: Page, request: RenderRequest) {
+    const responses: PageDataResponse[] = [];
+    const pending = new Set<Promise<void>>();
+    let bytes = 0;
+    page.on('response', (response) => {
+      const task = (async () => {
+        const browserRequest = response.request();
+        if (!['xhr', 'fetch'].includes(browserRequest.resourceType()) || response.status() !== 200) return;
+        if (!/json/i.test(response.headers()['content-type'] ?? '')) return;
+        const url = new URL(response.url());
+        if (!isSameSite(url.hostname, request.siteDomain) || responses.length >= RENDER.maxDataResponses) return;
+        if (Number(response.headers()['content-length']) > RENDER.maxDataResponseBytes) return;
+        const body = await response.body();
+        if (body.length > RENDER.maxDataResponseBytes || bytes + body.length > RENDER.maxDataBytesPerPage) return;
+        if (responses.length >= RENDER.maxDataResponses) return;
+        const json: unknown = JSON.parse(body.toString('utf8'));
+        bytes += body.length;
+        responses.push({ url: url.href, json });
+      })().catch(() => undefined);
+      pending.add(task);
+      void task.finally(() => pending.delete(task));
+    });
+    return {
+      collected: async () => {
+        await Promise.allSettled([...pending]);
+        return responses;
+      },
+    };
   }
 
   private overMemory(peakMb: number) {

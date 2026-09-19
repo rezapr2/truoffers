@@ -69,16 +69,25 @@ export class AdapterRegistry implements OnModuleInit {
   // Code adapters get a database record so admins can see and pause them like any other adapter.
   async ensureRegistered(): Promise<void> {
     await Promise.all(
-      this.codeAdapters.map((adapter) =>
-        this.model.updateOne(
+      this.codeAdapters.map(async (adapter) => {
+        // A new version of a code adapter takes over from the previous one, keeping a pause an admin set on it.
+        const previous = await this.model
+          .findOneAndUpdate({ key: adapter.id, version: { $ne: adapter.version }, isCurrent: true }, { $set: { isCurrent: false } })
+          .lean<AdapterLean>();
+        await this.model.updateOne(
           { key: adapter.id, version: adapter.version },
           {
-            $setOnInsert: { key: adapter.id, version: adapter.version, status: ScraperAdapterStatus.ACTIVE },
+            $setOnInsert: {
+              key: adapter.id,
+              version: adapter.version,
+              status: previous?.status === ScraperAdapterStatus.PAUSED ? ScraperAdapterStatus.PAUSED : ScraperAdapterStatus.ACTIVE,
+              ...(previous?.pausedReason ? { pausedReason: previous.pausedReason } : {}),
+            },
             $set: { name: adapter.name, priority: adapter.priority, isCurrent: true, ...CODE_ADAPTER_TYPES[adapter.id] },
           },
           { upsert: true },
-        ),
-      ),
+        );
+      }),
     );
   }
 

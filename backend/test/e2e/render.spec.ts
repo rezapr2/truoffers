@@ -18,8 +18,10 @@ import { ExtractedOfferCandidate } from '../../src/schemas/extracted-offer-candi
 import { ImportJob } from '../../src/schemas/import-job.schema';
 import { ScrapedWebsite } from '../../src/schemas/scraped-website.schema';
 import { FixtureServer, startFixtureServer, testResolver } from '../helpers/fixture-server';
+import { foodhubMenuResponse, foodhubStoreResponse } from '../helpers/foodhub-app';
 
 const HOST = 'spa-only.test';
+const FOODHUB = 'fh-app.test';
 
 describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
   let server: FixtureServer;
@@ -36,7 +38,7 @@ describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
     server = await startFixtureServer();
     moduleRef = await Test.createTestingModule({ imports: [MongooseModule.forRoot(process.env.MONGODB_URI!), ScraperWorkerModule] })
       .overrideProvider(NETWORK_POLICY)
-      .useValue(fixtureNetworkPolicy(new Set([HOST])))
+      .useValue(fixtureNetworkPolicy(new Set([HOST, FOODHUB])))
       .overrideProvider(HOST_RESOLVER)
       .useValue(testResolver())
       .overrideProvider(CNAME_RESOLVER)
@@ -63,14 +65,14 @@ describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
     await server.close();
   });
 
-  async function runOnce() {
+  async function runOnce(host = HOST) {
     const site = await sites.findOneAndUpdate(
-      { domain: HOST },
+      { domain: host },
       {
         $setOnInsert: {
-          domain: HOST,
-          registrableDomain: registrableDomainOf(HOST),
-          seedUrl: server.url(HOST, '/'),
+          domain: host,
+          registrableDomain: registrableDomainOf(host),
+          seedUrl: server.url(host, '/'),
           authorisationStatus: DomainAuthorisationStatus.AUTHORISED,
           authorisationSource: AuthorisationSource.ADMIN_MANUAL,
           businesses: [],
@@ -129,5 +131,34 @@ describe('rendering JavaScript-only websites, end to end (spec §5)', () => {
     expect(server.requestsFor(HOST).every((r) => r.userAgent?.startsWith('TruOffersBot/1.0'))).toBe(true);
     expect(moduleRef.get(RenderService).restarts).toBe(0);
     expect(new Types.ObjectId(String(render.runId))).toBeTruthy();
+  });
+
+  it('renders a Foodhub site for the menu deals its app loads, as well as the discount in its page data', async () => {
+    const json = (body: unknown) => (_req: unknown, res: import('node:http').ServerResponse) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+    server.route(FOODHUB, '/api/consumer/store', json(foodhubStoreResponse()));
+    server.route(FOODHUB, '/api/consumer/store/9002/menu/foodhub/friday.json', json(foodhubMenuResponse()));
+
+    const stages = await runOnce(FOODHUB);
+    const extract = stages.find((s) => s.type === ImportJobType.EXTRACT_OFFERS)!;
+    expect(extract.logs.map((l) => l.message).join(' ')).toMatch(/menu deals only load in the browser; queueing a Chromium render/);
+    const render = stages.find((s) => s.type === ImportJobType.RENDER_PAGES)!;
+    // One page is enough: the app loads the same store and menu on every page.
+    expect(render.resultCounts).toMatchObject({ rendered: 1 });
+
+    const found = await candidates.find({ domain: FOODHUB }).lean();
+    const titles = found.map((c) => c.title).sort();
+    expect(titles).toEqual([
+      '10" Double Saver: Any 2 X 10" Pizzas',
+      '10% off orders over £15',
+      'Meal Deal 1: Any 10" Pizza, Fries & Can of Drink',
+      'Offer 1: Any 8" pizza',
+      'Weekday Saver: Any 12" Pizza',
+    ]);
+    expect(found.find((c) => c.title.startsWith('Offer 1'))).toMatchObject({ collectionEligible: true, deliveryEligible: false });
+    // The app's data was only read in memory: nothing of the menu itself was stored with the run.
+    expect(JSON.stringify(await jobs.find({ runId: render.runId }).lean())).not.toMatch(/subcat|Staff Deal|Margherita/);
   });
 });

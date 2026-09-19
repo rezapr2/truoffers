@@ -116,6 +116,13 @@ export interface LoadedPage {
   nofollow: boolean;
   lastModified?: Date;
   fetchedAt: Date;
+  /** Rendered pages only: JSON the page's own scripts loaded from the website. In memory, never stored. */
+  dataResponses?: PageDataResponse[];
+}
+
+export interface PageDataResponse {
+  url: string;
+  json: unknown;
 }
 
 export interface WebsiteContext {

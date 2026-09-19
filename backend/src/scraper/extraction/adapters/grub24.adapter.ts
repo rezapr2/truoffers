@@ -6,13 +6,11 @@ import { PageExtraction } from './builtin-adapter';
 import { embeddedOffer, setEmbeddedField } from './embedded-offer';
 import { GenericHtmlAdapter } from './generic-html.adapter';
 import { JsonLdAdapter } from './jsonld.adapter';
+import { dealBenefitText, OFFER_CATEGORY } from './menu-deals';
 import { PROVIDER_ADAPTER_PRIORITY } from './ordernest.adapter';
 
 const MAX_OFFERS = 30;
-// Menu categories that hold deals rather than ordinary dishes.
-const OFFER_CATEGORY = /\b(special offers?|offers|deals|meal deals|promotions?)\b/i;
 const ITEM_KEYS = ['item_name', 'item_description', 'price_delivery', 'price_collection', 'only_collection', 'only_delivery', 'active_days'];
-const BUNDLE = /\b(deal|special|family|treat|combo|meal|bundle|feast|box|platter)\b/i;
 
 function priceOf(list: unknown): number | undefined {
   const price = Array.isArray(list) ? Number((list[0] as { price?: unknown })?.price) : NaN;
@@ -27,14 +25,7 @@ export function dealBenefit(item: Record<string, unknown>, collectionCategory: b
   const collectionOnly = collectionCategory || String(item.only_collection) === '1';
   const price = collectionOnly ? (priceOf(item.price_collection) ?? priceOf(item.prices)) : (priceOf(item.price_delivery) ?? priceOf(item.prices));
   if (!price) return undefined;
-  const pounds = `£${Number.isInteger(price) ? price : price.toFixed(2)}`;
-  const name = collapse(String(item.item_name ?? ''));
-  const description = plain(item.item_description);
-  const quantity = /\b(\d)\s*x\b/i.exec(name)?.[1];
-  if (quantity && Number(quantity) >= 2) return { text: `${quantity} for ${pounds}`, collectionOnly };
-  const components = description.split(/,|\bwith\b|\band\b/i).filter((part) => part.trim()).length;
-  if (BUNDLE.test(name) || components >= 2) return { text: `Meal deal for ${pounds}`, collectionOnly };
-  return { text: `${/^(any|all|every)\b/i.test(name) ? '' : 'Any '}${name} only ${pounds}`, collectionOnly };
+  return { text: dealBenefitText(String(item.item_name ?? ''), plain(item.item_description), price), collectionOnly };
 }
 
 function plain(html: unknown): string {

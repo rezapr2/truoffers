@@ -37,6 +37,8 @@ const FLAG_ACTIONS: Record<string, string> = {
   order_type_unconfirmed:
     'The platform marks this offer for one order type but doesn’t say whether that is collection or delivery. Check the website and set Collection and Delivery above before approving.',
   weekdays_unconfirmed: 'The offer applies on some days only, but the page data doesn’t say which. Check the website and set the days above.',
+  single_item_unconfirmed:
+    'The platform ties this discount to one menu item without naming it. Check the website and name the item in the title and terms before approving.',
 };
 
 const MONEY: OfferField[] = ['discountAmount', 'originalPrice', 'promotionalPrice', 'minimumOrder', 'requiredSpend'];

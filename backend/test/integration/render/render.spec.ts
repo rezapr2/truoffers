@@ -22,7 +22,7 @@ describe('Chromium rendering (spec §3/§5)', () => {
 
   beforeAll(async () => {
     server = await startFixtureServer();
-    renderer = new RenderService(fixtureNetworkPolicy(new Set([HOST])), testResolver());
+    renderer = new RenderService(fixtureNetworkPolicy(new Set([HOST, 'elsewhere.test'])), testResolver());
   }, 60_000);
 
   afterAll(async () => {
@@ -40,6 +40,45 @@ describe('Chromium rendering (spec §3/§5)', () => {
     expect(result.pages[0].$('.offer-banner h2').text()).toBe('Sushi Sunday');
     // The same DOM the adapters read: the static HTML has none of this.
     expect(result.pages[0].$('body').text()).toContain('25% off all platters every Sunday');
+  }, 60_000);
+
+  it('keeps the JSON the page’s own scripts load from the website, and nothing else', async () => {
+    const json = (body: unknown, headers: Record<string, string> = {}) => (_req: unknown, res: import('node:http').ServerResponse) => {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', ...headers });
+      res.end(JSON.stringify(body));
+    };
+    server.route(HOST, '/app', (_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      // The data arrives two seconds after the page, as a client-side ordering app's does.
+      res.end(
+        page(`<div id="root">Loading</div><script>setTimeout(async () => {
+          const store = await fetch('/api/store').then((r) => r.json());
+          await fetch('/api/notes').then((r) => r.text());
+          await fetch('/api/private').catch(() => null);
+          await fetch('${server.url('elsewhere.test', '/api/menu')}').catch(() => null);
+          document.getElementById('root').textContent = store.name;
+        }, 2000);</script>`),
+      );
+    });
+    server.route(HOST, '/api/store', json({ name: 'Sushi Stop', deals: ['Sushi Sunday'] }));
+    server.route(HOST, '/api/notes', (_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('not data');
+    });
+    server.route(HOST, '/api/private', json({ secret: true }));
+    server.route('elsewhere.test', '/api/menu', json({ other: 'site' }));
+
+    const result = await renderer.render(
+      request('/app', {
+        // What robots.txt disallows is never requested, so it can't be kept either.
+        assertUrlAllowed: async (url: URL) => {
+          if (url.pathname === '/api/private') throw new Error('Disallowed by robots.txt');
+        },
+      }),
+    );
+    expect(result.pages[0].$('#root').text()).toBe('Sushi Stop');
+    expect(result.pages[0].dataResponses).toEqual([{ url: server.url(HOST, '/api/store'), json: { name: 'Sushi Stop', deals: ['Sushi Sunday'] } }]);
+    expect(server.requestsFor(HOST).map((r) => r.path)).not.toContain('/api/private');
   }, 60_000);
 
   it('never requests images, media or fonts, and blocks analytics hosts', async () => {
