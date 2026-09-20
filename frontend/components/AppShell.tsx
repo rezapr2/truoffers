@@ -16,7 +16,14 @@ const APP_PREFIXES = ['/dashboard', '/admin'];
  * admin) keep the blue scale: a white rounded canvas floating on a grey backdrop, with a sidebar
  * on the left. Below the lg breakpoint the sidebar becomes a slide-in drawer in both cases.
  */
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({
+  children,
+  footer,
+}: {
+  children: React.ReactNode;
+  /** The marketing footer: rendered on the public site, left off the workspaces. */
+  footer?: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const isWorkspace = APP_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -47,6 +54,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <TopNav onOpenMenu={() => setOpen(true)} />
         {drawer}
         <div className="flex-1 min-w-0 flex flex-col">{children}</div>
+        {footer}
       </div>
     );
   }

@@ -84,7 +84,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="mx-auto max-w-4xl px-5 md:px-10 py-10">
-      <div className="bg-gradient-to-br from-tint-blue via-surface to-card border border-line rounded-3xl px-7 py-10 md:px-12 mb-6">
+      <div className="bg-sun-soft rounded-3xl px-7 py-10 md:px-12 mb-6">
         <div className="font-display text-5xl md:text-6xl font-extrabold text-primary mb-3">{offer.displayLabel}</div>
         <h1 className="font-display text-2xl md:text-3xl font-extrabold tracking-tight mb-2">
           {offer.title}
@@ -103,7 +103,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
           {offer.redemptionType === 'code' && offer.code && (
             <button
               onClick={redeem}
-              className="inline-flex items-center gap-3 bg-ink text-surface font-display font-extrabold text-2xl px-6 py-3 rounded-2xl cursor-pointer hover:bg-primary transition-colors mb-4"
+              className="inline-flex items-center gap-3 bg-brand-deep text-white font-display font-extrabold text-2xl px-6 py-3 rounded-2xl cursor-pointer hover:bg-brand transition-colors mb-4"
             >
               {offer.code}
               <span className="text-xs font-sans font-bold opacity-70">
@@ -177,7 +177,7 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
 
         {/* Business card */}
         <aside className="bg-card border border-line rounded-3xl p-7 h-fit">
-          <div className="w-16 h-16 rounded-full bg-page flex items-center justify-center font-display font-extrabold text-2xl text-primary mb-3">
+          <div className="w-16 h-16 rounded-full bg-sun-soft flex items-center justify-center font-display font-extrabold text-2xl text-brand-deep mb-3">
             {business.name?.charAt(0)}
           </div>
           <div className="flex items-center gap-2 flex-wrap mb-1">

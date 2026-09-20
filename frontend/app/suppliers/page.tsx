@@ -87,16 +87,16 @@ export default async function SuppliersPage({
         ))}
       </div>
 
-      <div className="mt-14 bg-gradient-to-br from-tint-blue to-card border border-line rounded-3xl px-8 py-10 md:px-12 flex flex-col md:flex-row items-start md:items-center gap-6">
+      <div className="mt-14 bg-brand-deep text-white rounded-3xl px-8 py-10 md:px-12 flex flex-col md:flex-row items-start md:items-center gap-6">
         <div className="flex-1">
           <h2 className="font-display text-2xl font-extrabold mb-2">Are you a supplier?</h2>
-          <p className="text-[15px] text-muted-2">
+          <p className="text-[15px] text-leaf-soft/85">
             Reach thousands of independent takeaways actively looking for partners.
           </p>
         </div>
         <Link
           href="/register?role=supplier"
-          className="btn-soft font-extrabold px-7 py-3.5 rounded-2xl"
+          className="btn-sun font-extrabold px-7 py-3.5 rounded-full"
         >
           List your business
         </Link>

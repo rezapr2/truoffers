@@ -84,10 +84,10 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
         {/* FRONT */}
         <div
           onClick={flip}
-          className="flip-face h-full bg-card border border-line rounded-2xl p-6 flex flex-col cursor-pointer shadow-sm hover:shadow-lg transition-shadow"
+          className="flip-face h-full bg-card border border-line rounded-3xl p-6 flex flex-col cursor-pointer shadow-sm hover:shadow-lg transition-shadow"
         >
           <div className="flex items-start justify-between gap-2">
-            <div className="font-display text-3xl font-extrabold text-primary">{offer.displayLabel}</div>
+            <div className="font-display text-3xl font-extrabold text-brand-deep">{offer.displayLabel}</div>
             <div className="flex gap-1.5">
               {offer.sponsored && (
                 <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted bg-page px-2 py-1 rounded-full">
@@ -108,7 +108,7 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
           </div>
           <div className="mt-auto flex items-center justify-between">
             <span className="text-[13px] font-bold text-primary">{endsLabel}</span>
-            <span className="text-[13px] font-bold text-ink-soft border border-line bg-card rounded-full px-4 py-2">
+            <span className="text-[13px] font-extrabold text-white bg-brand rounded-full px-4 py-2">
               Tap to redeem
             </span>
           </div>
@@ -117,13 +117,13 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
         {/* BACK */}
         <div
           onClick={flip}
-          className="flip-face flip-back h-full bg-ink text-surface rounded-2xl p-6 flex flex-col cursor-pointer"
+          className="flip-face flip-back h-full bg-brand-deep text-white rounded-3xl p-6 flex flex-col cursor-pointer"
         >
-          <div className="text-[13px] font-bold text-peach uppercase tracking-wide">How to redeem</div>
+          <div className="text-[13px] font-bold text-sun uppercase tracking-wide">How to redeem</div>
           {offer.redemptionType === 'code' && offer.code ? (
             <button
               onClick={copyCode}
-              className="mt-2 inline-flex items-center gap-2 self-start bg-surface text-ink font-display font-extrabold text-xl px-4 py-1.5 rounded-xl cursor-pointer hover:bg-peach-2 transition-colors"
+              className="mt-2 inline-flex items-center gap-2 self-start bg-white text-ink font-display font-extrabold text-xl px-4 py-1.5 rounded-xl cursor-pointer hover:bg-sun-soft transition-colors"
             >
               {offer.code}
               <span className="text-[11px] font-sans font-bold text-muted-2">
@@ -137,12 +137,12 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
               {offer.redemptionType === 'phone' && 'Mention TruOffers when you call'}
             </div>
           )}
-          <div className="mt-2 text-[13px] font-semibold text-peach-2/80 line-clamp-2">
+          <div className="mt-2 text-[13px] font-semibold text-leaf-soft/80 line-clamp-2">
             {offer.terms || offer.description}
             {offer.minOrder > 0 ? ` · Min order £${offer.minOrder}` : ''}
           </div>
           {offer.imported && (
-            <div className="mt-1 text-[11px] font-semibold text-peach-2/70 truncate">
+            <div className="mt-1 text-[11px] font-semibold text-leaf-soft/70 truncate">
               {offer.imported.verification === 'merchant_verified' ? 'Confirmed by the business' : `Imported from ${offer.imported.domain}`}
               {offer.imported.lastCheckedAt && offer.imported.verification !== 'merchant_verified'
                 ? ` · checked ${ukDate(offer.imported.lastCheckedAt)}`
@@ -156,7 +156,7 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={orderClick}
-                className="btn-soft text-[13px] font-bold px-4 py-2 rounded-2xl"
+                className="btn-sun text-[13px] font-extrabold px-4 py-2 rounded-full"
               >
                 Order now
               </a>
@@ -165,7 +165,7 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
               <Link
                 href={`/takeaway/${business.slug}`}
                 onClick={(e) => e.stopPropagation()}
-                className="border-[1.5px] border-surface text-surface text-[13px] font-bold px-4 py-2 rounded-full hover:bg-surface hover:text-ink transition-colors"
+                className="border-[1.5px] border-white/50 text-white text-[13px] font-bold px-4 py-2 rounded-full hover:bg-white hover:text-brand-deep transition-colors"
               >
                 View profile
               </Link>

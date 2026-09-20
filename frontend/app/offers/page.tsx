@@ -8,6 +8,7 @@ import { track } from '@/lib/analytics';
 import type { Category, SearchResult, Offer } from '@/lib/types';
 import OfferFlipCard from '@/components/OfferFlipCard';
 import BusinessCard from '@/components/BusinessCard';
+import PageHero from '@/components/PageHero';
 
 // Leaflet touches `window` — client-only
 const OffersMap = dynamic(() => import('@/components/OffersMap'), {
@@ -103,35 +104,39 @@ function OffersPageInner() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
-      <h1 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight mb-6">
-        {result?.searchedArea
-          ? `Offers near ${result.searchedArea}`
-          : lat
-            ? 'Offers near you'
-            : 'All live offers'}
-      </h1>
-
-      {/* Search bar */}
-      <form
-        onSubmit={submitPostcode}
-        className="flex gap-2 bg-card border border-line rounded-full p-1.5 pl-6 max-w-xl items-center mb-5"
+    <div>
+      <PageHero
+        title={
+          result?.searchedArea
+            ? `Offers near ${result.searchedArea}`
+            : lat
+              ? 'Offers near you'
+              : 'All live offers'
+        }
+        subtitle="Live deals from takeaways near you — tap a card to see how to redeem it."
       >
-        <span className="w-2.5 h-2.5 border-[2.5px] border-primary rounded-full flex-none" />
-        <input
-          value={postcode}
-          onChange={(e) => setPostcode(e.target.value)}
-          placeholder="Your postcode — e.g. M14 5TQ"
-          className="flex-1 min-w-0 border-none outline-none text-base font-bold text-ink bg-transparent"
-        />
-        <button
-          type="submit"
-          className="btn-soft text-[15px] font-bold px-6 py-3 rounded-full cursor-pointer"
+        {/* Search bar */}
+        <form
+          onSubmit={submitPostcode}
+          className="flex gap-2 bg-card rounded-full p-1.5 pl-6 max-w-xl items-center shadow-lg"
         >
-          Search
-        </button>
-      </form>
+          <span className="w-2.5 h-2.5 border-[2.5px] border-primary rounded-full flex-none" />
+          <input
+            value={postcode}
+            onChange={(e) => setPostcode(e.target.value)}
+            placeholder="Your postcode — e.g. M14 5TQ"
+            className="flex-1 min-w-0 border-none outline-none text-base font-bold text-ink bg-transparent"
+          />
+          <button
+            type="submit"
+            className="btn-sun text-[15px] font-extrabold px-7 py-3 rounded-full cursor-pointer"
+          >
+            Search
+          </button>
+        </form>
+      </PageHero>
 
+      <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
       {/* Filters */}
       <div className="flex gap-2 flex-wrap mb-8">
         <button
@@ -231,6 +236,7 @@ function OffersPageInner() {
           </div>
         </section>
       )}
+      </div>
     </div>
   );
 }

@@ -39,9 +39,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en-GB" className={poppins.variable}>
       <body className="min-h-screen antialiased">
         <AuthProvider>
-          <AppShell>
+          <AppShell footer={<Footer />}>
             <main className="flex-1">{children}</main>
-            <Footer />
           </AppShell>
         </AuthProvider>
       </body>

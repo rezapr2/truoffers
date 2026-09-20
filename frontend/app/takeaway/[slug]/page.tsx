@@ -70,7 +70,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
       {/* Header */}
       <div className="bg-card border border-line rounded-3xl p-7 md:p-10 mb-5">
         <div className="flex flex-col md:flex-row gap-6 md:items-center">
-          <div className="w-20 h-20 md:w-24 md:h-24 flex-none rounded-full bg-page flex items-center justify-center font-display font-extrabold text-3xl text-primary">
+          <div className="w-20 h-20 md:w-24 md:h-24 flex-none rounded-full bg-sun-soft flex items-center justify-center font-display font-extrabold text-3xl text-brand-deep">
             {business.name.charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
