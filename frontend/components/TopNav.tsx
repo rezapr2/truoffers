@@ -10,18 +10,17 @@ import { ADMIN_ROLES, NAV, isNavActive } from './nav';
 // Home is the logo; the top bar lists the sections.
 const LINKS = NAV.filter((item) => item.href !== '/');
 
-/** The public site's navigation: a top bar inside the rounded canvas. */
+/** The public site's navigation: the green bar the reference carries across the whole site. */
 export default function TopNav({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
-
   const dashboardHref = user && ADMIN_ROLES.includes(user.role) ? '/admin' : '/dashboard';
   const followed = user?.followedBusinesses.length ?? 0;
 
   return (
-    <header className="sticky top-0 z-30 bg-card/95 backdrop-blur border-b border-line">
+    <header className="sticky top-0 z-30 bg-brand-deep text-white">
       <div className="mx-auto max-w-7xl flex items-center gap-8 px-5 md:px-10 h-16 lg:h-20">
-        <Logo />
+        <Logo tone="light" />
 
         <nav className="hidden lg:flex items-center gap-1">
           {LINKS.map((item) => {
@@ -32,7 +31,9 @@ export default function TopNav({ onOpenMenu }: { onOpenMenu: () => void }) {
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 className={`text-[15px] px-4 py-2 rounded-full transition-colors ${
-                  active ? 'bg-surface text-ink font-extrabold' : 'text-muted hover:text-ink font-bold'
+                  active
+                    ? 'bg-white/12 text-white font-extrabold'
+                    : 'text-leaf-soft/80 hover:text-white font-bold'
                 }`}
               >
                 {item.label}
@@ -45,22 +46,27 @@ export default function TopNav({ onOpenMenu }: { onOpenMenu: () => void }) {
           {user ? (
             <>
               {followed > 0 && (
-                <span className="text-[14px] font-bold text-ink-soft inline-flex items-center gap-2">
+                <Link
+                  href="/takeaways"
+                  className="text-[14px] font-bold inline-flex items-center gap-2 text-leaf-soft/85 hover:text-white"
+                >
                   Following
-                  <span className="bg-tint-blue text-primary text-[11px] font-extrabold min-w-5 h-5 px-1.5 rounded-full inline-flex items-center justify-center">
+                  <span
+                    className="text-[11px] font-extrabold min-w-5 h-5 px-1.5 rounded-full inline-flex items-center justify-center bg-sun text-[#43310A]"
+                  >
                     {followed}
                   </span>
-                </span>
+                </Link>
               )}
               <Link
                 href={dashboardHref}
-                className="text-[14px] font-bold bg-surface px-4 py-2.5 rounded-2xl hover:text-primary transition-colors"
+                className="text-[14px] font-bold px-4 py-2.5 rounded-2xl transition-colors bg-white/12 text-white hover:bg-white/20"
               >
                 {user.name.split(' ')[0]}
               </Link>
               <button
                 onClick={logout}
-                className="text-[14px] font-bold border border-line px-4 py-2.5 rounded-2xl hover:border-primary hover:text-primary transition-colors cursor-pointer"
+                className="text-[14px] font-bold px-4 py-2.5 rounded-2xl border transition-colors cursor-pointer border-white/30 text-white hover:bg-white hover:text-brand-deep"
               >
                 Log out
               </button>
@@ -69,11 +75,14 @@ export default function TopNav({ onOpenMenu }: { onOpenMenu: () => void }) {
             <>
               <Link
                 href="/claim-your-business"
-                className="text-[14px] font-bold text-primary hover:text-primary-dark px-2"
+                className="text-[14px] font-bold px-2 text-sun hover:text-sun-soft"
               >
                 Add your business
               </Link>
-              <Link href="/login" className="btn-soft text-[14px] font-bold px-6 py-2.5 rounded-2xl">
+              <Link
+                href="/login"
+                className="text-[14px] font-extrabold px-6 py-2.5 rounded-full transition-colors border-[1.5px] border-white/50 text-white hover:bg-white hover:text-brand-deep"
+              >
                 Log in
               </Link>
             </>
@@ -83,7 +92,7 @@ export default function TopNav({ onOpenMenu }: { onOpenMenu: () => void }) {
         <button
           aria-label="Open menu"
           onClick={onOpenMenu}
-          className="ml-auto lg:hidden w-10 h-10 rounded-2xl bg-surface flex items-center justify-center cursor-pointer"
+          className="ml-auto lg:hidden w-10 h-10 rounded-2xl flex items-center justify-center cursor-pointer bg-white/12 text-white"
         >
           <MenuIcon />
         </button>

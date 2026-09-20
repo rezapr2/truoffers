@@ -220,3 +220,32 @@ export const UsersIcon = (p: IconProps) => (
     <path d="M17.5 14.2A5.5 5.5 0 0 1 20.5 19" />
   </Icon>
 );
+
+export const ClockIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 1.8" />
+  </Icon>
+);
+
+export const StarIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path
+      d="m12 4 2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </Icon>
+);
+
+export const FlameIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 3.5s5.5 4 5.5 8.8a5.5 5.5 0 0 1-11 0C6.5 9.8 8 8 9 7c0 2 1 3 2 3.2 0-3 1-5.4 1-6.7Z" />
+  </Icon>
+);
+
+export const ChevronDownIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m6 9.5 6 6 6-6" />
+  </Icon>
+);

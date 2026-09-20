@@ -11,9 +11,10 @@ import { CloseIcon, MenuIcon } from './icons';
 const APP_PREFIXES = ['/dashboard', '/admin'];
 
 /**
- * Public pages sit on a plain white page under a top bar. Workspaces (dashboard, admin) get the
- * reference's look: a white rounded canvas floating on a grey backdrop, with a sidebar on the left.
- * Below the lg breakpoint the sidebar becomes a slide-in drawer in both cases.
+ * Public pages sit on a plain white page under a top bar, inside `theme-public`, which re-points
+ * the shared colour tokens at the green food palette (see globals.css). Workspaces (dashboard,
+ * admin) keep the blue scale: a white rounded canvas floating on a grey backdrop, with a sidebar
+ * on the left. Below the lg breakpoint the sidebar becomes a slide-in drawer in both cases.
  */
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -42,7 +43,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!isWorkspace) {
     return (
-      <div className="min-h-screen bg-card flex flex-col">
+      <div className="theme-public min-h-screen bg-card flex flex-col">
         <TopNav onOpenMenu={() => setOpen(true)} />
         {drawer}
         <div className="flex-1 min-w-0 flex flex-col">{children}</div>

@@ -33,6 +33,20 @@
   --color-tint-mint: #DDF5EA;
   --color-tint-lilac: #ECEAF8;
 
+
+  /* --- Viewer-side food palette (the green/yellow/red look). Admin keeps the blue scale. --- */
+  --color-brand: #0F7048;
+  --color-brand-dark: #0A5335;
+  --color-brand-deep: #10462F;
+  --color-brand-deeper: #0A3222;
+  --color-sun: #F3C141;
+  --color-sun-soft: #FBE79B;
+  --color-tomato: #EE5B3B;
+  --color-tomato-soft: #F9C4B3;
+  --color-leaf: #C9E3A5;
+  --color-leaf-soft: #E8F3D9;
+  --color-cream-2: #FBF8F1;
+
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
 
@@ -101,4 +115,72 @@ body {
   transform: rotateY(180deg);
   position: absolute;
   inset: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   The viewer side (everything outside /dashboard and /admin) re-points the
+   shared colour tokens at the food palette, so every component that already
+   says `text-primary` or `bg-surface` turns green and cream without being
+   rewritten. The workspaces stay on the blue scale defined above.
+   --------------------------------------------------------------------------- */
+.theme-public {
+  --color-primary: #0F7048;
+  --color-primary-dark: #0A5335;
+  --color-surface: #F6F5EF;
+  --color-page: #EDEFE5;
+  --color-line: #ECEBE2;
+  --color-peach: #F7DFA6;
+  --color-peach-2: #E9F2E2;
+  --color-accent: #EE5B3B;
+
+  --color-tint-blue: #E2F0E4;
+  --color-tint-peach: #FCEBD6;
+  --color-tint-mint: #DDF0D6;
+  --color-tint-lilac: #F2EFE3;
+
+  --shadow-lg: 0 16px 38px -16px rgb(16 70 47 / 0.3);
+}
+
+/* Solid green pill — the viewer side's primary action */
+.theme-public .btn-soft {
+  background: var(--color-brand);
+  color: #fff;
+  box-shadow: 0 10px 20px -10px rgb(15 112 72 / 0.7);
+}
+.theme-public .btn-soft:hover {
+  filter: brightness(1.08);
+}
+
+/* The yellow "Get Started" pill from the reference, for use on the green hero */
+.btn-sun {
+  background: var(--color-sun);
+  color: #43310A;
+  box-shadow: 0 12px 24px -12px rgb(160 110 10 / 0.8);
+  transition: filter 0.15s, transform 0.15s;
+}
+.btn-sun:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+/* Faint food doodles across the dark green hero */
+.hero-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.055' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='26' cy='30' r='12'/%3E%3Cpath d='M22 30h8M26 26v8'/%3E%3Cpath d='M88 20c7 0 12 5 12 12H76c0-7 5-12 12-12z'/%3E%3Cpath d='M74 38h28'/%3E%3Ccircle cx='114' cy='96' r='8'/%3E%3Cpath d='M20 98c9-7 21-7 30 0'/%3E%3Cpath d='M20 106h30'/%3E%3Cpath d='M64 74h14M71 67v14'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* The plate the hero and the category section are built around */
+.plate {
+  background:
+    radial-gradient(circle at 50% 42%, #fff 0%, #FBF6E9 46%, #F2E6CC 68%, #E6D5B2 100%);
+  box-shadow:
+    inset 0 0 0 10px rgb(255 255 255 / 0.55),
+    inset 0 0 0 11px rgb(0 0 0 / 0.04),
+    0 30px 60px -25px rgb(10 50 34 / 0.55);
+}
+
+/* Countdown digits on the flash-deal cards */
+.countdown-cell {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
 }

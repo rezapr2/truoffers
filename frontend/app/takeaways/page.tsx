@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { serverApi } from '@/lib/server-api';
 import type { Business } from '@/lib/types';
 import BusinessCard from '@/components/BusinessCard';
+import PageHero from '@/components/PageHero';
 
 export const metadata = {
   title: 'Takeaway directory — TruOffers',
@@ -27,35 +28,33 @@ export default async function TakeawaysPage({
   ]);
 
   return (
-    <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
-      <h1 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
-        Takeaway directory
-      </h1>
-      <p className="text-muted font-semibold mb-8">
-        {data?.total ?? 0} takeaways listed — verified profiles, live offers and direct ordering.
-      </p>
+    <div>
+      <PageHero
+        title="Takeaway directory"
+        subtitle={`${data?.total ?? 0} takeaways listed — verified profiles, live offers and ordering direct.`}
+      >
+        {/* Towns */}
+        <div className="flex gap-2.5 flex-wrap">
+          {(towns || []).map((t) => (
+            <Link
+              key={t.town}
+              href={`/takeaways/${encodeURIComponent(t.town.toLowerCase())}`}
+              className="bg-white/12 text-white text-sm font-bold px-4 py-2.5 rounded-full hover:bg-white hover:text-brand-deep transition-colors"
+            >
+              {t.town} · {t.count}
+            </Link>
+          ))}
+        </div>
+      </PageHero>
 
-      {/* Towns */}
-      <div className="flex gap-2.5 flex-wrap mb-8">
-        {(towns || []).map((t) => (
-          <Link
-            key={t.town}
-            href={`/takeaways/${encodeURIComponent(t.town.toLowerCase())}`}
-            className="bg-card border border-line text-sm font-bold px-4 py-2.5 rounded-full hover:border-primary transition-colors"
-          >
-            {t.town} · {t.count}
-          </Link>
-        ))}
-      </div>
-
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="mx-auto max-w-7xl px-5 md:px-10 py-10 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {(data?.items || []).map((b) => (
           <BusinessCard key={b._id} business={b} />
         ))}
       </div>
 
       {data && data.pages > 1 && (
-        <div className="flex gap-2 justify-center mt-10">
+        <div className="flex gap-2 justify-center pb-10">
           {Array.from({ length: data.pages }, (_, i) => (
             <Link
               key={i}
