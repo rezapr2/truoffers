@@ -7,12 +7,12 @@ import VerifiedBadge from './VerifiedBadge';
 
 export default function BusinessCard({ business }: { business: Business }) {
   return (
-    <div className="bg-card border border-line rounded-2xl p-6 flex gap-4 items-center hover:shadow-lg transition-shadow">
+    <div className="bg-card border border-line rounded-2xl p-6 flex gap-4 items-center min-w-0 hover:shadow-lg transition-shadow">
       <div className="w-16 h-16 flex-none rounded-full bg-sun-soft flex items-center justify-center font-display font-extrabold text-xl text-brand-deep">
         {business.name.charAt(0)}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <Link
             href={`/takeaway/${business.slug}`}
             className="text-[17px] font-extrabold text-ink hover:text-primary transition-colors truncate"

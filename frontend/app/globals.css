@@ -184,3 +184,118 @@ body {
   color: var(--color-ink);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+   Motion. Entrances run once on load (used above the fold, where they are
+   actually seen); the drifting loops keep the hero and the cuisine cards alive.
+   Anything that keeps moving is layered on its own element, so a hover
+   transform on the child never fights the animation on the parent.
+   --------------------------------------------------------------------------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-11px);
+  }
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes nudge-down {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+/* Entrance: set an inline animation-delay to stagger a group */
+.rise {
+  opacity: 0;
+  animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.pop-in {
+  opacity: 0;
+  animation: pop-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+/* Loops: duration and delay are varied inline so a group drifts out of step */
+.bob {
+  animation: bob 5s ease-in-out infinite;
+}
+
+.bob-slow {
+  animation: bob 7s ease-in-out infinite;
+}
+
+/* The dashed ring that turns behind the plate */
+.ring-turn {
+  animation: turn 46s linear infinite;
+}
+
+.nudge-down {
+  animation: nudge-down 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .pop-in,
+  .bob,
+  .bob-slow,
+  .ring-turn,
+  .nudge-down {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Search pills. The :focus-visible rule above is unlayered, so it beats
+   Tailwind's `outline-none` on the input and draws a box inside the pill. A
+   field that fills its own pill hands the ring to the pill instead, which keeps
+   the focus state visible without the double outline.
+   --------------------------------------------------------------------------- */
+.field-bare:focus-visible {
+  outline: none;
+}
+
+.field-shell:focus-within {
+  outline: 2px solid var(--focus-ring, var(--color-primary));
+  outline-offset: 2px;
+}
+
+/* On the green hero the ring has to read against dark, not against white */
+.field-shell-on-dark {
+  --focus-ring: var(--color-sun);
+}

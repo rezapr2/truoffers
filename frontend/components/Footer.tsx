@@ -14,8 +14,8 @@ const LINKS = [
 
 export default function Footer() {
   return (
-    <footer className="mt-12 px-5 md:px-10 pb-5">
-      <div className="mx-auto max-w-7xl bg-brand-deep text-white rounded-[2rem] px-7 py-10 md:px-12">
+    <footer className="bg-brand-deep text-white">
+      <div className="mx-auto max-w-7xl px-5 md:px-10 pt-12 pb-10 md:pt-16 md:pb-12">
         <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-10 mb-8">
           <Logo tone="light" />
           <p className="text-[13.5px] text-leaf-soft/75 max-w-sm leading-relaxed">

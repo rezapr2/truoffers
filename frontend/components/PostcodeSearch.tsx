@@ -44,8 +44,8 @@ export default function PostcodeSearch({
     <div>
       <form
         onSubmit={submit}
-        className={`flex gap-2 bg-card rounded-full items-center ${
-          tone === 'dark' ? 'shadow-lg' : 'border border-line shadow-sm'
+        className={`field-shell flex gap-2 bg-card rounded-full items-center ${
+          tone === 'dark' ? 'field-shell-on-dark shadow-lg' : 'border border-line shadow-sm'
         } ${size === 'lg' ? 'p-1.5 pl-6 max-w-xl' : 'p-1 pl-4 max-w-md'}`}
       >
         <span className="w-2.5 h-2.5 border-[2.5px] border-primary rounded-full flex-none" />
@@ -53,7 +53,7 @@ export default function PostcodeSearch({
           value={postcode}
           onChange={(e) => setPostcode(e.target.value)}
           placeholder="Your postcode — e.g. M14 5TQ"
-          className={`flex-1 min-w-0 border-none outline-none font-bold text-ink bg-transparent ${
+          className={`field-bare flex-1 min-w-0 border-none outline-none font-bold text-ink bg-transparent ${
             size === 'lg' ? 'text-base' : 'text-sm'
           }`}
         />

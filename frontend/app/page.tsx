@@ -52,53 +52,73 @@ export default async function HomePage() {
       <section className="bg-brand-deep hero-pattern text-white rounded-b-[2rem] md:rounded-b-[3rem]">
         <div className="mx-auto max-w-7xl px-5 md:px-10 pt-10 md:pt-14 pb-20 md:pb-28 grid md:grid-cols-[1.05fr_0.95fr] gap-8 items-center">
           <div>
-            <h1 className="font-display text-[40px] leading-[1.06] md:text-[58px] font-extrabold tracking-tight mb-5">
+            <h1 className="rise font-display text-[40px] leading-[1.06] md:text-[58px] font-extrabold tracking-tight mb-5">
               Delicious deals
               <br />
               at your doorstep
             </h1>
-            <p className="text-[15px] md:text-base text-leaf-soft/85 mb-8 leading-relaxed max-w-md">
+            <p
+              className="rise text-[15px] md:text-base text-leaf-soft/85 mb-8 leading-relaxed max-w-md"
+              style={{ animationDelay: '120ms' }}
+            >
               Every live takeaway offer near you, in one search. Verified businesses, real reviews
               and ordering direct — no marketplace mark-ups.
             </p>
-            <PostcodeSearch tone="dark" />
+            <div className="rise" style={{ animationDelay: '240ms' }}>
+              <PostcodeSearch tone="dark" />
+            </div>
           </div>
 
           {/* Decorative: a plate of the cuisines currently listed */}
           <div className="relative hidden md:block h-[380px]" aria-hidden="true">
-            <div className="plate absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-2 text-[58px] leading-none select-none">
-                {cuisines.slice(0, 4).map((c) => (
-                  <span key={c._id}>{c.emoji || '🍽️'}</span>
-                ))}
+            <div className="rise absolute inset-0" style={{ animationDelay: '180ms' }}>
+              {/* A dashed ring turning behind the plate */}
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[344px] h-[344px]">
+                <div className="ring-turn w-full h-full rounded-full border-2 border-dashed border-white/15" />
+              </div>
+              <div className="bob-slow absolute left-1/2 top-1/2 -ml-[150px] -mt-[150px]">
+                <div className="plate w-[300px] h-[300px] rounded-full flex items-center justify-center">
+                  <div className="grid grid-cols-2 gap-2 text-[58px] leading-none select-none">
+                    {cuisines.slice(0, 4).map((c) => (
+                      <span key={c._id}>{c.emoji || '🍽️'}</span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
             {topRated && (
-              <div className="absolute top-4 right-0 bg-card text-ink rounded-2xl shadow-lg px-4 py-3 max-w-[210px]">
-                <div className="text-star text-[13px] tracking-[-1px]">★★★★★</div>
-                <div className="text-[13px] font-extrabold mt-0.5 truncate">{topRated.name}</div>
-                <div className="text-[11.5px] font-bold text-muted">
-                  {topRated.reviews.rating.toFixed(1)} from {topRated.reviews.count} reviews
+              <div className="rise absolute top-4 right-0" style={{ animationDelay: '420ms' }}>
+                <div className="bob bg-card text-ink rounded-2xl shadow-lg px-4 py-3 max-w-[210px]">
+                  <div className="text-star text-[13px] tracking-[-1px]">★★★★★</div>
+                  <div className="text-[13px] font-extrabold mt-0.5 truncate">{topRated.name}</div>
+                  <div className="text-[11.5px] font-bold text-muted">
+                    {topRated.reviews.rating.toFixed(1)} from {topRated.reviews.count} reviews
+                  </div>
                 </div>
               </div>
             )}
 
-            <div className="absolute bottom-6 left-0 bg-card text-ink rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3">
-              <span className="flex -space-x-2">
-                {featuredBusinesses.slice(0, 3).map((b) => (
-                  <span
-                    key={b._id}
-                    className="w-8 h-8 rounded-full bg-sun-soft border-2 border-white flex items-center justify-center font-display font-extrabold text-[13px] text-brand-deep"
-                  >
-                    {b.name.charAt(0)}
-                  </span>
-                ))}
-              </span>
-              <span className="text-[12px] font-extrabold leading-tight">
-                {all?.total ?? 0} takeaways
-                <span className="block text-muted font-bold">listed and live</span>
-              </span>
+            <div className="rise absolute bottom-6 left-0" style={{ animationDelay: '560ms' }}>
+              <div
+                className="bob bg-card text-ink rounded-2xl shadow-lg px-4 py-3 flex items-center gap-3"
+                style={{ animationDelay: '1.4s', animationDuration: '6s' }}
+              >
+                <span className="flex -space-x-2">
+                  {featuredBusinesses.slice(0, 3).map((b) => (
+                    <span
+                      key={b._id}
+                      className="w-8 h-8 rounded-full bg-sun-soft border-2 border-white flex items-center justify-center font-display font-extrabold text-[13px] text-brand-deep"
+                    >
+                      {b.name.charAt(0)}
+                    </span>
+                  ))}
+                </span>
+                <span className="text-[12px] font-extrabold leading-tight">
+                  {all?.total ?? 0} takeaways
+                  <span className="block text-muted font-bold">listed and live</span>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -153,7 +173,7 @@ export default async function HomePage() {
         )}
 
         {/* ---------------- Top picks ---------------- */}
-        <section className="px-5 md:px-10 py-12 md:py-16">
+        <section id="top-picks" className="px-5 md:px-10 py-12 md:py-16 scroll-mt-24">
           <div className="text-center mb-8">
             <h2 className="font-display text-2xl md:text-[34px] font-extrabold tracking-tight">
               Our top picks
@@ -272,7 +292,7 @@ export default async function HomePage() {
         </section>
 
         {/* ---------------- Follow banner ---------------- */}
-        <section className="mx-5 md:mx-10 mt-6 mb-4 bg-brand-deep hero-pattern text-white rounded-[2rem] px-7 py-10 md:px-12 md:py-12 flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-10">
+        <section className="mx-5 md:mx-10 mt-6 mb-16 md:mb-20 bg-brand-deep hero-pattern text-white rounded-[2rem] px-7 py-10 md:px-12 md:py-12 flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-10">
           <div className="flex-1">
             <h2 className="font-display text-2xl md:text-[30px] font-extrabold tracking-tight mb-2">
               Never miss a deal

@@ -118,14 +118,14 @@ function OffersPageInner() {
         {/* Search bar */}
         <form
           onSubmit={submitPostcode}
-          className="flex gap-2 bg-card rounded-full p-1.5 pl-6 max-w-xl items-center shadow-lg"
+          className="field-shell field-shell-on-dark flex gap-2 bg-card rounded-full p-1.5 pl-6 max-w-xl items-center shadow-lg"
         >
           <span className="w-2.5 h-2.5 border-[2.5px] border-primary rounded-full flex-none" />
           <input
             value={postcode}
             onChange={(e) => setPostcode(e.target.value)}
             placeholder="Your postcode — e.g. M14 5TQ"
-            className="flex-1 min-w-0 border-none outline-none text-base font-bold text-ink bg-transparent"
+            className="field-bare flex-1 min-w-0 border-none outline-none text-base font-bold text-ink bg-transparent"
           />
           <button
             type="submit"
