@@ -1,13 +1,20 @@
 name: Build and publish images
 
-# Builds the production images on GitHub's runners (native amd64, free) and
-# publishes them to GHCR. Deployment stays manual: SSH to the VPS and run
-# ./deploy.sh to pull the new images. No SSH keys are stored in GitHub.
+# Builds the production images on GitHub's runners (native amd64, free),
+# publishes them to GHCR, then SSHes to the VPS to run ./deploy.sh so the
+# new images actually go live. The deploy key is scoped: the VPS's
+# authorized_keys forces it to run only `cd /srv/truoffers && ./deploy.sh`,
+# so a leaked key can't be used for anything else.
 #
 # Required repo settings (Settings -> Secrets and variables -> Actions -> Variables):
 #   SITE_URL           e.g. https://truoffers.co.uk   (baked into the frontend)
 #   GOOGLE_CLIENT_ID   optional
 #   APPLE_CLIENT_ID    optional
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions -> Secrets):
+#   DEPLOY_SSH_KEY     private half of the dedicated github-actions-deploy keypair
+#   DEPLOY_HOST        the VPS's IP or hostname
+#   DEPLOY_USER        the SSH user on the VPS
 
 on:
   push:
@@ -71,3 +78,26 @@ jobs:
             NEXT_PUBLIC_APPLE_CLIENT_ID=${{ vars.APPLE_CLIENT_ID }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+    # Only auto-deploy when the build ran against main (a manual dispatch
+    # against another branch/tag still builds images but skips this).
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: SSH and run ./deploy.sh
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 22
+          # Ignored server-side if authorized_keys forces the command (see comment above),
+          # kept here so the workflow is still correct if that restriction is ever lifted.
+          script: |
+            cd /srv/truoffers
+            ./deploy.sh
+          # deploy.sh itself waits up to 7 minutes for services to report healthy.
+          command_timeout: 15m

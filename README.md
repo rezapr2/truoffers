@@ -502,8 +502,11 @@ echo <GITHUB_PAT> | docker login ghcr.io -u rezapr2 --password-stdin   # scope: 
 > `PLATFORM` if step 1 said `aarch64`.
 
 **Prefer not to use your Mac?** Push to `main` and `.github/workflows/build-images.yml` builds both
-images on GitHub's native amd64 runners for free. Set the repo variable `SITE_URL` first
-(Settings → Secrets and variables → Actions → Variables). Deploys stay manual — no SSH keys in CI.
+images on GitHub's native amd64 runners for free, then SSHes to the VPS and runs `./deploy.sh` for
+you. Set the repo variable `SITE_URL` first (Settings → Secrets and variables → Actions →
+Variables), and the `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_SSH_KEY` secrets described at the top
+of that workflow file — the deploy key is restricted on the VPS side to running only `deploy.sh`,
+nothing else.
 
 ### 6. Deploy and seed (on the VPS)
 
@@ -529,8 +532,13 @@ Visit `https://truoffers.co.uk` — you should get the homepage with seeded offe
 
 ## Routine deploys (every release after that)
 
+**Push to `main` and it's live** — `build-images.yml` builds the images, then SSHes to the VPS and
+runs `./deploy.sh` automatically. Watch it under the repo's Actions tab.
+
+Prefer to do it by hand (e.g. to control exactly when the VPS restarts)?
+
 ```bash
-# 1. On your Mac — or just push to main and let GitHub Actions build it
+# 1. On your Mac
 ./build-and-push.sh
 
 # 2. On the VPS
@@ -588,6 +596,7 @@ docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups
 | Site loads but every API call fails | `SITE_URL` in `.env.build` didn't match the live domain, so the wrong URL was baked into the bundle. Rebuild and repush. |
 | No TLS certificate | DNS isn't pointing at the VPS yet, or ports 80/443 are firewalled. Check `dig +short <domain>` and `docker compose logs caddy`. |
 | Frontend changes don't appear | You restarted instead of rebuilding. `NEXT_PUBLIC_*` is compile-time — rerun `./build-and-push.sh`. |
+| CI is green but the site is stale | The `build` job only publishes images to GHCR — it doesn't run `./deploy.sh` by itself. Check the `deploy` job in the same workflow run: if it's missing/skipped, `DEPLOY_HOST`/`DEPLOY_USER`/`DEPLOY_SSH_KEY` secrets aren't set or the push wasn't to `main`. If it ran and failed, its log has the SSH/deploy.sh error. |
 
 ### Notes & gotchas
 
