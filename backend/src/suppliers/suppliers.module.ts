@@ -12,13 +12,15 @@ import {
   Query,
 } from '@nestjs/common';
 import { InjectModel, MongooseModule } from '@nestjs/mongoose';
+import { Throttle } from '@nestjs/throttler';
 import { Model, Types } from 'mongoose';
-import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import slugify from 'slugify';
 import { Supplier, SupplierDocument, SupplierSchema } from '../schemas/supplier.schema';
 import { Lead, LeadDocument, LeadSchema } from '../schemas/lead.schema';
 import { CurrentUser, Public, Roles } from '../common/decorators';
-import { LeadStatus, Role } from '../common/enums';
+import { ADMIN_ROLES, LeadStatus, Role } from '../common/enums';
+import { IsWebUrl } from '../common/validators';
 
 export class CreateSupplierDto {
   @IsString() @MinLength(2) @MaxLength(120) name: string;
@@ -27,7 +29,7 @@ export class CreateSupplierDto {
   @IsOptional() @IsString() serviceArea?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() email?: string;
-  @IsOptional() @IsString() website?: string;
+  @IsOptional() @IsString() @IsWebUrl() website?: string;
 }
 
 export class CreateLeadDto {
@@ -36,6 +38,10 @@ export class CreateLeadDto {
   @IsOptional() @IsString() contactPhone?: string;
   @IsString() @MinLength(5) @MaxLength(2000) message: string;
   @IsOptional() @IsString() type?: string;
+}
+
+export class LeadStatusDto {
+  @IsEnum(LeadStatus) status: LeadStatus;
 }
 
 @Injectable()
@@ -70,7 +76,7 @@ export class SuppliersService {
   }
 
   async submitLead(supplierId: string, dto: CreateLeadDto, userId?: string) {
-    const supplier = await this.supplierModel.findById(supplierId);
+    const supplier = Types.ObjectId.isValid(supplierId) ? await this.supplierModel.findById(supplierId) : null;
     if (!supplier) throw new NotFoundException('Supplier not found');
     const lead = await this.leadModel.create({
       ...dto,
@@ -82,10 +88,12 @@ export class SuppliersService {
     return { id: lead.id, status: lead.status };
   }
 
+  // Admins see every lead; anyone else only the leads sent to suppliers they own (none, for most users).
   async myLeads(userId: string, role: Role) {
     const filter: any = {};
-    if (role === Role.SUPPLIER) {
-      const suppliers = await this.supplierModel.find({ ownerId: new Types.ObjectId(userId) });
+    if (!ADMIN_ROLES.includes(role)) {
+      const suppliers = await this.supplierModel.find({ ownerId: new Types.ObjectId(userId) }).select('_id');
+      if (suppliers.length === 0) return [];
       filter.supplierId = { $in: suppliers.map((s) => s._id) };
     }
     return this.leadModel
@@ -97,8 +105,7 @@ export class SuppliersService {
   async updateLeadStatus(leadId: string, status: LeadStatus, userId: string, role: Role) {
     const lead = await this.leadModel.findById(leadId).populate<{ supplierId: SupplierDocument }>('supplierId');
     if (!lead) throw new NotFoundException('Lead not found');
-    const isAdmin = [Role.SUPER_ADMIN, Role.SALES_ADMIN, Role.SUPPORT_ADMIN].includes(role);
-    if (!isAdmin && String(lead.supplierId.ownerId) !== userId) {
+    if (!ADMIN_ROLES.includes(role) && String(lead.supplierId?.ownerId) !== userId) {
       throw new ForbiddenException('Not your lead');
     }
     lead.status = status;
@@ -134,7 +141,9 @@ export class SuppliersController {
     return this.service.create(dto, userId);
   }
 
+  // Anonymous form: a tighter limit keeps suppliers' inboxes from being flooded.
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
   @Post(':id/leads')
   submitLead(
     @Param('id') id: string,
@@ -147,10 +156,10 @@ export class SuppliersController {
   @Patch('leads/:leadId/status')
   updateLeadStatus(
     @Param('leadId') leadId: string,
-    @Body('status') status: LeadStatus,
+    @Body() dto: LeadStatusDto,
     @CurrentUser() user: { userId: string; role: Role },
   ) {
-    return this.service.updateLeadStatus(leadId, status, user.userId, user.role);
+    return this.service.updateLeadStatus(leadId, dto.status, user.userId, user.role);
   }
 }
 

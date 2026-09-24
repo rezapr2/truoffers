@@ -52,7 +52,20 @@ export default function BusinessJsonLd({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      dangerouslySetInnerHTML={{ __html: jsonForScriptTag(data) }}
     />
   );
+}
+
+/**
+ * JSON.stringify leaves `<` as is, so a business name like `</script><script>…` would close the tag and run
+ * as script. Escaping `<`, `>` and `&` (and the JS line separators) keeps the JSON identical once parsed.
+ */
+export function jsonForScriptTag(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }

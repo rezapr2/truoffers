@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import SocialLogin from '@/components/SocialLogin';
 import type { User } from '@/lib/types';
+import { safeNextPath } from '@/lib/safe-redirect';
 
 function LoginInner() {
   const { login } = useAuth();
@@ -17,7 +18,7 @@ function LoginInner() {
   const [busy, setBusy] = useState(false);
 
   function redirectFor(user: User) {
-    const next = params.get('next');
+    const next = safeNextPath(params.get('next'));
     if (next) router.push(next);
     else if (['super_admin', 'support_admin', 'sales_admin'].includes(user.role)) router.push('/admin');
     else if (['business_owner', 'supplier'].includes(user.role)) router.push('/dashboard');

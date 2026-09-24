@@ -2,9 +2,12 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomInt, timingSafeEqual } from 'node:crypto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import slugify from 'slugify';
@@ -34,6 +37,23 @@ import {
 } from './businesses.dto';
 
 const AUTO_APPROVE_METHODS = [ClaimMethod.PHONE_OTP, ClaimMethod.FOODBELL_AUTO];
+
+// Phone-code claims: a code works for 15 minutes and for 5 tries, and a business accepts at most 5 such
+// claims a day from all accounts together, so at most 25 of the 900,000 possible codes can be tried a day.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const OTP_TTL_MS = 15 * 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_CLAIMS_PER_BUSINESS_PER_DAY = 5;
+
+function isExpiredOtpClaim(claim: ClaimDocument): boolean {
+  if (claim.method !== ClaimMethod.PHONE_OTP) return false;
+  return !claim.otpExpiresAt || claim.otpExpiresAt.getTime() < Date.now();
+}
+
+function otpMatches(expected: string | undefined, given: string): boolean {
+  if (!expected || typeof given !== 'string' || given.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(given));
+}
 
 // Listings are unique by canonical postcode and normalised name.
 function duplicateListing(err: unknown): unknown {
@@ -165,6 +185,9 @@ export class BusinessesService {
 
   async update(id: string, dto: UpdateBusinessDto, user: { userId: string; role: Role }) {
     const business = await this.assertCanManage(id, user);
+    // The DTO class declares every field, so fields left out of the request are present as undefined: assigning
+    // them would erase what the listing has (and fail validation for its name and postcode).
+    dto = Object.fromEntries(Object.entries(dto).filter(([, value]) => value !== undefined)) as UpdateBusinessDto;
     if (dto.postcode) {
       const postcode = normalisePostcode(dto.postcode);
       const geo = await geocodePostcode(postcode);
@@ -250,7 +273,7 @@ export class BusinessesService {
   // ---- Claim & verification flow (blueprint section 8) ----
 
   async startClaim(businessId: string, userId: string, dto: StartClaimDto) {
-    const business = await this.businessModel.findById(businessId);
+    const business = Types.ObjectId.isValid(businessId) ? await this.businessModel.findById(businessId) : null;
     if (!business) throw new NotFoundException('Business not found');
     if (business.ownerId) throw new BadRequestException('This business is already claimed');
 
@@ -259,12 +282,31 @@ export class BusinessesService {
       userId: new Types.ObjectId(userId),
       status: ClaimStatus.PENDING,
     });
-    if (existing) throw new BadRequestException('You already have a pending claim');
+    if (existing && isExpiredOtpClaim(existing)) {
+      await this.rejectOtpClaim(existing, 'The verification code expired');
+    } else if (existing) {
+      throw new BadRequestException('You already have a pending claim');
+    }
 
-    const otpCode =
-      dto.method === ClaimMethod.PHONE_OTP
-        ? String(Math.floor(100000 + Math.random() * 900000))
-        : undefined;
+    const phoneOtp = dto.method === ClaimMethod.PHONE_OTP;
+    if (phoneOtp) {
+      if (!business.phone) {
+        throw new BadRequestException('This listing has no phone number to send a code to. Choose document review instead.');
+      }
+      // Counted across every account, so new sign-ups don't buy more guesses at the same business's code.
+      const recent = await this.claimModel.countDocuments({
+        businessId: business._id,
+        method: ClaimMethod.PHONE_OTP,
+        createdAt: { $gte: new Date(Date.now() - DAY_MS) },
+      });
+      if (recent >= OTP_CLAIMS_PER_BUSINESS_PER_DAY) {
+        throw new HttpException(
+          'Too many phone verification attempts for this business today. Try again tomorrow or choose document review.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+    const otpCode = phoneOtp ? String(randomInt(100000, 1000000)) : undefined;
 
     const claim = await this.claimModel.create({
       businessId: business._id,
@@ -272,6 +314,7 @@ export class BusinessesService {
       method: dto.method,
       evidence: dto.evidence,
       otpCode,
+      otpExpiresAt: phoneOtp ? new Date(Date.now() + OTP_TTL_MS) : undefined,
       riskLevel: dto.method === ClaimMethod.FOODBELL_AUTO ? 'very_low' : 'medium',
     });
 
@@ -286,33 +329,82 @@ export class BusinessesService {
   }
 
   async verifyClaimOtp(claimId: string, userId: string, otp: string) {
-    const claim = await this.claimModel.findById(claimId).select('+otpCode');
+    const claim = Types.ObjectId.isValid(claimId) ? await this.claimModel.findById(claimId) : null;
     if (!claim || String(claim.userId) !== userId) throw new NotFoundException('Claim not found');
     if (claim.status !== ClaimStatus.PENDING) throw new BadRequestException('Claim already resolved');
     if (claim.method !== ClaimMethod.PHONE_OTP) {
       throw new BadRequestException('This claim does not use OTP verification');
     }
-    if (claim.otpCode !== otp) throw new BadRequestException('Incorrect code');
+    if (isExpiredOtpClaim(claim)) {
+      await this.rejectOtpClaim(claim, 'The verification code expired');
+      throw new BadRequestException('This code has expired. Start the claim again to get a new one.');
+    }
 
-    claim.otpVerified = true;
-    claim.status = ClaimStatus.APPROVED;
-    await claim.save();
-    await this.approveClaimEffects(claim);
+    // Count the attempt before comparing, atomically, so parallel requests can't get past the limit.
+    const attempt = await this.claimModel
+      .findOneAndUpdate(
+        { _id: claim._id, status: ClaimStatus.PENDING, otpAttempts: { $lt: OTP_MAX_ATTEMPTS } },
+        { $inc: { otpAttempts: 1 } },
+        { new: true },
+      )
+      .select('+otpCode');
+    if (!attempt) {
+      await this.rejectOtpClaim(claim, 'Too many incorrect codes');
+      throw new BadRequestException('Too many incorrect codes. Start the claim again to get a new one.');
+    }
+    if (!otpMatches(attempt.otpCode, otp)) {
+      const left = OTP_MAX_ATTEMPTS - attempt.otpAttempts;
+      if (left <= 0) {
+        await this.rejectOtpClaim(attempt, 'Too many incorrect codes');
+        throw new BadRequestException('Incorrect code. Start the claim again to get a new one.');
+      }
+      throw new BadRequestException(`Incorrect code (${left} attempt${left === 1 ? '' : 's'} left)`);
+    }
+
+    const approved = await this.claimModel.findOneAndUpdate(
+      { _id: claim._id, status: ClaimStatus.PENDING },
+      { $set: { status: ClaimStatus.APPROVED, otpVerified: true }, $unset: { otpCode: 1 } },
+      { new: true },
+    );
+    if (!approved) throw new BadRequestException('Claim already resolved');
+    try {
+      await this.approveClaimEffects(approved);
+    } catch (err) {
+      await this.claimModel.updateOne(
+        { _id: approved._id },
+        { $set: { status: ClaimStatus.REJECTED, reviewNote: 'The business was claimed by another account first' } },
+      );
+      throw err;
+    }
     return { status: 'approved' };
   }
 
-  async approveClaimEffects(claim: ClaimDocument) {
+  private async rejectOtpClaim(claim: ClaimDocument, reason: string) {
+    await this.claimModel.updateOne(
+      { _id: claim._id, status: ClaimStatus.PENDING },
+      { $set: { status: ClaimStatus.REJECTED, reviewNote: reason }, $unset: { otpCode: 1 } },
+    );
+  }
+
+  /**
+   * Makes the claimant the business's owner. A claim approved by a code alone never takes a business away from an
+   * owner it already has (a claim started before someone else claimed it, say): only an admin reviewing the
+   * claim may hand an owned business to someone else, with `replaceOwner`.
+   */
+  async approveClaimEffects(claim: ClaimDocument, options: { replaceOwner?: boolean } = {}) {
     const verificationStatus =
       claim.method === ClaimMethod.FOODBELL_AUTO
         ? VerificationStatus.FOODBELL_VERIFIED
         : AUTO_APPROVE_METHODS.includes(claim.method)
           ? VerificationStatus.VERIFIED
           : VerificationStatus.CLAIMED;
-    await this.businessModel.findByIdAndUpdate(claim.businessId, {
-      ownerId: claim.userId,
-      verificationStatus,
-      $inc: { trustScore: 20 },
-    });
+    const business = await this.businessModel.findOneAndUpdate(
+      options.replaceOwner
+        ? { _id: claim.businessId }
+        : { _id: claim.businessId, $or: [{ ownerId: null }, { ownerId: claim.userId }] },
+      { ownerId: claim.userId, verificationStatus, $inc: { trustScore: 20 } },
+    );
+    if (!business) throw new ConflictException('This business has already been claimed by another account');
     // Spec §14: any claim invitation an admin handed this business is done with, however the claim arrived.
     await this.invitationModel.updateMany(
       { businessRef: claim.businessId, claimedAt: { $exists: false }, revokedAt: { $exists: false } },

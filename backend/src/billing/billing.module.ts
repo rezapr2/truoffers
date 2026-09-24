@@ -12,6 +12,7 @@ import {
   Post,
   RawBodyRequest,
   Req,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectModel, MongooseModule } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -25,6 +26,7 @@ import {
   SubscriptionSchema,
 } from '../schemas/subscription.schema';
 import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';
+import { Supplier, SupplierDocument, SupplierSchema } from '../schemas/supplier.schema';
 import { Wallet, WalletDocument, WalletSchema } from '../schemas/wallet.schema';
 import {
   WalletTransaction,
@@ -62,6 +64,7 @@ export class BillingService {
     @InjectModel(Plan.name) private planModel: Model<PlanDocument>,
     @InjectModel(Subscription.name) private subModel: Model<SubscriptionDocument>,
     @InjectModel(Business.name) private businessModel: Model<BusinessDocument>,
+    @InjectModel(Supplier.name) private supplierModel: Model<SupplierDocument>,
     @InjectModel(Wallet.name) private walletModel: Model<WalletDocument>,
     @InjectModel(WalletTransaction.name)
     private walletTxModel: Model<WalletTransactionDocument>,
@@ -72,6 +75,16 @@ export class BillingService {
 
   get stripeEnabled() {
     return this.stripe !== null;
+  }
+
+  /**
+   * Without Stripe, plans and ad-wallet top-ups are granted without payment. That is for development and demos:
+   * production refuses it unless BILLING_MOCK_MODE=true says giving them away is intended.
+   */
+  assertMockPaymentsAllowed() {
+    if (process.env.NODE_ENV === 'production' && process.env.BILLING_MOCK_MODE !== 'true') {
+      throw new ServiceUnavailableException('Payments are not available right now');
+    }
   }
 
   listPlans(audience?: string) {
@@ -85,12 +98,23 @@ export class BillingService {
     if (!plan) throw new NotFoundException('Plan not found');
     if (plan.monthlyPrice === 0) throw new BadRequestException('Free plan needs no checkout');
 
+    if (dto.businessId && dto.supplierId) {
+      throw new BadRequestException('A plan is for either a business or a supplier');
+    }
+    const isAdmin = [Role.SUPER_ADMIN, Role.SALES_ADMIN].includes(user.role);
     if (dto.businessId) {
       const business = await this.businessModel.findById(dto.businessId);
       if (!business) throw new NotFoundException('Business not found');
-      const isAdmin = [Role.SUPER_ADMIN, Role.SALES_ADMIN].includes(user.role);
       if (!isAdmin && String(business.ownerId) !== user.userId) {
         throw new ForbiddenException('You do not manage this business');
+      }
+    }
+    // Activating a plan cancels the entity's current one, so a supplier is checked like a business.
+    if (dto.supplierId) {
+      const supplier = await this.supplierModel.findById(dto.supplierId);
+      if (!supplier) throw new NotFoundException('Supplier not found');
+      if (!isAdmin && String(supplier.ownerId) !== user.userId) {
+        throw new ForbiddenException('You do not manage this supplier');
       }
     }
 
@@ -127,6 +151,7 @@ export class BillingService {
     }
 
     // Mock mode: activate directly
+    this.assertMockPaymentsAllowed();
     const sub = await this.activateSubscription({
       userId: user.userId,
       businessId: dto.businessId,
@@ -149,6 +174,11 @@ export class BillingService {
     stripeSubscriptionId?: string;
     stripeCustomerId?: string;
   }) {
+    // Stripe redelivers webhooks: the same subscription is only activated once.
+    if (params.stripeSubscriptionId) {
+      const existing = await this.subModel.findOne({ stripeSubscriptionId: params.stripeSubscriptionId });
+      if (existing) return existing;
+    }
     const entityFilter: any = params.businessId
       ? { businessId: new Types.ObjectId(params.businessId) }
       : params.supplierId
@@ -212,8 +242,11 @@ export class BillingService {
     }
 
     switch (event.type) {
-      case 'checkout.session.completed': {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object;
+        // Delayed payment methods complete checkout before the money arrives: act on async_payment_succeeded.
+        if (session.payment_status === 'unpaid') break;
         const meta = session.metadata || {};
         if (meta.type === 'subscription') {
           await this.activateSubscription({
@@ -236,6 +269,7 @@ export class BillingService {
             meta.businessId,
             (session.amount_total || 0) / 100,
             `Stripe top-up (${session.id})`,
+            session.id,
           );
           this.logger.log(`Credited wallet for business ${meta.businessId}`);
         }
@@ -277,19 +311,28 @@ export class BillingService {
     return { received: true };
   }
 
-  async creditWallet(businessId: string, amount: number, note: string) {
-    const wallet = await this.walletModel.findOneAndUpdate(
+  /** Adds a top-up to the wallet. With a payment `reference`, a payment already credited is not credited again. */
+  async creditWallet(businessId: string, amount: number, note: string, reference?: string) {
+    try {
+      await this.walletTxModel.create({
+        businessId: new Types.ObjectId(businessId),
+        type: 'topup',
+        amount,
+        note,
+        reference,
+      });
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000 && reference) {
+        this.logger.log(`Top-up ${reference} was already credited`);
+        return this.walletModel.findOne({ businessId: new Types.ObjectId(businessId) });
+      }
+      throw err;
+    }
+    return this.walletModel.findOneAndUpdate(
       { businessId: new Types.ObjectId(businessId) },
       { $inc: { balance: amount, totalToppedUp: amount } },
       { upsert: true, new: true },
     );
-    await this.walletTxModel.create({
-      businessId: new Types.ObjectId(businessId),
-      type: 'topup',
-      amount,
-      note,
-    });
-    return wallet;
   }
 
   async mySubscriptions(userId: string) {
@@ -300,7 +343,7 @@ export class BillingService {
   }
 
   async cancel(subscriptionId: string, userId: string) {
-    const sub = await this.subModel.findById(subscriptionId);
+    const sub = Types.ObjectId.isValid(subscriptionId) ? await this.subModel.findById(subscriptionId) : null;
     if (!sub || String(sub.userId) !== userId) throw new NotFoundException('Subscription not found');
     if (this.stripe && sub.stripeSubscriptionId) {
       try {
@@ -358,6 +401,7 @@ export class BillingController {
       { name: Plan.name, schema: PlanSchema },
       { name: Subscription.name, schema: SubscriptionSchema },
       { name: Business.name, schema: BusinessSchema },
+      { name: Supplier.name, schema: SupplierSchema },
       { name: Wallet.name, schema: WalletSchema },
       { name: WalletTransaction.name, schema: WalletTransactionSchema },
     ]),

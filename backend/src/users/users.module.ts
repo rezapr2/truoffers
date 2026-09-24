@@ -8,9 +8,18 @@ import {
 } from '@nestjs/common';
 import { InjectModel, MongooseModule } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { IsMongoId } from 'class-validator';
 import { User, UserDocument, UserSchema } from '../schemas/user.schema';
 import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';
 import { CurrentUser } from '../common/decorators';
+
+export class FollowDto {
+  @IsMongoId() businessId: string;
+}
+
+export class SaveOfferDto {
+  @IsMongoId() offerId: string;
+}
 
 @Injectable()
 export class UsersService {
@@ -23,6 +32,10 @@ export class UsersService {
     const user = await this.userModel.findById(userId);
     if (!user) throw new NotFoundException('User not found');
     const following = user.followedBusinesses.includes(businessId);
+    // Following something that isn't a business would only pad the user's list; unfollowing always works.
+    if (!following && !(await this.businessModel.exists({ _id: businessId }))) {
+      throw new NotFoundException('Business not found');
+    }
     if (following) {
       user.followedBusinesses = user.followedBusinesses.filter((b) => b !== businessId);
     } else {
@@ -54,13 +67,13 @@ export class UsersController {
   constructor(private readonly service: UsersService) {}
 
   @Post('me/follow')
-  toggleFollow(@CurrentUser('userId') userId: string, @Body('businessId') businessId: string) {
-    return this.service.toggleFollow(userId, businessId);
+  toggleFollow(@CurrentUser('userId') userId: string, @Body() dto: FollowDto) {
+    return this.service.toggleFollow(userId, dto.businessId);
   }
 
   @Post('me/save-offer')
-  toggleSave(@CurrentUser('userId') userId: string, @Body('offerId') offerId: string) {
-    return this.service.toggleSaveOffer(userId, offerId);
+  toggleSave(@CurrentUser('userId') userId: string, @Body() dto: SaveOfferDto) {
+    return this.service.toggleSaveOffer(userId, dto.offerId);
   }
 }
 

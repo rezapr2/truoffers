@@ -9,6 +9,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { DiscountType, RedemptionType } from '../common/enums';
+import { IsWebUrl } from '../common/validators';
 
 export class CreateOfferDto {
   @IsString()
@@ -45,6 +46,7 @@ export class CreateOfferDto {
 
   @IsOptional()
   @IsString()
+  @IsWebUrl()
   redemptionUrl?: string;
 
   @IsOptional()

@@ -96,6 +96,7 @@ export class AdsService {
       return this.billing.createTopupSession(businessId, dto.amount, user.userId);
     }
     // Mock mode: credit directly
+    this.billing.assertMockPaymentsAllowed();
     const wallet = await this.billing.creditWallet(businessId, dto.amount, 'Top-up (mock mode)');
     return { mode: 'mock', wallet };
   }

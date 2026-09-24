@@ -25,6 +25,13 @@ export class Claim {
   @Prop({ default: false })
   otpVerified: boolean;
 
+  // Wrong codes entered so far, and when the code stops working; the claim is rejected once either runs out.
+  @Prop({ default: 0 })
+  otpAttempts: number;
+
+  @Prop()
+  otpExpiresAt?: Date;
+
   @Prop({ type: String, enum: Object.values(ClaimStatus), default: ClaimStatus.PENDING })
   status: ClaimStatus;
 
@@ -39,3 +46,5 @@ export class Claim {
 }
 
 export const ClaimSchema = SchemaFactory.createForClass(Claim);
+// Phone-code claims started recently for a business (the per-business limit on code guessing).
+ClaimSchema.index({ businessId: 1, method: 1, createdAt: -1 });

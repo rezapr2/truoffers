@@ -33,7 +33,7 @@ import { ScraperModule } from './scraper/scraper.module';
         uri: config.get('MONGODB_URI') || 'mongodb://localhost:27017/truoffers',
       }),
     }),
-    // Rate limiting: 100 requests / 60s per IP (analytics events excluded via skipIf below)
+    // Rate limiting: 100 requests / 60s per IP (analytics events have their own, larger allowance)
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     AuthModule,
     UsersModule,

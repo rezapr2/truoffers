@@ -11,9 +11,20 @@ import {
   Query,
 } from '@nestjs/common';
 import { InjectModel, MongooseModule } from '@nestjs/mongoose';
-import { SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
+import { Type } from 'class-transformer';
 import { Model, Types } from 'mongoose';
-import { IsIn, IsObject, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsMongoId,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import {
   AnalyticsEvent,
   AnalyticsEventDocument,
@@ -52,12 +63,20 @@ export class TrackEventDto {
   @IsIn(EVENT_NAMES as unknown as string[])
   eventName: string;
 
-  @IsOptional() @IsString() sessionId?: string;
-  @IsOptional() @IsString() businessId?: string;
-  @IsOptional() @IsString() offerId?: string;
-  @IsOptional() @IsString() supplierId?: string;
-  @IsOptional() @IsString() postcodeArea?: string;
+  @IsOptional() @IsString() @MaxLength(100) sessionId?: string;
+  @IsOptional() @IsMongoId() businessId?: string;
+  @IsOptional() @IsMongoId() offerId?: string;
+  @IsOptional() @IsMongoId() supplierId?: string;
+  @IsOptional() @IsString() @MaxLength(10) postcodeArea?: string;
   @IsOptional() @IsObject() metadata?: Record<string, any>;
+}
+
+export class TrackEventBatchDto {
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => TrackEventDto)
+  events: TrackEventDto[];
 }
 
 // Events that also bump denormalised counters on the offer document
@@ -175,22 +194,26 @@ function round(n: number) {
   return Math.round(n * 1000) / 1000;
 }
 
-// High-frequency fire-and-forget events shouldn't consume the API rate budget
-@SkipThrottle()
+// Events are frequent (one per offer card scrolled into view), so they get a larger allowance than the rest of
+// the API, but still a limit: they are anonymous writes that feed the counters businesses see and pay by.
+const EVENTS_LIMIT = { default: { limit: 300, ttl: 60_000 } };
+
 @Controller()
 export class AnalyticsController {
   constructor(private readonly service: AnalyticsService) {}
 
   @Public()
+  @Throttle(EVENTS_LIMIT)
   @Post('events')
   track(@Body() dto: TrackEventDto, @CurrentUser('userId') userId?: string) {
     return this.service.track(dto, userId);
   }
 
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('events/batch')
-  trackBatch(@Body('events') events: TrackEventDto[], @CurrentUser('userId') userId?: string) {
-    return this.service.trackBatch(events || [], userId);
+  trackBatch(@Body() dto: TrackEventBatchDto, @CurrentUser('userId') userId?: string) {
+    return this.service.trackBatch(dto.events, userId);
   }
 
   @Get('dashboard/businesses/:businessId/metrics')

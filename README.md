@@ -73,7 +73,8 @@ npm run dev           # http://localhost:3000
   businesses publish instantly. Admin approve/reject with notes.
 - **Plans & billing (§6)** — all 5 takeaway plans + 3 supplier plans seeded with blueprint pricing
   and limits (Free = 2 live offers, Starter = 5, Standard+ unlimited — enforced server-side).
-  Checkout is Stripe-ready: without `STRIPE_SECRET_KEY` it runs in mock mode.
+  Checkout is Stripe-ready: without `STRIPE_SECRET_KEY` it runs in mock mode (plans granted without
+  payment), which production refuses unless `BILLING_MOCK_MODE=true`.
 - **Analytics (§16)** — full event taxonomy (`postcode_search`, `offer_impression`, `offer_flip`,
   `order_click`, …) fired from the UI, aggregated into the owner dashboard (with §16.4 funnel
   formulas) and the admin executive dashboard (MRR, ARPA, supply/demand, top search areas).
@@ -374,7 +375,9 @@ gitignored.
 | `.env` (repo root) | **VPS only** | `docker compose` / `deploy.sh` | `SITE_DOMAIN`, `SITE_URL`, `JWT_SECRET`, Stripe/API keys |
 
 Every optional key (Stripe, OAuth, Google Places, Anthropic) degrades gracefully when blank — the
-feature switches to mock/template mode rather than crashing.
+feature switches to mock/template mode rather than crashing. The exception is billing in production:
+without Stripe, paid plans and ad top-ups are unavailable rather than free (set `BILLING_MOCK_MODE=true`
+to give them away deliberately).
 
 The split is deliberate: production secrets exist **only** on the VPS, never on your laptop or in CI.
 

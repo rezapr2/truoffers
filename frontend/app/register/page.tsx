@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import SocialLogin from '@/components/SocialLogin';
 import type { User } from '@/lib/types';
+import { safeNextPath } from '@/lib/safe-redirect';
 
 const ROLES = [
   { value: 'customer', label: 'Customer', hint: 'Find offers and follow takeaways' },
@@ -28,7 +29,7 @@ function RegisterInner() {
   const [busy, setBusy] = useState(false);
 
   function redirectFor(user: User) {
-    const next = params.get('next');
+    const next = safeNextPath(params.get('next'));
     if (next) router.push(next);
     else if (user.role === 'business_owner') router.push('/claim-your-business');
     else if (user.role === 'supplier') router.push('/dashboard');

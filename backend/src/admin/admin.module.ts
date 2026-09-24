@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel, MongooseModule } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';
 import { Claim, ClaimDocument, ClaimSchema } from '../schemas/claim.schema';
 import { Offer, OfferDocument, OfferSchema } from '../schemas/offer.schema';
@@ -36,6 +37,20 @@ import {
 } from '../common/enums';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { BusinessesService } from '../businesses/businesses.service';
+
+// A string "false" is truthy, so these bodies are validated rather than read field by field.
+export class ReviewDecisionDto {
+  @IsBoolean() approve: boolean;
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}
+
+export class VerificationDto {
+  @IsEnum(VerificationStatus) status: VerificationStatus;
+}
+
+export class FeaturedDto {
+  @IsBoolean() featured: boolean;
+}
 
 @Injectable()
 export class AdminService {
@@ -65,7 +80,8 @@ export class AdminService {
     claim.reviewNote = note;
     await claim.save();
     if (approve) {
-      await this.businessesService.approveClaimEffects(claim);
+      // An admin's decision may hand a business that already has an owner to the claimant.
+      await this.businessesService.approveClaimEffects(claim, { replaceOwner: true });
     }
     return claim;
   }
@@ -194,11 +210,10 @@ export class AdminController {
   @Patch('claims/:id/review')
   reviewClaim(
     @Param('id') id: string,
-    @Body('approve') approve: boolean,
-    @Body('note') note: string,
+    @Body() dto: ReviewDecisionDto,
     @CurrentUser('userId') reviewerId: string,
   ) {
-    return this.service.reviewClaim(id, approve, reviewerId, note);
+    return this.service.reviewClaim(id, dto.approve, reviewerId, dto.note);
   }
 
   @Get('offers')
@@ -207,22 +222,18 @@ export class AdminController {
   }
 
   @Patch('offers/:id/moderate')
-  moderateOffer(
-    @Param('id') id: string,
-    @Body('approve') approve: boolean,
-    @Body('note') note?: string,
-  ) {
-    return this.service.moderateOffer(id, approve, note);
+  moderateOffer(@Param('id') id: string, @Body() dto: ReviewDecisionDto) {
+    return this.service.moderateOffer(id, dto.approve, dto.note);
   }
 
   @Patch('businesses/:id/verification')
-  setVerification(@Param('id') id: string, @Body('status') status: VerificationStatus) {
-    return this.service.setVerification(id, status);
+  setVerification(@Param('id') id: string, @Body() dto: VerificationDto) {
+    return this.service.setVerification(id, dto.status);
   }
 
   @Patch('businesses/:id/featured')
-  setFeatured(@Param('id') id: string, @Body('featured') featured: boolean) {
-    return this.service.setFeatured(id, featured);
+  setFeatured(@Param('id') id: string, @Body() dto: FeaturedDto) {
+    return this.service.setFeatured(id, dto.featured);
   }
 
   @Get('businesses')

@@ -13,6 +13,7 @@ import { Redemption, RedemptionDocument } from '../schemas/redemption.schema';
 import { Subscription, SubscriptionDocument } from '../schemas/subscription.schema';
 import { Plan, PlanDocument } from '../schemas/plan.schema';
 import {
+  ADMIN_ROLES,
   BusinessStatus,
   OfferStatus,
   PlanKey,
@@ -37,6 +38,14 @@ function isDuplicateOffer(err: unknown): boolean {
 }
 
 const DUPLICATE_OFFER_MESSAGE = 'An identical offer is already live for this business';
+
+// Businesses whose offers go live without moderation.
+const AUTO_APPROVED_BUSINESSES = [
+  VerificationStatus.VERIFIED,
+  VerificationStatus.FOODBELL_VERIFIED,
+  VerificationStatus.TRUSTED_PARTNER,
+  VerificationStatus.FRANCHISE_VERIFIED,
+];
 
 // A bare calendar day means the whole day in the UK: starts at 00:00 and ends at 23:59:59 London time.
 function offerStart(value?: string): Date | undefined {
@@ -128,12 +137,7 @@ export class OffersService {
 
     // Auto-moderation (blueprint moderation flow): verified businesses are
     // low-risk and go live immediately; unverified go to the admin queue.
-    const autoApprove = [
-      VerificationStatus.VERIFIED,
-      VerificationStatus.FOODBELL_VERIFIED,
-      VerificationStatus.TRUSTED_PARTNER,
-      VerificationStatus.FRANCHISE_VERIFIED,
-    ].includes(business.verificationStatus);
+    const autoApprove = AUTO_APPROVED_BUSINESSES.includes(business.verificationStatus);
 
     const endsAt = offerEnd(dto.endsAt);
     const offer = await this.offerModel
@@ -163,8 +167,18 @@ export class OffersService {
   async update(offerId: string, dto: UpdateOfferDto, user: { userId: string; role: Role }) {
     const offer = await this.offerModel.findById(offerId);
     if (!offer) throw new NotFoundException('Offer not found');
-    await this.assertCanManage(String(offer.businessId), user);
+    const business = await this.assertCanManage(String(offer.businessId), user);
     if (offer.status === OfferStatus.REMOVED) throw new BadRequestException('This offer was removed');
+    // An unverified business's offers are moderated before they go live, so what an approved (or rejected)
+    // offer says can't be changed without going back through the queue.
+    if (
+      !AUTO_APPROVED_BUSINESSES.includes(business.verificationStatus) &&
+      !ADMIN_ROLES.includes(user.role) &&
+      offer.status !== OfferStatus.PENDING &&
+      offer.status !== OfferStatus.DRAFT
+    ) {
+      offer.status = OfferStatus.PENDING;
+    }
     Object.assign(offer, {
       ...dto,
       startsAt: offerStart(dto.startsAt) ?? offer.startsAt,

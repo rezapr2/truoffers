@@ -16,6 +16,14 @@ export class WalletTransaction {
 
   @Prop()
   note?: string;
+
+  // The payment a top-up came from (a Stripe Checkout Session id): unique, so a redelivered webhook credits once.
+  @Prop()
+  reference?: string;
 }
 
 export const WalletTransactionSchema = SchemaFactory.createForClass(WalletTransaction);
+WalletTransactionSchema.index(
+  { reference: 1 },
+  { unique: true, partialFilterExpression: { reference: { $type: 'string' } } },
+);

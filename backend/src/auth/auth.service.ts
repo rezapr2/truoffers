@@ -56,17 +56,26 @@ export class AuthService {
 
   /** Log in (or auto-register) a user verified by Google/Apple. */
   async oauthLogin(profile: OAuthProfile, requestedRole?: Role) {
-    let user = await this.userModel.findOne({
-      $or: [
-        { provider: profile.provider, providerId: profile.providerId },
-        { email: profile.email },
-      ],
-    });
+    const linked = await this.userModel.findOne({ provider: profile.provider, providerId: profile.providerId });
+    if (linked) return this.buildAuthResponse(linked);
+
+    // Everything below trusts the email address, so the provider must have confirmed this person owns it:
+    // otherwise anyone could sign in to an account by putting its address on an unverified social profile.
+    if (!profile.emailVerified) {
+      throw new UnauthorizedException(
+        `Your ${profile.provider} account's email address is not verified. Verify it with ${profile.provider} first.`,
+      );
+    }
+
+    let user = await this.userModel.findOne({ email: profile.email }).select('+passwordHash');
     if (user) {
       // Link the social identity to an existing email account on first use
       if (!user.providerId) {
         user.provider = profile.provider;
         user.providerId = profile.providerId;
+        // Nobody ever proved they own the address a password account was registered with, and this person
+        // just did: a password someone else set up with their address (to wait for them to join) stops working.
+        user.passwordHash = undefined;
         await user.save();
       }
     } else {
