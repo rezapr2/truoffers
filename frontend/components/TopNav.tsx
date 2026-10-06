@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
+import { isStaff, useAuth } from '@/lib/auth-context';
 import Logo from './Logo';
 import { MenuIcon } from './icons';
-import { ADMIN_ROLES, NAV, isNavActive } from './nav';
+import { NAV, isNavActive } from './nav';
 
 // Home is the logo; the top bar lists the sections.
 const LINKS = NAV.filter((item) => item.href !== '/');
@@ -14,7 +14,7 @@ const LINKS = NAV.filter((item) => item.href !== '/');
 export default function TopNav({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
-  const dashboardHref = user && ADMIN_ROLES.includes(user.role) ? '/admin' : '/dashboard';
+  const dashboardHref = isStaff(user) ? '/admin' : '/dashboard';
   const followed = user?.followedBusinesses.length ?? 0;
 
   return (

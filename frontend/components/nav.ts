@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react';
 import { CategoriesIcon, HomeIcon, OffersIcon, PricingIcon, StoreIcon, TruckIcon } from './icons';
 
-export const ADMIN_ROLES = ['super_admin', 'support_admin', 'sales_admin'];
-
 export interface NavItem {
   href: string;
   label: string;

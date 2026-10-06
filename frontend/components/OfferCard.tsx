@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import type { Business, Category, Offer } from '@/lib/types';
 import VerifiedBadge from './VerifiedBadge';
+import ReportOffer from './ReportOffer';
+import { offerHref } from '@/lib/offer-url';
+import { assetUrl } from '@/lib/api';
 import { ArrowRightIcon, ClockIcon, PinIcon } from './icons';
 import { endsLabel as formatEnds } from '@/lib/dates';
 
@@ -42,11 +45,20 @@ export default function OfferCard({ offer, index = 0 }: { offer: Offer; index?: 
   return (
     <div className="group bg-card border border-line rounded-3xl p-3 flex flex-col hover:shadow-lg transition-shadow">
       <div
-        className={`relative h-36 rounded-2xl flex items-center justify-center px-4 text-center ${TILES[index % TILES.length]}`}
+        className={`relative h-36 rounded-2xl flex items-center justify-center px-4 text-center overflow-hidden ${TILES[index % TILES.length]}`}
       >
-        <span className="font-display text-[34px] leading-none font-extrabold text-brand-deep">
+        {offer.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={assetUrl(offer.imageUrl)} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        <span className={`relative font-display text-[34px] leading-none font-extrabold text-brand-deep ${offer.imageUrl ? 'bg-card/90 px-3 py-1.5 rounded-xl' : ''}`}>
           {offer.displayLabel}
         </span>
+        {offer.promoted && (
+          <span className="absolute top-2.5 left-2.5 bg-ink/75 text-white rounded-full px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-wide">
+            Promoted
+          </span>
+        )}
         {rating != null && rating > 0 && (
           <span className="absolute top-2.5 right-2.5 bg-card rounded-full px-2.5 py-1 text-[12px] font-extrabold inline-flex items-center gap-1 shadow-sm">
             <span className="text-star">★</span>
@@ -67,12 +79,12 @@ export default function OfferCard({ offer, index = 0 }: { offer: Offer; index?: 
       <div className="pt-3.5 px-1.5 pb-1 flex-1 flex flex-col">
         <div className="flex items-baseline gap-2">
           <Link
-            href={business.slug ? `/takeaway/${business.slug}` : `/offer/${offer._id}`}
+            href={business.slug ? `/takeaway/${business.slug}` : offerHref(offer)}
             className="font-display font-extrabold text-[16px] leading-snug truncate hover:text-primary transition-colors"
           >
             {business.name}
           </Link>
-          <VerifiedBadge status={business.verificationStatus} className="text-[11px] flex-none" />
+          <VerifiedBadge level={business.verificationLevel} className="text-[11px] flex-none" />
         </div>
         <div className="text-[12.5px] text-muted mt-0.5 truncate">{cuisine || offer.title}</div>
 
@@ -90,11 +102,14 @@ export default function OfferCard({ offer, index = 0 }: { offer: Offer; index?: 
         </div>
 
         <div className="mt-auto pt-3.5 flex items-center justify-between gap-2">
-          <span className="text-[13px] font-extrabold text-primary truncate">
-            {offer.minOrder > 0 ? `Min order £${offer.minOrder}` : 'View offer'}
+          <span className="flex flex-col min-w-0">
+            <span className="text-[13px] font-extrabold text-primary truncate">
+              {offer.minOrder > 0 ? `Min order £${offer.minOrder}` : 'View offer'}
+            </span>
+            <ReportOffer offerId={offer._id} offerTitle={offer.title} className="mt-0.5" />
           </span>
           <Link
-            href={`/offer/${offer._id}`}
+            href={offerHref(offer)}
             aria-label={`View ${offer.title}`}
             className="w-9 h-9 flex-none rounded-full bg-brand text-white flex items-center justify-center group-hover:translate-x-0.5 transition-transform"
           >

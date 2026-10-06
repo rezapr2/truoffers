@@ -1,121 +1,134 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { Alert, btn, Card, SectionTitle, Spinner, StatStrip, type Stat } from '@/components/ui';
+import { BellIcon, ClickIcon, EyeIcon, FlipIcon, PhoneIcon, PlusIcon } from '@/components/icons';
 import { useAuth } from '@/lib/auth-context';
-import { api } from '@/lib/api';
-import type { Business } from '@/lib/types';
-import { DateChip, PageHeader, Tabs } from '@/components/ui';
-import OverviewTab from './OverviewTab';
-import OffersTab from './OffersTab';
-import PromoteTab from './PromoteTab';
-import BillingTab from './BillingTab';
-import LeadsTab from './LeadsTab';
-import FranchiseTab from './FranchiseTab';
+import { useBusiness } from '@/lib/business-context';
+import { useApi } from '@/lib/hooks';
+import { timeAgo } from '@/lib/format';
+import type { Notification, Offer } from '@/lib/types';
+import { DashboardPage, PlanUsage, VerificationBanner } from './_components/shared';
 
-const BIZ_TABS = ['Overview', 'Offers', 'Promote', 'Billing'] as const;
+interface Week {
+  views: { value: number; previous: number };
+  redeemTaps: { value: number; previous: number };
+  orderClicks: { value: number; previous: number };
+  calls: { value: number; previous: number };
+}
 
-export default function DashboardPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<string>('Overview');
-  const [loaded, setLoaded] = useState(false);
+function trend(f: { value: number; previous: number }): Stat['note'] {
+  if (!f.previous && !f.value) return undefined;
+  const diff = f.value - f.previous;
+  if (diff === 0) return { text: 'same as last week', tone: 'neutral' };
+  return { text: `${diff > 0 ? '+' : ''}${diff} vs last week`, tone: diff > 0 ? 'good' : 'bad' };
+}
 
-  useEffect(() => {
-    if (!loading && !user) router.push('/login?next=/dashboard');
-  }, [loading, user, router]);
+function Home() {
+  const { user } = useAuth();
+  const { business, manage } = useBusiness();
+  const params = useSearchParams();
+  const { data: week } = useApi<Week>(business ? `/businesses/${business._id}/insights/week` : null);
+  const { data: offers } = useApi<{ offers: Offer[]; counts: Record<string, number> }>(business ? `/businesses/${business._id}/offers/manage` : null);
+  const { data: notes } = useApi<Notification[]>(business ? `/notifications?businessId=${business._id}` : null);
+  if (!business || !manage) return <Spinner />;
 
-  useEffect(() => {
-    if (!user) return;
-    if (['super_admin', 'support_admin', 'sales_admin'].includes(user.role)) {
-      router.push('/admin');
-      return;
-    }
-    if (user.role === 'supplier') return;
-    void api<Business[]>('/businesses/mine')
-      .then((list) => {
-        setBusinesses(list);
-        if (list.length > 0) setSelectedId(list[0]._id);
-      })
-      .finally(() => setLoaded(true));
-  }, [user, router]);
-
-  if (loading || !user || !(loaded || user.role === 'supplier')) {
-    return <div className="py-24 text-center text-muted font-bold">Loading…</div>;
-  }
-
-  const isSupplier = user.role === 'supplier';
-  const activeTab = isSupplier ? 'Leads' : tab;
-  const selected = businesses.find((b) => b._id === selectedId) || null;
-
-  if (!isSupplier && businesses.length === 0) {
-    return (
-      <div className="mx-auto max-w-xl px-5 py-20 text-center">
-        <div className="text-5xl mb-4">🏪</div>
-        <h1 className="font-display text-3xl font-extrabold mb-3">No business yet</h1>
-        <p className="text-muted font-semibold mb-7">
-          Claim your existing listing or add your takeaway to start posting offers.
-        </p>
-        <Link
-          href="/claim-your-business"
-          className="btn-soft inline-block font-bold px-8 py-3.5 rounded-2xl"
-        >
-          Claim or add your business
-        </Link>
-      </div>
-    );
-  }
-
-  // Multi-location owners (franchises) get a cross-location view
-  const tabs = isSupplier
-    ? ['Leads']
-    : businesses.length > 1
-      ? [...BIZ_TABS, 'All locations']
-      : [...BIZ_TABS];
+  const stats: Stat[] = week
+    ? [
+        { icon: EyeIcon, tint: 'blue', label: 'Views this week', value: week.views.value, note: trend(week.views), href: '/dashboard/insights' },
+        { icon: FlipIcon, tint: 'mint', label: 'Redeem taps', value: week.redeemTaps.value, note: trend(week.redeemTaps), href: '/dashboard/insights' },
+        { icon: ClickIcon, tint: 'peach', label: 'Order clicks', value: week.orderClicks.value, note: trend(week.orderClicks), href: '/dashboard/insights' },
+        { icon: PhoneIcon, tint: 'lilac', label: 'Calls', value: week.calls.value, note: trend(week.calls), href: '/dashboard/insights' },
+      ]
+    : [];
+  const counts = offers?.counts ?? {};
 
   return (
-    <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
-      <PageHeader
-        title={`Hello, ${user.name.split(' ')[0]}`}
-        subtitle={
-          isSupplier
-            ? 'Leads from takeaways appear here as they come in.'
-            : 'Here is how your takeaway is doing on TruOffers.'
-        }
-        actions={
-          <>
-            {!isSupplier && businesses.length > 1 && (
-              <select
-                value={selectedId ?? ''}
-                onChange={(e) => setSelectedId(e.target.value)}
-                aria-label="Business"
-                className="bg-surface rounded-xl px-4 py-2.5 text-sm font-bold outline-none cursor-pointer"
-              >
-                {businesses.map((b) => (
-                  <option key={b._id} value={b._id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <DateChip />
-          </>
-        }
-      />
-
-      <div className="mb-7">
-        <Tabs tabs={tabs.map((t) => ({ value: t, label: t }))} active={activeTab} onChange={setTab} />
+    <DashboardPage
+      title={`Hello, ${user?.name.split(' ')[0] ?? ''}`}
+      subtitle={`Here is how ${business.name} is doing on TruOffers.`}
+      actions={
+        <Link href="/dashboard/offers/new" className={btn.primary}>
+          <PlusIcon className="w-4 h-4" /> Post an offer
+        </Link>
+      }
+    >
+      <div className="flex flex-col gap-5 mb-8">
+        {params.get('checkout') === 'success' && <Alert tone="success" title="Thank you!">Your payment went through. Your plan switches on as soon as Stripe confirms it, usually within a minute.</Alert>}
+        <VerificationBanner manage={manage} />
       </div>
 
-      {activeTab === 'Overview' && selected && <OverviewTab business={selected} />}
-      {activeTab === 'Offers' && selected && <OffersTab business={selected} />}
-      {activeTab === 'Promote' && selected && <PromoteTab business={selected} />}
-      {activeTab === 'Billing' && selected && <BillingTab business={selected} />}
-      {activeTab === 'All locations' && <FranchiseTab />}
-      {activeTab === 'Leads' && isSupplier && <LeadsTab />}
-    </div>
+      {stats.length > 0 && <StatStrip stats={stats} />}
+
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-8 mt-8">
+        <div className="flex flex-col gap-8 min-w-0">
+          <section>
+            <SectionTitle aside={<Link href="/dashboard/offers" className="text-sm font-bold text-primary">All offers →</Link>}>Your offers</SectionTitle>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                ['Live', counts.live ?? 0, 'live'],
+                ['Scheduled', counts.scheduled ?? 0, 'scheduled'],
+                ['Pending review', counts.pending ?? 0, 'pending'],
+                ['Drafts', counts.draft ?? 0, 'draft'],
+              ].map(([label, value, tab]) => (
+                <Link key={tab as string} href={`/dashboard/offers?tab=${tab}`} className="bg-surface rounded-2xl p-4 hover:bg-page transition-colors">
+                  <div className="font-display text-2xl font-extrabold">{value}</div>
+                  <div className="text-[13px] text-muted font-semibold">{label}</div>
+                </Link>
+              ))}
+            </div>
+            {(counts.rejected ?? 0) > 0 && (
+              <Alert tone="danger" className="mt-4" action={<Link href="/dashboard/offers?tab=rejected" className={btn.small}>See why</Link>}>
+                {counts.rejected} offer{counts.rejected === 1 ? ' needs' : 's need'} changes before it can go live.
+              </Alert>
+            )}
+          </section>
+
+          <section>
+            <SectionTitle>Plan</SectionTitle>
+            <Card>
+              <PlanUsage manage={manage} />
+              {manage.plan.subscription?.cancelAtPeriodEnd && (
+                <p className="text-[13px] text-muted mt-3">Your plan ends at the end of this billing period.</p>
+              )}
+            </Card>
+          </section>
+        </div>
+
+        <aside>
+          <SectionTitle aside={<Link href="/dashboard/notifications" className="text-sm font-bold text-primary">All →</Link>}>Latest</SectionTitle>
+          <ul className="flex flex-col">
+            {(notes ?? []).slice(0, 6).map((n) => (
+              <li key={n._id} className="flex gap-3 py-3 border-b border-line last:border-0">
+                <span className={`w-9 h-9 rounded-full flex items-center justify-center flex-none ${n.readAt ? 'bg-surface text-muted' : 'bg-tint-blue text-primary'}`}>
+                  <BellIcon className="w-4 h-4" />
+                </span>
+                <div className="min-w-0">
+                  {n.link ? (
+                    <Link href={n.link} className="text-sm font-bold hover:text-primary">
+                      {n.title}
+                    </Link>
+                  ) : (
+                    <div className="text-sm font-bold">{n.title}</div>
+                  )}
+                  <div className="text-[12px] text-muted">{timeAgo(n.createdAt)}</div>
+                </div>
+              </li>
+            ))}
+            {notes && notes.length === 0 && <li className="text-sm text-muted">Nothing new yet.</li>}
+          </ul>
+        </aside>
+      </div>
+    </DashboardPage>
+  );
+}
+
+export default function DashboardHomePage() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <Home />
+    </Suspense>
   );
 }

@@ -40,11 +40,11 @@ export default function OffersMap({ businesses }: { businesses: Business[] }) {
           <CircleMarker
             key={b._id}
             center={points[i]}
-            radius={b.sponsored ? 12 : 9}
+            radius={b.verificationLevel >= 2 ? 11 : 9}
             pathOptions={{
               color: '#ffffff',
               weight: 2,
-              fillColor: b.sponsored ? '#F0A24B' : '#2F6FD0',
+              fillColor: b.verificationLevel >= 2 ? '#0F7048' : '#8A8F80',
               fillOpacity: 0.95,
             }}
           >
@@ -52,7 +52,7 @@ export default function OffersMap({ businesses }: { businesses: Business[] }) {
               <div className="font-sans">
                 <div className="font-extrabold text-sm">
                   {b.name}
-                  {b.sponsored ? ' · Sponsored' : ''}
+                  {b.verificationLevel >= 2 ? ' · ✓ TruOffers verified' : ' · Not verified'}
                 </div>
                 <div className="text-xs">
                   {b.reviews?.rating ? `${b.reviews.rating}★ (${b.reviews.count}) · ` : ''}

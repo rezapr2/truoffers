@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
+import { isStaff, useAuth } from '@/lib/auth-context';
 import Logo from './Logo';
 import { DashboardIcon, HelpIcon, LoginIcon, LogoutIcon, ShieldIcon } from './icons';
-import { ADMIN_ROLES, NAV, isNavActive, type NavItem } from './nav';
+import { NAV, isNavActive, type NavItem } from './nav';
 
 const itemClass = (active: boolean) =>
   `flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-[15px] transition-colors cursor-pointer w-full text-left ${
@@ -18,7 +18,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
 
-  const isAdmin = !!user && ADMIN_ROLES.includes(user.role);
+  const isAdmin = isStaff(user);
   // Owners and suppliers already have their business; the invitation is for everyone else
   const showPromo = !user || user.role === 'customer';
   const followed = user?.followedBusinesses.length ?? 0;

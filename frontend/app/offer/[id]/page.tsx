@@ -1,212 +1,77 @@
-'use client';
-
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { use, useEffect, useState } from 'react';
-import { api } from '@/lib/api';
-import { track } from '@/lib/analytics';
-import type { Offer, Business, CheckingOffer } from '@/lib/types';
-import VerifiedBadge from '@/components/VerifiedBadge';
-import FollowButton from '@/components/FollowButton';
-import ImportedSourceNotice from '@/components/ImportedSourceNotice';
-import { ukDate } from '@/lib/dates';
+import { notFound } from 'next/navigation';
+import { cache } from 'react';
+import { serverApi } from '@/lib/server-api';
+import type { Business, CheckingOffer, Offer } from '@/lib/types';
+import OfferDetail from './OfferDetail';
 
-export default function OfferDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const [offer, setOffer] = useState<Offer | null>(null);
-  const [checking, setChecking] = useState<CheckingOffer | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [copied, setCopied] = useState(false);
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://truoffers.co.uk';
 
-  useEffect(() => {
-    api<Offer | CheckingOffer>(`/offers/${id}`)
-      .then((result) => {
-        // An imported offer the robot could not find on the business's website is hidden while it checks again.
-        if ('availability' in result) {
-          setChecking(result);
-          return;
-        }
-        setOffer(result);
-        const businessId = typeof result.businessId === 'object' ? (result.businessId as Business)._id : result.businessId;
-        track('offer_detail_view', { offerId: result._id, businessId });
-      })
-      .catch(() => setNotFound(true));
-  }, [id]);
+// generateMetadata and the page share one request.
+const loadOffer = cache((id: string) => serverApi<Offer | CheckingOffer>(`/offers/${encodeURIComponent(id)}`));
 
-  if (checking) {
+const businessOf = (offer: Offer) => (typeof offer.businessId === 'object' ? (offer.businessId as Business) : null);
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const offer = await loadOffer(id);
+  if (!offer || 'availability' in offer) return { title: 'Offer', robots: { index: false } };
+  const business = businessOf(offer);
+  const title = `${offer.displayLabel} at ${business?.name ?? 'a local takeaway'}: ${offer.title}`;
+  const description = [offer.description, business?.town ? `${business.name}, ${business.town}.` : undefined, 'Redeem it on TruOffers — no app or account needed.']
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 300);
+  const canonical = `/offer/${offer._id}${offer.slug ? `-${offer.slug}` : ''}`;
+  const image = offer.imageUrl ? (offer.imageUrl.startsWith('/api/') ? `${SITE_URL}${offer.imageUrl}` : offer.imageUrl) : undefined;
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { type: 'website', url: `${SITE_URL}${canonical}`, title, description, siteName: 'TruOffers', ...(image ? { images: [{ url: image }] } : {}) },
+    twitter: { card: image ? 'summary_large_image' : 'summary', title, description },
+  };
+}
+
+export default async function OfferPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const offer = await loadOffer(id);
+  if (!offer) notFound();
+
+  // An imported offer the robot could not find on the business's website is hidden while it checks again.
+  if ('availability' in offer) {
     return (
       <div className="mx-auto max-w-3xl px-5 py-20 text-center">
         <h1 className="font-display text-3xl font-extrabold mb-3">We’re checking this offer</h1>
-        <p className="text-muted font-semibold mb-6">
-          It was not on {checking.business?.name ?? 'the takeaway'}’s website the last time we looked, so it is hidden until we can confirm it.
-        </p>
-        {checking.business?.slug && (
-          <Link href={`/takeaway/${checking.business.slug}`} className="btn-soft font-bold px-6 py-3 rounded-2xl">
-            See {checking.business.name}’s other offers
+        <p className="text-muted font-semibold mb-6">It is hidden until we can confirm {offer.business?.name ?? 'the takeaway'} still runs it.</p>
+        {offer.business?.slug && (
+          <Link href={`/takeaway/${offer.business.slug}`} className="btn-soft font-bold px-6 py-3 rounded-2xl">
+            See {offer.business.name}’s other offers
           </Link>
         )}
       </div>
     );
   }
 
-  if (notFound) {
-    return (
-      <div className="mx-auto max-w-3xl px-5 py-20 text-center">
-        <h1 className="font-display text-3xl font-extrabold mb-3">Offer not found</h1>
-        <p className="text-muted font-semibold mb-6">It may have expired or been removed.</p>
-        <Link href="/offers" className="btn-soft font-bold px-6 py-3 rounded-2xl">
-          Browse live offers
-        </Link>
-      </div>
-    );
-  }
-  if (!offer) return <div className="py-24 text-center text-muted font-bold">Loading…</div>;
-
-  const business = (typeof offer.businessId === 'object' ? offer.businessId : {}) as Partial<Business>;
-
-  async function redeem() {
-    if (!offer) return;
-    track('redeem_click', { offerId: offer._id, businessId: business._id });
-    void api(`/offers/${offer._id}/redeem`, {
-      method: 'POST',
-      body: JSON.stringify({
-        sessionId: sessionStorage.getItem('truoffers_sid'),
-        channel: offer.redemptionType === 'code' ? 'code_copy' : offer.redemptionType,
-      }),
-    }).catch(() => {});
-    if (offer.code) {
-      try {
-        await navigator.clipboard.writeText(offer.code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch { /* ignore */ }
-    }
-  }
+  const business = businessOf(offer);
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Offer',
+    name: offer.title,
+    description: offer.description ?? offer.terms,
+    url: `${SITE_URL}/offer/${offer._id}${offer.slug ? `-${offer.slug}` : ''}`,
+    ...(offer.endsAt ? { validThrough: offer.endsAt } : {}),
+    ...(offer.startsAt ? { validFrom: offer.startsAt } : {}),
+    offeredBy: business
+      ? { '@type': 'Restaurant', name: business.name, address: { '@type': 'PostalAddress', streetAddress: business.address, addressLocality: business.town, postalCode: business.postcode, addressCountry: 'GB' } }
+      : undefined,
+  };
 
   return (
-    <div className="mx-auto max-w-4xl px-5 md:px-10 py-10">
-      <div className="bg-sun-soft rounded-3xl px-7 py-10 md:px-12 mb-6">
-        <div className="font-display text-5xl md:text-6xl font-extrabold text-primary mb-3">{offer.displayLabel}</div>
-        <h1 className="font-display text-2xl md:text-3xl font-extrabold tracking-tight mb-2">
-          {offer.title}
-        </h1>
-        {offer.description && (
-          <p className="text-muted-2 max-w-xl leading-relaxed">{offer.description}</p>
-        )}
-      </div>
-
-      <ImportedSourceNotice imported={offer.imported} offerId={offer._id} className="mb-6" />
-
-      <div className="grid md:grid-cols-[1fr_320px] gap-5">
-        {/* Redemption */}
-        <div className="bg-card border border-line rounded-3xl p-7">
-          <h2 className="font-display text-xl font-extrabold mb-4">How to redeem</h2>
-          {offer.redemptionType === 'code' && offer.code && (
-            <button
-              onClick={redeem}
-              className="inline-flex items-center gap-3 bg-brand-deep text-white font-display font-extrabold text-2xl px-6 py-3 rounded-2xl cursor-pointer hover:bg-brand transition-colors mb-4"
-            >
-              {offer.code}
-              <span className="text-xs font-sans font-bold opacity-70">
-                {copied ? 'Copied!' : 'tap to copy'}
-              </span>
-            </button>
-          )}
-          {offer.redemptionType === 'show_in_store' && (
-            <p className="font-bold mb-4">Show this screen in store to claim the offer.</p>
-          )}
-          {offer.redemptionType === 'phone' && (
-            <p className="font-bold mb-4">
-              Mention <span className="text-primary">TruOffers</span> when you call
-              {business.phone ? ` ${business.phone}` : ''}.
-            </p>
-          )}
-          {offer.redemptionType === 'direct_link' && (
-            <p className="font-bold mb-4">Order through the link below — the discount is applied automatically.</p>
-          )}
-
-          <dl className="text-sm font-semibold text-ink-soft space-y-2 mb-6">
-            {offer.minOrder > 0 && (
-              <div><dt className="inline font-extrabold">Minimum order: </dt><dd className="inline">£{offer.minOrder}</dd></div>
-            )}
-            <div>
-              <dt className="inline font-extrabold">Available for: </dt>
-              <dd className="inline">
-                {[offer.collection && 'collection', offer.delivery && 'delivery'].filter(Boolean).join(' & ') || '—'}
-              </dd>
-            </div>
-            {offer.endsAt && (
-              <div>
-                <dt className="inline font-extrabold">Valid until: </dt>
-                <dd className="inline">{ukDate(offer.endsAt, { weekday: 'long', day: 'numeric', month: 'long' })}</dd>
-              </div>
-            )}
-            {offer.maxRedemptions > 0 && (
-              <div>
-                <dt className="inline font-extrabold">Limited: </dt>
-                <dd className="inline">{Math.max(0, offer.maxRedemptions - offer.redemptionCount)} of {offer.maxRedemptions} remaining</dd>
-              </div>
-            )}
-            {offer.terms && (
-              <div><dt className="inline font-extrabold">Terms: </dt><dd className="inline">{offer.terms}</dd></div>
-            )}
-          </dl>
-
-          <div className="flex gap-3 flex-wrap">
-            {(offer.redemptionUrl || business.orderUrl) && (
-              <a
-                href={offer.redemptionUrl || business.orderUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => track('order_click', { offerId: offer._id, businessId: business._id })}
-                className="btn-soft font-bold px-7 py-3.5 rounded-2xl"
-              >
-                Order now
-              </a>
-            )}
-            {business.phone && (
-              <a
-                href={`tel:${business.phone}`}
-                onClick={() => track('call_click', { businessId: business._id })}
-                className="border border-line bg-card font-bold px-7 py-3.5 rounded-full hover:border-primary hover:text-primary transition-colors"
-              >
-                Call {business.phone}
-              </a>
-            )}
-          </div>
-        </div>
-
-        {/* Business card */}
-        <aside className="bg-card border border-line rounded-3xl p-7 h-fit">
-          <div className="w-16 h-16 rounded-full bg-sun-soft flex items-center justify-center font-display font-extrabold text-2xl text-brand-deep mb-3">
-            {business.name?.charAt(0)}
-          </div>
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <Link
-              href={`/takeaway/${business.slug}`}
-              className="text-lg font-extrabold hover:text-primary transition-colors"
-            >
-              {business.name}
-            </Link>
-            {business._id && <FollowButton businessId={business._id} />}
-          </div>
-          <VerifiedBadge status={business.verificationStatus} className="text-[13px]" />
-          <div className="text-sm font-semibold text-muted mt-2">
-            {business.town} {business.postcode}
-          </div>
-          {business.reviews && business.reviews.rating > 0 && (
-            <div className="text-sm font-bold text-star mt-1">
-              ★ {business.reviews.rating.toFixed(1)}{' '}
-              <span className="text-muted font-semibold">({business.reviews.count} reviews)</span>
-            </div>
-          )}
-          <Link
-            href={`/takeaway/${business.slug}`}
-            className="mt-5 block text-center border border-line bg-card font-bold px-5 py-3 rounded-full hover:border-primary hover:text-primary transition-colors"
-          >
-            View full profile
-          </Link>
-        </aside>
-      </div>
-    </div>
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
+      <OfferDetail offer={offer} />
+    </>
   );
 }

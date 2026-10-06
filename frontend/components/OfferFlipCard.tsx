@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { Offer, Business } from '@/lib/types';
 import { track } from '@/lib/analytics';
 import { api } from '@/lib/api';
-import VerifiedBadge from './VerifiedBadge';
-import ImportedSourceNotice from './ImportedSourceNotice';
-import { endsLabel as formatEnds, ukDate } from '@/lib/dates';
+import { endsLabel as formatEnds } from '@/lib/dates';
+import { offerHref } from '@/lib/offer-url';
+import VerifiedBadge, { FoodbellTag } from './VerifiedBadge';
+import ReportOffer from './ReportOffer';
 
 function offerBusiness(offer: Offer): Partial<Business> {
   if (offer.business) return offer.business;
@@ -15,9 +16,17 @@ function offerBusiness(offer: Offer): Partial<Business> {
   return {};
 }
 
+function sessionId() {
+  try {
+    return sessionStorage.getItem('truoffers_sid');
+  } catch {
+    return null;
+  }
+}
+
 /**
- * The blueprint's signature interaction: offer card front shows the deal,
- * tapping flips it to reveal how to redeem (section 20 wireframe).
+ * The offer card: the front shows the deal; "Tap to redeem" turns it over to the redeem method (order online,
+ * copy code, call, or show in store). Every tap is logged and shows in the business's Insights.
  */
 export default function OfferFlipCard({ offer }: { offer: Offer }) {
   const [flipped, setFlipped] = useState(false);
@@ -26,6 +35,7 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const business = offerBusiness(offer);
   const businessId = typeof offer.businessId === 'string' ? offer.businessId : business._id;
+  const orderUrl = offer.redemptionUrl || business.orderUrl;
 
   // offer_impression when the card enters the viewport
   useEffect(() => {
@@ -50,14 +60,15 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
     setFlipped(!flipped);
   }
 
+  function redeemed(channel: string) {
+    void api(`/offers/${offer._id}/redeem`, { method: 'POST', body: JSON.stringify({ sessionId: sessionId(), channel }) }).catch(() => {});
+  }
+
   async function copyCode(e: React.MouseEvent) {
     e.stopPropagation();
     if (!offer.code) return;
-    track('redeem_click', { offerId: offer._id, businessId, metadata: { type: 'code_copy' } });
-    void api(`/offers/${offer._id}/redeem`, {
-      method: 'POST',
-      body: JSON.stringify({ sessionId: sessionStorage.getItem('truoffers_sid'), channel: 'code_copy' }),
-    }).catch(() => {});
+    track('code_copy', { offerId: offer._id, businessId });
+    redeemed('code_copy');
     try {
       await navigator.clipboard.writeText(offer.code);
       setCopied(true);
@@ -67,109 +78,87 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
     }
   }
 
-  function orderClick(e: React.MouseEvent) {
-    e.stopPropagation();
-    track('order_click', { offerId: offer._id, businessId });
-  }
-
-  const endsLabel = offer.endsAt
-    ? formatEnds(offer.endsAt)
-    : offer.maxRedemptions > 0
-      ? `First ${offer.maxRedemptions} customers`
-      : 'Ongoing offer';
+  const endsLabel = offer.endsAt ? formatEnds(offer.endsAt) : offer.maxRedemptions > 0 ? `First ${offer.maxRedemptions} customers` : 'Ongoing offer';
 
   return (
-    <div ref={cardRef} className="flip-scene h-56">
+    <div ref={cardRef} className="flip-scene h-60">
       <div className={`flip-inner h-full ${flipped ? 'flipped' : ''}`}>
         {/* FRONT */}
-        <div
-          onClick={flip}
-          className="flip-face h-full bg-card border border-line rounded-3xl p-6 flex flex-col cursor-pointer shadow-sm hover:shadow-lg transition-shadow"
-        >
+        <div onClick={flip} className="flip-face h-full bg-card border border-line rounded-3xl p-6 flex flex-col cursor-pointer shadow-sm hover:shadow-lg transition-shadow">
           <div className="flex items-start justify-between gap-2">
             <div className="font-display text-3xl font-extrabold text-brand-deep">{offer.displayLabel}</div>
-            <div className="flex gap-1.5">
-              {offer.sponsored && (
-                <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted bg-page px-2 py-1 rounded-full">
-                  Sponsored
-                </span>
-              )}
-              <ImportedSourceNotice imported={offer.imported} variant="pill" />
-            </div>
+            {offer.promoted && <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted bg-page px-2 py-1 rounded-full">Promoted</span>}
           </div>
-          <div className="mt-2 text-base font-extrabold">
-            {business.name}{' '}
-            <VerifiedBadge status={business.verificationStatus} className="text-[12px]" />
+          <div className="mt-2 text-base font-extrabold flex items-center gap-2 flex-wrap">
+            <span>{business.name}</span>
+            <VerifiedBadge level={business.verificationLevel} className="text-[12px]" quiet />
+            <FoodbellTag show={business.isFoodbellClient} />
           </div>
           <div className="text-[13px] font-semibold text-muted mt-0.5 line-clamp-2">
             {offer.title}
             {business.town ? ` · ${business.town} ${business.postcodeArea ?? ''}` : ''}
             {business.distanceMiles != null ? ` · ${business.distanceMiles} mi` : ''}
           </div>
-          <div className="mt-auto flex items-center justify-between">
+          <div className="mt-auto flex items-center justify-between gap-2">
             <span className="text-[13px] font-bold text-primary">{endsLabel}</span>
-            <span className="text-[13px] font-extrabold text-white bg-brand rounded-full px-4 py-2">
-              Tap to redeem
-            </span>
+            <span className="text-[13px] font-extrabold text-white bg-brand rounded-full px-4 py-2">Tap to redeem</span>
           </div>
         </div>
 
         {/* BACK */}
-        <div
-          onClick={flip}
-          className="flip-face flip-back h-full bg-brand-deep text-white rounded-3xl p-6 flex flex-col cursor-pointer"
-        >
+        <div onClick={flip} className="flip-face flip-back h-full bg-brand-deep text-white rounded-3xl p-6 flex flex-col cursor-pointer">
           <div className="text-[13px] font-bold text-sun uppercase tracking-wide">How to redeem</div>
           {offer.redemptionType === 'code' && offer.code ? (
-            <button
-              onClick={copyCode}
-              className="mt-2 inline-flex items-center gap-2 self-start bg-white text-ink font-display font-extrabold text-xl px-4 py-1.5 rounded-xl cursor-pointer hover:bg-sun-soft transition-colors"
-            >
+            <button onClick={copyCode} className="mt-2 inline-flex items-center gap-2 self-start bg-white text-ink font-display font-extrabold text-xl px-4 py-1.5 rounded-xl cursor-pointer hover:bg-sun-soft transition-colors">
               {offer.code}
-              <span className="text-[11px] font-sans font-bold text-muted-2">
-                {copied ? 'Copied!' : 'tap to copy'}
-              </span>
+              <span className="text-[11px] font-sans font-bold text-muted-2">{copied ? 'Copied!' : 'tap to copy'}</span>
             </button>
           ) : (
             <div className="mt-2 text-[15px] font-bold">
               {offer.redemptionType === 'show_in_store' && 'Show this screen in store'}
-              {offer.redemptionType === 'direct_link' && 'Order via the link — discount auto-applied'}
-              {offer.redemptionType === 'phone' && 'Mention TruOffers when you call'}
+              {offer.redemptionType === 'direct_link' && 'Order online — the discount is applied for you'}
+              {offer.redemptionType === 'phone' && `Call${business.phone ? ` ${business.phone}` : ''} and mention TruOffers`}
             </div>
           )}
           <div className="mt-2 text-[13px] font-semibold text-leaf-soft/80 line-clamp-2">
             {offer.terms || offer.description}
             {offer.minOrder > 0 ? ` · Min order £${offer.minOrder}` : ''}
           </div>
-          {offer.imported && (
-            <div className="mt-1 text-[11px] font-semibold text-leaf-soft/70 truncate">
-              {offer.imported.verification === 'merchant_verified' ? 'Confirmed by the business' : `Imported from ${offer.imported.domain}`}
-              {offer.imported.lastCheckedAt && offer.imported.verification !== 'merchant_verified'
-                ? ` · checked ${ukDate(offer.imported.lastCheckedAt)}`
-                : ''}
-            </div>
-          )}
-          <div className="mt-auto flex gap-2 flex-wrap">
-            {(offer.redemptionUrl || business.orderUrl) && (
+          <div className="mt-auto flex gap-2 flex-wrap items-center">
+            {orderUrl && offer.redemptionType !== 'phone' && (
               <a
-                href={offer.redemptionUrl || business.orderUrl}
+                href={orderUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={orderClick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  track('order_click', { offerId: offer._id, businessId });
+                  if (offer.redemptionType === 'direct_link') redeemed('order_link');
+                }}
                 className="btn-sun text-[13px] font-extrabold px-4 py-2 rounded-full"
               >
-                Order now
+                Order online
               </a>
             )}
-            {business.slug && (
-              <Link
-                href={`/takeaway/${business.slug}`}
-                onClick={(e) => e.stopPropagation()}
-                className="border-[1.5px] border-white/50 text-white text-[13px] font-bold px-4 py-2 rounded-full hover:bg-white hover:text-brand-deep transition-colors"
+            {business.phone && (offer.redemptionType === 'phone' || offer.redemptionType === 'code') && (
+              <a
+                href={`tel:${business.phone.replace(/\s+/g, '')}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  track('call_click', { offerId: offer._id, businessId });
+                  if (offer.redemptionType === 'phone') redeemed('call');
+                }}
+                className="btn-sun text-[13px] font-extrabold px-4 py-2 rounded-full"
               >
-                View profile
-              </Link>
+                Call
+              </a>
             )}
+            <Link href={offerHref(offer)} onClick={(e) => e.stopPropagation()} className="border-[1.5px] border-white/50 text-white text-[13px] font-bold px-4 py-2 rounded-full hover:bg-white hover:text-brand-deep transition-colors">
+              Details
+            </Link>
+            <span onClick={(e) => e.stopPropagation()} className="ml-auto">
+              <ReportOffer offerId={offer._id} offerTitle={offer.title} tone="dark" />
+            </span>
           </div>
         </div>
       </div>

@@ -1,38 +1,41 @@
 @import "tailwindcss";
 
 @theme {
-  /* The grey backdrop the white app canvas floats on */
-  --color-backdrop: #DCDADE;
-  /* Light grey fill for chips, progress tracks and avatars on white */
-  --color-page: #ECEEF2;
-  /* Soft grey panels, inputs and inner tiles */
-  --color-surface: #F5F6F8;
+  /*
+   * One design system for the whole product (spec T1.1): the public site's green and yellow brand is used by
+   * the business dashboard and the admin panel too. Token names are kept from the earlier blue scale so every
+   * component picks the brand up without being rewritten.
+   */
+  /* The backdrop the dashboard and admin canvas floats on */
+  --color-backdrop: #E6E8DE;
+  /* Light fill for chips, progress tracks and avatars on white */
+  --color-page: #EDEFE5;
+  /* Soft panels, inputs and inner tiles */
+  --color-surface: #F6F5EF;
   --color-card: #FFFFFF;
-  --color-primary: #2F6FD0;
-  --color-primary-dark: #2559AB;
+  --color-primary: #0F7048;
+  --color-primary-dark: #0A5335;
   --color-ink: #161821;
   --color-ink-soft: #4A4F5E;
-  --color-muted: #737888;
-  --color-muted-2: #5B6070;
+  --color-muted: #6E7466;
+  --color-muted-2: #565C52;
   /* Text on primary and ink backgrounds */
   --color-cream: #FFFFFF;
-  --color-peach: #C9DCF7;
-  /* Pale blue fill: chat-bubble blue in the reference */
-  --color-peach-2: #E4EEFC;
-  --color-line: #EDEEF2;
+  --color-peach: #F7DFA6;
+  --color-peach-2: #E9F2E2;
+  --color-line: #E6E5DA;
   --color-verified: #1E8A5A;
-  --color-star: #E2941B;
-  --color-danger: #DD3B3B;
-  --color-danger-dark: #B02A2A;
+  --color-star: #D98A12;
+  --color-danger: #D7432F;
+  --color-danger-dark: #A9301F;
   /* Second series colour, used beside primary */
-  --color-accent: #F0A24B;
+  --color-accent: #EE5B3B;
 
   /* Pastel circles behind icons */
-  --color-tint-blue: #E3EEFC;
+  --color-tint-blue: #E2F0E4;
   --color-tint-peach: #FCEBD6;
-  --color-tint-mint: #DDF5EA;
-  --color-tint-lilac: #ECEAF8;
-
+  --color-tint-mint: #DDF0D6;
+  --color-tint-lilac: #F2EFE3;
 
   /* --- Viewer-side food palette (the green/yellow/red look). Admin keeps the blue scale. --- */
   --color-brand: #0F7048;
@@ -58,9 +61,9 @@
   --radius-3xl: 1.75rem;
   --radius-4xl: 2.25rem;
 
-  --shadow-sm: 0 1px 2px rgb(20 24 40 / 0.04), 0 6px 16px -8px rgb(20 24 40 / 0.08);
-  --shadow-lg: 0 14px 36px -14px rgb(30 60 130 / 0.28);
-  --shadow-canvas: 0 40px 80px -40px rgb(30 30 50 / 0.35);
+  --shadow-sm: 0 1px 2px rgb(20 24 20 / 0.04), 0 6px 16px -8px rgb(20 40 24 / 0.08);
+  --shadow-lg: 0 16px 38px -16px rgb(16 70 47 / 0.3);
+  --shadow-canvas: 0 40px 80px -40px rgb(16 50 34 / 0.3);
 }
 
 body {
@@ -83,16 +86,20 @@ body {
   outline-offset: 2px;
 }
 
-/* The light-blue gradient pill from the reference's "Upgrade" button */
+/* The primary action everywhere: the solid brand-green pill */
 .btn-soft {
-  background: linear-gradient(180deg, #D6E7FB 0%, #9CC4F2 100%);
-  color: #14294A;
-  box-shadow: 0 10px 20px -10px rgb(70 130 220 / 0.6);
+  background: var(--color-brand);
+  color: #fff;
+  box-shadow: 0 10px 20px -10px rgb(15 112 72 / 0.7);
   transition: filter 0.15s, transform 0.15s;
 }
 .btn-soft:hover {
-  filter: brightness(1.04);
+  filter: brightness(1.08);
   transform: translateY(-1px);
+}
+.btn-soft:disabled {
+  transform: none;
+  filter: none;
 }
 
 /* Offer flip card */
@@ -118,38 +125,9 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   The viewer side (everything outside /dashboard and /admin) re-points the
-   shared colour tokens at the food palette, so every component that already
-   says `text-primary` or `bg-surface` turns green and cream without being
-   rewritten. The workspaces stay on the blue scale defined above.
+   `theme-public` marks the viewer side (everything outside /dashboard and /admin). The colour tokens are the
+   same everywhere now; the class remains for the few viewer-only touches below.
    --------------------------------------------------------------------------- */
-.theme-public {
-  --color-primary: #0F7048;
-  --color-primary-dark: #0A5335;
-  --color-surface: #F6F5EF;
-  --color-page: #EDEFE5;
-  --color-line: #ECEBE2;
-  --color-peach: #F7DFA6;
-  --color-peach-2: #E9F2E2;
-  --color-accent: #EE5B3B;
-
-  --color-tint-blue: #E2F0E4;
-  --color-tint-peach: #FCEBD6;
-  --color-tint-mint: #DDF0D6;
-  --color-tint-lilac: #F2EFE3;
-
-  --shadow-lg: 0 16px 38px -16px rgb(16 70 47 / 0.3);
-}
-
-/* Solid green pill — the viewer side's primary action */
-.theme-public .btn-soft {
-  background: var(--color-brand);
-  color: #fff;
-  box-shadow: 0 10px 20px -10px rgb(15 112 72 / 0.7);
-}
-.theme-public .btn-soft:hover {
-  filter: brightness(1.08);
-}
 
 /* The yellow "Get Started" pill from the reference, for use on the green hero */
 .btn-sun {

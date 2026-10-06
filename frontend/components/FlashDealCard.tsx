@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import type { Business, Category, Offer } from '@/lib/types';
 import VerifiedBadge from './VerifiedBadge';
+import ReportOffer from './ReportOffer';
+import { offerHref } from '@/lib/offer-url';
 import { ArrowRightIcon } from './icons';
+import Countdown from './Countdown';
 
 function offerBusiness(offer: Offer): Partial<Business> {
   if (offer.business) return offer.business;
@@ -19,64 +21,6 @@ function emojiFor(business: Partial<Business>): string | null {
     return (cats as Category[])[0].emoji || null;
   }
   return null;
-}
-
-function pad(n: number) {
-  return String(Math.max(0, Math.floor(n))).padStart(2, '0');
-}
-
-/**
- * Hours:minutes:seconds left, or days:hours:minutes once more than a day remains.
- * Starts blank so the server and the first client render agree.
- */
-function Countdown({ endsAt, size = 'sm' }: { endsAt: string; size?: 'sm' | 'lg' }) {
-  const [parts, setParts] = useState<{ labels: string[]; values: string[] } | null>(null);
-
-  useEffect(() => {
-    function tick() {
-      const ms = new Date(endsAt).getTime() - Date.now();
-      if (ms <= 0) {
-        setParts({ labels: ['days', 'hrs', 'min'], values: ['00', '00', '00'] });
-        return;
-      }
-      const totalMinutes = ms / 60_000;
-      if (totalMinutes >= 24 * 60) {
-        setParts({
-          labels: ['days', 'hrs', 'min'],
-          values: [pad(ms / 86_400_000), pad((ms / 3_600_000) % 24), pad((ms / 60_000) % 60)],
-        });
-      } else {
-        setParts({
-          labels: ['hrs', 'min', 'sec'],
-          values: [pad(ms / 3_600_000), pad((ms / 60_000) % 60), pad((ms / 1000) % 60)],
-        });
-      }
-    }
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [endsAt]);
-
-  const values = parts?.values ?? ['--', '--', '--'];
-  const labels = parts?.labels ?? ['hrs', 'min', 'sec'];
-
-  return (
-    <div className="flex items-center gap-1.5" aria-label="Time left on this offer">
-      {values.map((v, i) => (
-        <span key={labels[i]} className="flex items-center gap-1.5">
-          {i > 0 && <span className="text-muted font-extrabold">:</span>}
-          <span
-            title={labels[i]}
-            className={`countdown-cell rounded-lg font-extrabold ${
-              size === 'lg' ? 'text-[15px] px-2.5 py-1.5' : 'text-[12px] px-2 py-1'
-            }`}
-          >
-            {v}
-          </span>
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function Stars({ rating }: { rating?: number }) {
@@ -124,8 +68,11 @@ export default function FlashDealCard({
             </span>
           )}
           <span className="absolute bottom-3 left-3 bg-tomato text-white text-[11px] font-extrabold px-2.5 py-1 rounded-full">
-            {offer.endsAt ? 'Ending soon' : `First ${offer.maxRedemptions} customers`}
+            {offer.endsAt ? 'Ending soon' : offer.maxRedemptions > 0 ? `First ${offer.maxRedemptions} customers` : 'Flash deal'}
           </span>
+          {offer.promoted && (
+            <span className="absolute bottom-3 right-3 bg-ink/75 text-white text-[10.5px] font-extrabold uppercase tracking-wide px-2.5 py-1 rounded-full">Promoted</span>
+          )}
           {rating != null && rating > 0 && (
             <span className="absolute top-3 right-3 bg-card rounded-full px-2.5 py-1 text-[12px] font-extrabold shadow-sm">
               <span className="text-star">★</span> {rating.toFixed(1)}
@@ -135,12 +82,13 @@ export default function FlashDealCard({
 
         <div className="mt-4 flex items-baseline gap-2">
           <span className="font-display text-lg font-extrabold truncate">{business.name}</span>
-          <VerifiedBadge status={business.verificationStatus} className="text-[11px] flex-none" />
+          <VerifiedBadge level={business.verificationLevel} className="text-[11px] flex-none" />
         </div>
         <div className="text-[14px] font-bold text-ink-soft mt-1">{offer.title}</div>
         <p className="text-[13px] text-muted mt-2 line-clamp-3 leading-relaxed">
           {offer.description || offer.terms}
         </p>
+        <ReportOffer offerId={offer._id} offerTitle={offer.title} className="mt-2 self-start" />
 
         <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
           <Stars rating={rating} />
@@ -158,7 +106,7 @@ export default function FlashDealCard({
             </span>
           )}
           <Link
-            href={`/offer/${offer._id}`}
+            href={offerHref(offer)}
             className="btn-soft text-[13px] font-extrabold px-5 py-2.5 rounded-full inline-flex items-center gap-2"
           >
             View offer
@@ -189,7 +137,10 @@ export default function FlashDealCard({
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-extrabold truncate">{business.name}</div>
+        <div className="text-[13.5px] font-extrabold truncate">
+          {business.name}
+          {offer.promoted && <span className="ml-1.5 text-[10px] font-extrabold uppercase tracking-wide text-muted">· Promoted</span>}
+        </div>
         <div className="text-[12px] text-muted truncate">{offer.title}</div>
         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
           <Stars rating={rating} />
@@ -203,7 +154,7 @@ export default function FlashDealCard({
             </span>
           )}
           <Link
-            href={`/offer/${offer._id}`}
+            href={offerHref(offer)}
             className="bg-brand text-white text-[11.5px] font-extrabold px-3 py-1.5 rounded-full hover:bg-brand-dark transition-colors whitespace-nowrap"
           >
             View

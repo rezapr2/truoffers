@@ -7,6 +7,7 @@ const LINKS = [
   { href: '/takeaways', label: 'Takeaways' },
   { href: '/blog', label: 'Blog' },
   { href: '/about', label: 'About' },
+  { href: '/help', label: 'Help' },
   { href: '/claim-your-business', label: 'Add your business', highlight: true },
   { href: '/pricing', label: 'Pricing' },
   { href: '/suppliers', label: 'Suppliers' },
@@ -42,6 +43,7 @@ export default function Footer() {
             <Link href="/privacy" className="hover:text-white">Privacy</Link>
             <Link href="/terms" className="hover:text-white">Terms</Link>
             <Link href="/contact" className="hover:text-white">Contact</Link>
+            <Link href="/removal-request" className="hover:text-white">Remove a listing</Link>
             <Link href="/bot" className="hover:text-white">TruOffersBot</Link>
           </span>
         </div>

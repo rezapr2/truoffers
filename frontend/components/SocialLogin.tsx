@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, setToken } from '@/lib/api';
-import { useAuth } from '@/lib/auth-context';
-import type { User } from '@/lib/types';
+import { api } from '@/lib/api';
+import { useAuth, type LoginStep } from '@/lib/auth-context';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const APPLE_CLIENT_ID = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || '';
@@ -60,20 +59,19 @@ export default function SocialLogin({
   onSuccess,
 }: {
   role?: string;
-  onSuccess: (user: User) => void;
+  /** A session, or the second-factor step staff take next. */
+  onSuccess: (step: LoginStep) => void;
 }) {
-  const { refresh } = useAuth();
+  const { acceptSession } = useAuth();
   const googleDiv = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const finish = useCallback(
-    async (res: { accessToken: string; user: User }) => {
-      setToken(res.accessToken);
-      await refresh();
-      onSuccess(res.user);
+    async (res: unknown) => {
+      onSuccess(acceptSession(res));
     },
-    [refresh, onSuccess],
+    [acceptSession, onSuccess],
   );
 
   // Google Identity Services renders its own (policy-compliant) button
@@ -87,7 +85,7 @@ export default function SocialLogin({
           client_id: GOOGLE_CLIENT_ID,
           callback: async (response: { credential: string }) => {
             try {
-              const res = await api<{ accessToken: string; user: User }>('/auth/google', {
+              const res = await api('/auth/google', {
                 method: 'POST',
                 body: JSON.stringify({ idToken: response.credential, role }),
               });
@@ -132,7 +130,7 @@ export default function SocialLogin({
       // Apple only provides the name on the first authorisation
       const nameObj = response?.user?.name;
       const name = nameObj ? `${nameObj.firstName ?? ''} ${nameObj.lastName ?? ''}`.trim() : undefined;
-      const res = await api<{ accessToken: string; user: User }>('/auth/apple', {
+      const res = await api('/auth/apple', {
         method: 'POST',
         body: JSON.stringify({ identityToken: response.authorization.id_token, name, role }),
       });

@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import type { Category, SearchResult, Offer } from '@/lib/types';
 import OfferFlipCard from '@/components/OfferFlipCard';
+import FlashDealCard from '@/components/FlashDealCard';
 import BusinessCard from '@/components/BusinessCard';
 import PageHero from '@/components/PageHero';
 
@@ -27,6 +28,8 @@ function OffersPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'map'>('list');
+  // Paid "Flash deal" placements: the "Ending soon" strip above the results
+  const [flash, setFlash] = useState<Offer[]>([]);
 
   const activeCategory = params.get('category') || '';
   const delivery = params.get('delivery') === 'true';
@@ -38,6 +41,7 @@ function OffersPageInner() {
 
   useEffect(() => {
     void api<Category[]>('/categories').then(setCategories).catch(() => {});
+    void api<Offer[]>('/promotions/placements/flash').then(setFlash).catch(() => {});
   }, []);
 
   const runSearch = useCallback(async () => {
@@ -204,6 +208,18 @@ function OffersPageInner() {
         <div className="mb-8">
           <OffersMap businesses={result.businesses} />
         </div>
+      )}
+
+      {/* Ending soon */}
+      {!loading && view === 'list' && flash.length > 0 && (
+        <section className="mb-10">
+          <h2 className="font-display text-xl font-extrabold tracking-tight mb-4">Ending soon</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {flash.slice(0, 3).map((offer) => (
+              <FlashDealCard key={offer._id} offer={offer} />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Offer cards */}

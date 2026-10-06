@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
+import { useAuth, type LoginStep } from '@/lib/auth-context';
 import SocialLogin from '@/components/SocialLogin';
 import type { User } from '@/lib/types';
 
@@ -27,12 +27,18 @@ function RegisterInner() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [verifyUrl, setVerifyUrl] = useState<string | null | undefined>(undefined);
+
   function redirectFor(user: User) {
     const next = params.get('next');
-    if (next) router.push(next);
+    if (next && next.startsWith('/') && !next.startsWith('//')) router.push(next);
     else if (user.role === 'business_owner') router.push('/claim-your-business');
     else if (user.role === 'supplier') router.push('/dashboard');
     else router.push('/');
+  }
+
+  function afterSocial(step: LoginStep) {
+    if (step.kind === 'session') redirectFor(step.user);
   }
 
   async function submit(e: React.FormEvent) {
@@ -40,12 +46,39 @@ function RegisterInner() {
     setError(null);
     setBusy(true);
     try {
-      redirectFor(await register(form));
+      const { devVerifyUrl } = await register(form);
+      // Email-verified accounts can claim a business; show the next step before moving on.
+      setVerifyUrl(devVerifyUrl ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setBusy(false);
     }
+  }
+
+  if (verifyUrl !== undefined) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-16">
+        <div className="bg-card border border-line rounded-3xl p-8 text-center">
+          <div className="text-5xl mb-4">📬</div>
+          <h1 className="font-display text-2xl font-extrabold mb-2">Check your email</h1>
+          <p className="text-muted mb-6">
+            We sent a link to <strong className="text-ink">{form.email}</strong>. Confirm your address to claim a business and get offer alerts.
+          </p>
+          {verifyUrl && (
+            <p className="text-[13px] bg-surface rounded-xl px-4 py-3 mb-6">
+              Development: <a className="text-primary font-bold break-all" href={verifyUrl}>open the verification link</a>
+            </p>
+          )}
+          <button
+            className="btn-soft font-bold px-7 py-3 rounded-2xl cursor-pointer"
+            onClick={() => redirectFor({ role: form.role } as User)}
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -122,7 +155,7 @@ function RegisterInner() {
         >
           {busy ? 'Creating…' : 'Create account'}
         </button>
-        <SocialLogin role={form.role} onSuccess={redirectFor} />
+        <SocialLogin role={form.role} onSuccess={afterSocial} />
       </form>
       <p className="text-sm font-semibold text-muted mt-5 text-center">
         Already have an account?{' '}

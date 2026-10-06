@@ -8,29 +8,27 @@ export const metadata = {
     'Free listings for every takeaway. Paid plans add unlimited offers, verified badges, featured placement and analytics.',
 };
 
+const price = (n: number) => `£${Number.isInteger(n) ? n : n.toFixed(2)}`;
+
+// The plans, badges and prices all come from Plans & pricing in the admin panel.
 function PlanGrid({ plans, note }: { plans: Plan[]; note?: string }) {
   return (
     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
       {plans.map((plan) => (
-        <div
-          key={plan._id}
-          className={`bg-card border border-line rounded-3xl p-7 flex flex-col ${
-            plan.key === 'standard' || plan.key === 'supplier_pro' ? 'ring-2 ring-primary' : ''
-          }`}
-        >
-          {(plan.key === 'standard' || plan.key === 'supplier_pro') && (
-            <span className="self-start text-[11px] font-extrabold uppercase bg-primary text-cream px-3 py-1 rounded-full mb-3">
-              Most popular
-            </span>
+        <div key={plan._id} className={`bg-card border border-line rounded-3xl p-7 flex flex-col ${plan.badgeText ? 'ring-2 ring-primary' : ''}`}>
+          {plan.badgeText && (
+            <span className="self-start text-[11px] font-extrabold uppercase bg-primary text-cream px-3 py-1 rounded-full mb-3">{plan.badgeText}</span>
           )}
           <h3 className="font-display text-xl font-extrabold">{plan.name}</h3>
           <div className="font-display text-4xl font-extrabold mt-2">
-            £{plan.monthlyPrice}
+            {price(plan.monthlyPrice)}
             <span className="text-sm font-sans text-muted font-bold">/mo</span>
           </div>
-          {plan.annualPrice > 0 && (
-            <div className="text-[13px] font-bold text-muted">or £{plan.annualPrice}/year</div>
+          {plan.annualPrice > 0 && <div className="text-[13px] font-bold text-muted">or {price(plan.annualPrice)}/year</div>}
+          {plan.monthlyPrice > 0 && (
+            <div className="text-[12px] font-bold text-muted">{plan.pricesIncludeVat ? 'Including VAT' : `Plus VAT (${plan.vatRatePercent ?? 20}%)`}</div>
           )}
+          {plan.trialDays ? <div className="text-[12.5px] font-extrabold text-verified mt-1">{plan.trialDays}-day free trial</div> : null}
           <div className="text-sm font-bold text-ink-soft mt-1 mb-5">{plan.bestFor}</div>
           <ul className="text-sm font-semibold text-ink-soft space-y-2 mb-7">
             {plan.features.map((f) => (
@@ -45,7 +43,7 @@ function PlanGrid({ plans, note }: { plans: Plan[]; note?: string }) {
                 ? '/register?role=supplier'
                 : plan.monthlyPrice === 0
                   ? '/claim-your-business'
-                  : '/register?role=business_owner'
+                  : '/claim-your-business?plan=' + plan.key
             }
             className="mt-auto text-center btn-soft font-bold py-3.5 rounded-2xl"
           >
@@ -72,8 +70,8 @@ export default async function PricingPage() {
           Fair for businesses.
         </h1>
         <p className="text-muted font-semibold text-lg">
-          No commission on orders — ever. Pay a predictable monthly fee for visibility, offers and
-          analytics instead of giving away 14–30% of every order.
+          No commission on orders, ever. Listing is free; paid plans add more live offers, scheduling, coupon codes and
+          insights. Claim and verify your takeaway first, then upgrade from your dashboard.
         </p>
       </div>
 

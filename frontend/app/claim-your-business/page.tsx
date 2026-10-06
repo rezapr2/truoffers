@@ -1,52 +1,240 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, ApiError, errorMessage } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { useAuth } from '@/lib/auth-context';
 import type { Business, Category } from '@/lib/types';
+import ClaimWorkspace, { type ClaimView } from '@/components/ClaimWorkspace';
 import VerifiedBadge from '@/components/VerifiedBadge';
+import { Alert, btn, Card, Field, inputClass, Spinner, Toggle } from '@/components/ui';
 
-type Step = 'search' | 'method' | 'otp' | 'done' | 'add';
+type Step = 'search' | 'add' | 'claim';
 
-function ClaimInner() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const params = useSearchParams();
+interface Duplicate {
+  _id: string;
+  name: string;
+  slug: string;
+  town?: string;
+  postcode: string;
+  address?: string;
+  verificationLevel: number;
+  status: string;
+}
 
-  const [step, setStep] = useState<Step>('search');
-  const [query, setQuery] = useState(params.get('name') || '');
-  const [results, setResults] = useState<Business[]>([]);
-  const [selected, setSelected] = useState<Business | null>(null);
-  const [claimId, setClaimId] = useState<string | null>(null);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
-  const [otp, setOtp] = useState('');
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+function EmailGate() {
+  const [sent, setSent] = useState<{ devVerifyUrl?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <Card className="flex flex-col gap-4">
+      <h2 className="font-display text-xl font-extrabold">First, confirm your email</h2>
+      <p className="text-sm text-ink-soft">We sent you a link when you signed up. Claims can only be made from a confirmed account.</p>
+      {error && <Alert tone="danger">{error}</Alert>}
+      {sent ? (
+        <Alert tone="success">
+          Sent — check your inbox.{' '}
+          {sent.devVerifyUrl && (
+            <a className="underline font-bold" href={sent.devVerifyUrl}>
+              Development: open the link
+            </a>
+          )}
+        </Alert>
+      ) : (
+        <button
+          className={btn.primary}
+          onClick={() =>
+            api<{ devVerifyUrl?: string }>('/auth/email/resend', { method: 'POST' })
+              .then(setSent)
+              .catch((err) => setError(errorMessage(err)))
+          }
+        >
+          Send the link again
+        </button>
+      )}
+    </Card>
+  );
+}
+
+function AddBusiness({ categories, onClaim, onBack }: { categories: Category[]; onClaim: (claim: ClaimView) => void; onBack: () => void }) {
+  const [form, setForm] = useState({ name: '', postcode: '', town: '', address: '', phone: '', website: '', orderUrl: '', description: '', categories: [] as string[], delivery: true, collection: true });
+  const [hours, setHours] = useState<Record<string, string>>({});
+  const [duplicates, setDuplicates] = useState<Duplicate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [pendingReview, setPendingReview] = useState(false);
-  // An invitation link from the import robot: it says which business the link is for (spec §14).
-  const invite = params.get('invite');
+  const router = useRouter();
+  const set = (key: keyof typeof form, value: unknown) => setForm((f) => ({ ...f, [key]: value }));
+
+  async function submit(confirmNotDuplicate = false) {
+    setBusy(true);
+    setError(null);
+    try {
+      const openingHours = Object.fromEntries(Object.entries(hours).filter(([, v]) => v.trim()));
+      const claim = await api<ClaimView>('/claims/new-business', {
+        method: 'POST',
+        body: JSON.stringify({
+          business: {
+            ...form,
+            town: form.town || undefined,
+            address: form.address || undefined,
+            website: form.website || undefined,
+            orderUrl: form.orderUrl || undefined,
+            description: form.description || undefined,
+            openingHours: Object.keys(openingHours).length ? openingHours : undefined,
+          },
+          confirmNotDuplicate,
+        }),
+      });
+      track('claim_start', { businessId: claim.business._id, metadata: { kind: 'new' } });
+      onClaim(claim);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'possible_duplicates') setDuplicates(err.data.duplicates as Duplicate[]);
+      else setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (duplicates) {
+    return (
+      <Card className="flex flex-col gap-4">
+        <h2 className="font-display text-xl font-extrabold">Is it one of these?</h2>
+        <p className="text-sm text-muted">We found takeaways with the same phone number or a similar name at {form.postcode}. Claim yours instead of adding it twice.</p>
+        {duplicates.map((d) => (
+          <div key={d._id} className="flex items-center gap-4 border border-line rounded-2xl p-4">
+            <div className="flex-1 min-w-0">
+              <div className="font-extrabold">{d.name}</div>
+              <div className="text-[13px] text-muted">{[d.address, d.town, d.postcode].filter(Boolean).join(', ')}</div>
+            </div>
+            {d.status === 'active' ? (
+              <button className={btn.small} onClick={() => router.push(`/claim-your-business?business=${d._id}`)}>
+                Claim this one
+              </button>
+            ) : (
+              <span className="text-[12px] text-muted">Being added by someone else</span>
+            )}
+          </div>
+        ))}
+        <div className="flex gap-3 flex-wrap">
+          <button className={btn.primary} disabled={busy} onClick={() => submit(true)}>
+            {busy ? 'Adding…' : 'None of these — add mine'}
+          </button>
+          <button className={btn.secondary} onClick={() => setDuplicates(null)}>
+            Back to the form
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="bg-card border border-line rounded-3xl p-7 flex flex-col gap-4"
+    >
+      <h2 className="font-display text-xl font-extrabold">Add your business</h2>
+      <p className="text-sm text-muted -mt-2">It stays hidden until we’ve verified it. We’ll text or call the shop number to check it’s yours.</p>
+      {error && <Alert tone="danger">{error}</Alert>}
+      <Field label="Business name" required>
+        <input required minLength={2} value={form.name} onChange={(e) => set('name', e.target.value)} className={inputClass} />
+      </Field>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Postcode" required>
+          <input required value={form.postcode} onChange={(e) => set('postcode', e.target.value.toUpperCase())} placeholder="M14 5TQ" className={inputClass} />
+        </Field>
+        <Field label="Town or city">
+          <input value={form.town} onChange={(e) => set('town', e.target.value)} className={inputClass} />
+        </Field>
+      </div>
+      <Field label="Address">
+        <input value={form.address} onChange={(e) => set('address', e.target.value)} className={inputClass} />
+      </Field>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Shop phone number" required hint="We send the verification code to this number.">
+          <input required type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="0161 224 0102" className={inputClass} />
+        </Field>
+        <Field label="Website">
+          <input value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" className={inputClass} />
+        </Field>
+      </div>
+      <Field label="Online ordering link" hint="Your own site, Foodbell, or another ordering provider.">
+        <input value={form.orderUrl} onChange={(e) => set('orderUrl', e.target.value)} placeholder="https://" className={inputClass} />
+      </Field>
+      <Field label="Cuisines" hint="Pick up to 3.">
+        <div className="flex gap-2 flex-wrap">
+          {categories.map((c) => {
+            const on = form.categories.includes(c._id);
+            return (
+              <button
+                type="button"
+                key={c._id}
+                aria-pressed={on}
+                onClick={() => set('categories', on ? form.categories.filter((x) => x !== c._id) : form.categories.length < 3 ? [...form.categories, c._id] : form.categories)}
+                className={`text-sm font-bold px-3 py-1.5 rounded-full border cursor-pointer ${on ? 'bg-primary text-white border-primary' : 'border-line hover:border-primary'}`}
+              >
+                {c.emoji} {c.name}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+      <div className="flex gap-6 flex-wrap">
+        <Toggle checked={form.delivery} onChange={(v) => set('delivery', v)} label="Delivery" />
+        <Toggle checked={form.collection} onChange={(v) => set('collection', v)} label="Collection" />
+      </div>
+      <details className="bg-surface rounded-2xl px-4 py-3">
+        <summary className="font-bold text-sm cursor-pointer">Opening hours (optional)</summary>
+        <div className="grid sm:grid-cols-2 gap-3 mt-3">
+          {DAYS.map((d) => (
+            <Field key={d} label={<span className="capitalize">{d}</span>}>
+              <input value={hours[d] ?? ''} onChange={(e) => setHours({ ...hours, [d]: e.target.value })} placeholder="17:00–23:00 or Closed" className={inputClass} />
+            </Field>
+          ))}
+        </div>
+      </details>
+      <Field label="Short description">
+        <textarea rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} className={`${inputClass} resize-none`} />
+      </Field>
+      <div className="flex gap-3">
+        <button type="button" onClick={onBack} className={btn.secondary}>
+          Back
+        </button>
+        <button type="submit" disabled={busy} className={`${btn.primary} flex-1`}>
+          {busy ? 'Adding…' : 'Add and verify'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ClaimInner() {
+  const { user, loading, refresh } = useAuth();
+  const router = useRouter();
+  const params = useSearchParams();
+  const [step, setStep] = useState<Step>('search');
+  const [query, setQuery] = useState(params.get('name') || '');
+  const [results, setResults] = useState<Business[] | null>(null);
+  const [claim, setClaim] = useState<ClaimView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [invited, setInvited] = useState<{ business: Business; expiresAt: string } | null>(null);
   const [inviteExpired, setInviteExpired] = useState(false);
-
-  // Add-business form
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [addForm, setAddForm] = useState({
-    name: '',
-    postcode: '',
-    town: '',
-    address: '',
-    phone: '',
-    categoryId: '',
-    description: '',
-    orderUrl: '',
-  });
+  const [confirmDispute, setConfirmDispute] = useState<Business | null>(null);
+  const invite = params.get('invite');
+  const presetBusiness = params.get('business');
+  const resumeClaim = params.get('claim');
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push(`/login?next=${encodeURIComponent('/claim-your-business')}`);
+      const here = `/claim-your-business${typeof window !== 'undefined' ? window.location.search : ''}`;
+      router.push(`/register?role=business_owner&next=${encodeURIComponent(here)}`);
     }
   }, [loading, user, router]);
 
@@ -54,16 +242,44 @@ function ClaimInner() {
     void api<Category[]>('/categories').then(setCategories).catch(() => {});
   }, []);
 
+  const startClaim = useCallback(async (businessId: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await api<ClaimView>('/claims', { method: 'POST', body: JSON.stringify({ businessId }) });
+      track('claim_start', { businessId });
+      await refresh();
+      setClaim(created);
+      setStep('claim');
+    } catch (err) {
+      // An open claim on this listing: carry on with it.
+      if (err instanceof ApiError && typeof err.data.claimId === 'string') {
+        setClaim(await api<ClaimView>(`/claims/${err.data.claimId}`));
+        setStep('claim');
+      } else setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [refresh]);
+
+  // Deep links: an invitation from the import robot, a listing's "Claim this business" button, or resuming a claim.
   useEffect(() => {
-    if (!invite) return;
-    void api<{ business: Business; expiresAt: string }>(`/claim-invitations/${encodeURIComponent(invite)}`)
-      .then((result) => {
-        setInvited(result);
-        setSelected(result.business);
-        setStep('method');
-      })
-      .catch(() => setInviteExpired(true));
-  }, [invite]);
+    if (!user?.emailVerified) return;
+    if (resumeClaim) {
+      void api<ClaimView>(`/claims/${resumeClaim}`).then((c) => {
+        setClaim(c);
+        setStep('claim');
+      }).catch((err) => setError(errorMessage(err)));
+    } else if (invite) {
+      void api<{ business: Business; expiresAt: string }>(`/claim-invitations/${encodeURIComponent(invite)}`)
+        .then((result) => setInvited(result))
+        .catch(() => setInviteExpired(true));
+    } else if (presetBusiness) {
+      void api<{ items: Business[] }>(`/businesses?q=${encodeURIComponent(params.get('name') ?? '')}`)
+        .then((r) => setResults(r.items))
+        .catch(() => {});
+    }
+  }, [user?.emailVerified, resumeClaim, invite, presetBusiness, params]);
 
   async function search(e?: React.FormEvent) {
     e?.preventDefault();
@@ -71,391 +287,129 @@ function ClaimInner() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api<{ items: Business[] }>(`/businesses?q=${encodeURIComponent(query.trim())}`);
+      const res = await api<{ items: Business[] }>(`/businesses?q=${encodeURIComponent(query.trim())}&limit=20`);
       setResults(res.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
+      setError(errorMessage(err, 'Search failed'));
     } finally {
       setBusy(false);
     }
   }
 
-  async function startClaim(method: string) {
-    if (!selected) return;
-    setBusy(true);
-    setError(null);
-    try {
-      track('claim_start', { businessId: selected._id, metadata: { method } });
-      const res = await api<{ claimId: string; devOtp?: string }>(
-        `/businesses/${selected._id}/claim`,
-        { method: 'POST', body: JSON.stringify({ method }) },
-      );
-      setClaimId(res.claimId);
-      if (method === 'phone_otp') {
-        setDevOtp(res.devOtp || null);
-        setStep('otp');
-      } else {
-        setPendingReview(true);
-        setStep('done');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start claim');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function verifyOtp(e: React.FormEvent) {
-    e.preventDefault();
-    if (!claimId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api(`/businesses/claims/${claimId}/verify-otp`, {
-        method: 'POST',
-        body: JSON.stringify({ otp }),
-      });
-      track('claim_complete', { businessId: selected?._id, metadata: { method: 'phone_otp' } });
-      setPendingReview(false);
-      setStep('done');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function addBusiness(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const created = await api<Business>('/businesses', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: addForm.name,
-          postcode: addForm.postcode,
-          town: addForm.town || undefined,
-          address: addForm.address || undefined,
-          phone: addForm.phone || undefined,
-          description: addForm.description || undefined,
-          orderUrl: addForm.orderUrl || undefined,
-          categories: addForm.categoryId ? [addForm.categoryId] : [],
-        }),
-      });
-      setSelected(created);
-      setPendingReview(false);
-      setStep('done');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add business');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (loading || !user) return <div className="py-24 text-center text-muted font-bold">Loading…</div>;
-
-  const canClaim = user.role === 'business_owner' || user.role === 'customer';
+  if (loading || !user) return <Spinner />;
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-12">
-      <h1 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
-        Claim your business
-      </h1>
-      <p className="text-muted font-semibold mb-8">
-        Free listing, free claim. Verified businesses rank higher and unlock offer tools.
-      </p>
+    <div className="mx-auto max-w-3xl px-5 py-12">
+      <h1 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight mb-2">Claim your business</h1>
+      <p className="text-muted font-semibold mb-8">Free to claim. Verified takeaways get the ✓ badge, live offers, plans and promotions.</p>
 
-      {error && (
-        <div className="bg-danger/10 border border-danger/25 text-danger-dark text-sm font-bold rounded-xl px-4 py-3 mb-5">
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="danger" className="mb-5">{error}</Alert>}
 
-      {invited && (
-        <div className="bg-card border border-line rounded-2xl px-5 py-4 mb-5">
-          <p className="font-bold">We listed offers we found on {invited.business.name}’s website.</p>
-          <p className="text-[13px] font-semibold text-muted mt-1">
-            Claim the page to verify them, correct the details and see your clicks. Choose how you would like us to check you run the
-            business — this link works until {new Date(invited.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.
-          </p>
-        </div>
-      )}
-      {inviteExpired && (
-        <div className="bg-card border border-line rounded-2xl px-5 py-4 mb-5 font-semibold text-muted">
-          That invitation link has expired or has already been used. Search for your business below to claim it.
-        </div>
-      )}
-
-      {step === 'search' && (
+      {!user.emailVerified ? (
+        <EmailGate />
+      ) : step === 'claim' && claim ? (
         <>
-          <form onSubmit={search} className="flex gap-2 bg-card border border-line rounded-full p-1.5 pl-5 items-center mb-5">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search your business name…"
-              className="flex-1 min-w-0 border-none outline-none font-bold bg-transparent"
-            />
-            <button
-              type="submit"
-              disabled={busy}
-              className="btn-soft text-sm font-bold px-6 py-3 rounded-full cursor-pointer disabled:opacity-60"
-            >
-              Search
-            </button>
-          </form>
-          <div className="flex flex-col gap-3 mb-8">
-            {results.map((b) => (
-              <button
-                key={b._id}
-                onClick={() => {
-                  if (b.verificationStatus === 'unclaimed') {
-                    setSelected(b);
-                    setStep('method');
-                  }
-                }}
-                disabled={b.verificationStatus !== 'unclaimed'}
-                className={`bg-card border border-line rounded-2xl p-5 text-left flex items-center gap-4 transition-shadow ${
-                  b.verificationStatus === 'unclaimed'
-                    ? 'hover:shadow-lg cursor-pointer'
-                    : 'opacity-60'
-                }`}
-              >
-                <div className="w-12 h-12 flex-none rounded-full bg-page flex items-center justify-center font-display font-extrabold text-lg text-primary">
-                  {b.name.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-extrabold">{b.name}</div>
-                  <div className="text-[13px] font-semibold text-muted">
-                    {b.town} {b.postcode}
-                  </div>
-                </div>
-                {b.verificationStatus === 'unclaimed' ? (
-                  <span className="text-primary text-sm font-bold whitespace-nowrap">Claim →</span>
-                ) : (
-                  <VerifiedBadge status={b.verificationStatus} className="text-[13px]" />
-                )}
-              </button>
-            ))}
-          </div>
-          {canClaim && (
-            <div className="bg-card border border-line rounded-2xl p-6 text-center">
-              <div className="font-extrabold mb-1">Can&apos;t find your takeaway?</div>
-              <div className="text-sm font-semibold text-muted mb-4">
-                Add it to TruOffers in two minutes — free.
-              </div>
-              <button
-                onClick={() => setStep('add')}
-                className="btn-soft font-bold px-7 py-3 rounded-2xl cursor-pointer"
-              >
-                Add your business
-              </button>
+          <ClaimWorkspace claim={claim} onChange={setClaim} />
+          {claim.status === 'pending' && (
+            <div className="mt-6 flex justify-center">
+              <Link href="/dashboard" className={btn.primary}>
+                Go to your dashboard
+              </Link>
             </div>
           )}
         </>
-      )}
+      ) : step === 'add' ? (
+        <AddBusiness
+          categories={categories}
+          onBack={() => setStep('search')}
+          onClaim={async (c) => {
+            await refresh();
+            setClaim(c);
+            setStep('claim');
+          }}
+        />
+      ) : (
+        <>
+          {invited && (
+            <Card className="mb-5 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1">
+                <p className="font-bold">We listed offers we found on {invited.business.name}’s website.</p>
+                <p className="text-[13px] text-muted mt-1">Claim the page to verify them, correct the details and see your clicks. This link works until {new Date(invited.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}.</p>
+              </div>
+              <button className={btn.primary} disabled={busy} onClick={() => startClaim(invited.business._id)}>
+                Claim {invited.business.name}
+              </button>
+            </Card>
+          )}
+          {inviteExpired && <Alert tone="warning" className="mb-5">That invitation link has expired or was already used. Search for your business below.</Alert>}
 
-      {step === 'method' && selected && (
-        <div className="bg-card border border-line rounded-3xl p-7">
-          <h2 className="font-display text-xl font-extrabold mb-1">Verify you own {selected.name}</h2>
-          <p className="text-sm font-semibold text-muted mb-6">
-            Choose a verification method (blueprint-approved options).
-          </p>
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => startClaim('phone_otp')}
-              disabled={busy}
-              className="border border-line rounded-2xl p-5 text-left hover:border-primary transition-colors cursor-pointer"
-            >
-              <div className="font-extrabold">📱 Phone verification (instant)</div>
-              <div className="text-sm font-semibold text-muted">
-                We send a one-time code to the business phone number on file.
-              </div>
+          <form onSubmit={search} className="flex gap-2 bg-card border border-line rounded-full p-1.5 pl-5 items-center mb-5 field-shell">
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Business name or postcode…" className="flex-1 min-w-0 border-none outline-none font-bold bg-transparent field-bare" />
+            <button type="submit" disabled={busy} className="btn-soft text-sm font-bold px-6 py-3 rounded-full cursor-pointer disabled:opacity-60">
+              Search
             </button>
-            <button
-              onClick={() => startClaim('document_upload')}
-              disabled={busy}
-              className="border border-line rounded-2xl p-5 text-left hover:border-primary transition-colors cursor-pointer"
-            >
-              <div className="font-extrabold">📄 Document review (1–2 days)</div>
-              <div className="text-sm font-semibold text-muted">
-                Our team reviews your proof of ownership manually.
-              </div>
-            </button>
-            <button
-              onClick={() => startClaim('foodbell_auto')}
-              disabled={busy}
-              className="border border-line rounded-2xl p-5 text-left hover:border-primary transition-colors cursor-pointer"
-            >
-              <div className="font-extrabold">🔔 I&apos;m a Foodbell client (instant)</div>
-              <div className="text-sm font-semibold text-muted">
-                Foodbell clients are verified automatically.
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
+          </form>
 
-      {step === 'otp' && (
-        <form onSubmit={verifyOtp} className="bg-card border border-line rounded-3xl p-7">
-          <h2 className="font-display text-xl font-extrabold mb-1">Enter the 6-digit code</h2>
-          <p className="text-sm font-semibold text-muted mb-5">
-            We called/texted the business number ending in{' '}
-            {selected?.phone ? `…${selected.phone.slice(-3)}` : '…'}
-          </p>
-          {devOtp && (
-            <div className="bg-surface border border-line rounded-xl px-4 py-3 text-sm font-bold mb-5">
-              Dev mode — your code is: <span className="text-primary font-display text-lg">{devOtp}</span>
+          {results && (
+            <div className="flex flex-col gap-3 mb-8">
+              {results.length === 0 && <p className="text-sm text-muted">No listings match. Add yours below.</p>}
+              {results.map((b) => {
+                const level = b.verificationLevel ?? 0;
+                return (
+                  <div key={b._id} className={`bg-card border rounded-2xl p-5 flex items-center gap-4 ${b._id === presetBusiness ? 'border-primary' : 'border-line'}`}>
+                    <div className="w-12 h-12 flex-none rounded-full bg-sun-soft flex items-center justify-center font-display font-extrabold text-lg text-brand-deep">{b.name.charAt(0)}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-extrabold">{b.name}</div>
+                      <div className="text-[13px] text-muted">
+                        {[b.address, b.town, b.postcode].filter(Boolean).join(', ')}
+                      </div>
+                      <VerifiedBadge level={level} className="text-[12px]" />
+                    </div>
+                    {level === 0 ? (
+                      <button className={btn.primary} disabled={busy} onClick={() => startClaim(b._id)}>
+                        Claim
+                      </button>
+                    ) : level === 1 ? (
+                      <span className="text-[12.5px] font-bold text-[#7a5408] bg-sun-soft/70 px-2.5 py-1 rounded-full whitespace-nowrap">Claim in review</span>
+                    ) : (
+                      <button className={btn.small} onClick={() => setConfirmDispute(b)}>
+                        This is mine
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
-          <input
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
-            maxLength={6}
-            inputMode="numeric"
-            placeholder="000000"
-            className="border border-line rounded-xl px-4 py-3 font-display font-extrabold text-2xl tracking-[0.4em] w-full text-center outline-none focus:border-primary bg-surface mb-5"
-          />
-          <button
-            type="submit"
-            disabled={busy || otp.length !== 6}
-            className="w-full btn-soft font-bold py-3.5 rounded-2xl cursor-pointer disabled:opacity-60"
-          >
-            Verify
-          </button>
-        </form>
-      )}
 
-      {step === 'done' && (
-        <div className="bg-card border border-line rounded-3xl p-10 text-center">
-          <div className="text-5xl mb-4">{pendingReview ? '🕓' : '🎉'}</div>
-          <h2 className="font-display text-2xl font-extrabold mb-2">
-            {pendingReview ? 'Claim submitted' : 'You’re verified!'}
-          </h2>
-          <p className="text-muted font-semibold mb-7">
-            {pendingReview
-              ? 'Our team will review your claim within 1–2 working days. You’ll get dashboard access once approved.'
-              : `${selected?.name ?? 'Your business'} is now yours to manage — post offers, update your menu and watch your analytics.`}
-          </p>
-          <Link
-            href="/dashboard"
-            className="btn-soft font-bold px-8 py-3.5 rounded-2xl"
-          >
-            Go to dashboard
-          </Link>
-        </div>
-      )}
-
-      {step === 'add' && (
-        <form onSubmit={addBusiness} className="bg-card border border-line rounded-3xl p-7 flex flex-col gap-4">
-          <h2 className="font-display text-xl font-extrabold">Add your business</h2>
-          {user.role !== 'business_owner' && (
-            <div className="bg-surface border border-line rounded-xl px-4 py-3 text-sm font-bold">
-              Note: your account is a customer account. Adding a business is available for takeaway
-              owner accounts —{' '}
-              <Link href="/register?role=business_owner" className="text-primary">
-                create one here
-              </Link>
-              .
-            </div>
+          {confirmDispute && (
+            <Alert
+              tone="warning"
+              className="mb-6"
+              title={`${confirmDispute.name} is already verified`}
+              action={
+                <div className="flex gap-2">
+                  <button className={btn.small} disabled={busy} onClick={() => startClaim(confirmDispute._id)}>
+                    Claim anyway
+                  </button>
+                  <button className={btn.small} onClick={() => setConfirmDispute(null)}>
+                    Cancel
+                  </button>
+                </div>
+              }
+            >
+              If you prove access to its phone line, our team reviews who runs it and both owners are told. Changes to the listing pause meanwhile.
+            </Alert>
           )}
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-extrabold">Business name *</span>
-            <input
-              required
-              value={addForm.name}
-              onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-              className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-extrabold">Postcode *</span>
-              <input
-                required
-                value={addForm.postcode}
-                onChange={(e) => setAddForm({ ...addForm, postcode: e.target.value })}
-                placeholder="M14 5TQ"
-                className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-extrabold">Town</span>
-              <input
-                value={addForm.town}
-                onChange={(e) => setAddForm({ ...addForm, town: e.target.value })}
-                className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
-              />
-            </label>
-          </div>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-extrabold">Address</span>
-            <input
-              value={addForm.address}
-              onChange={(e) => setAddForm({ ...addForm, address: e.target.value })}
-              className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-extrabold">Phone</span>
-              <input
-                value={addForm.phone}
-                onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
-                className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-extrabold">Cuisine</span>
-              <select
-                value={addForm.categoryId}
-                onChange={(e) => setAddForm({ ...addForm, categoryId: e.target.value })}
-                className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
-              >
-                <option value="">Select…</option>
-                {categories.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-extrabold">Online ordering link (Foodbell or your site)</span>
-            <input
-              value={addForm.orderUrl}
-              onChange={(e) => setAddForm({ ...addForm, orderUrl: e.target.value })}
-              placeholder="https://…"
-              className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-extrabold">Short description</span>
-            <textarea
-              rows={3}
-              value={addForm.description}
-              onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
-              className="border border-line rounded-xl px-4 py-3 font-semibold outline-none focus:border-primary bg-surface resize-none"
-            />
-          </label>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setStep('search')}
-              className="border border-line bg-card font-bold px-6 py-3 rounded-full cursor-pointer"
-            >
-              Back
+
+          <Card className="text-center">
+            <div className="font-extrabold mb-1">Can’t find your takeaway?</div>
+            <div className="text-sm text-muted mb-4">Add it to TruOffers in two minutes, free.</div>
+            <button onClick={() => setStep('add')} className={btn.primary}>
+              Add your business
             </button>
-            <button
-              type="submit"
-              disabled={busy || user.role !== 'business_owner'}
-              className="flex-1 btn-soft font-bold py-3 rounded-2xl cursor-pointer disabled:opacity-60"
-            >
-              {busy ? 'Adding…' : 'Add business'}
-            </button>
-          </div>
-        </form>
+          </Card>
+        </>
       )}
     </div>
   );

@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { useAuth } from '@/lib/auth-context';
 import type { Supplier } from '@/lib/types';
-import VerifiedBadge from '@/components/VerifiedBadge';
+import SupplierBadge from '@/components/SupplierBadge';
 
 export default function SupplierPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -66,7 +66,7 @@ export default function SupplierPage({ params }: { params: Promise<{ slug: strin
       <div className="bg-card border border-line rounded-3xl p-8 md:p-10 mb-5">
         <div className="flex items-center gap-3 flex-wrap mb-2">
           <h1 className="font-display text-3xl font-extrabold tracking-tight">{supplier.name}</h1>
-          <VerifiedBadge status={supplier.verificationStatus} />
+          <SupplierBadge status={supplier.verificationStatus} />
         </div>
         <div className="text-sm font-bold text-muted capitalize mb-5">
           {supplier.category} · {supplier.serviceArea}

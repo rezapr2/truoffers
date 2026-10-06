@@ -5,11 +5,11 @@ import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import type { Business, Offer } from '@/lib/types';
-import VerifiedBadge from '@/components/VerifiedBadge';
+import VerifiedBadge, { FoodbellTag } from '@/components/VerifiedBadge';
+import { assetUrl } from '@/lib/api';
 import FollowButton from '@/components/FollowButton';
 import OfferFlipCard from '@/components/OfferFlipCard';
 import BusinessJsonLd from '@/components/BusinessJsonLd';
-import ImportedSourceNotice from '@/components/ImportedSourceNotice';
 import ClaimBanner from './ClaimBanner';
 
 interface MenuItem {
@@ -70,8 +70,13 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
       {/* Header */}
       <div className="bg-card border border-line rounded-3xl p-7 md:p-10 mb-5">
         <div className="flex flex-col md:flex-row gap-6 md:items-center">
-          <div className="w-20 h-20 md:w-24 md:h-24 flex-none rounded-full bg-sun-soft flex items-center justify-center font-display font-extrabold text-3xl text-brand-deep">
-            {business.name.charAt(0)}
+          <div className="w-20 h-20 md:w-24 md:h-24 flex-none rounded-full bg-sun-soft flex items-center justify-center font-display font-extrabold text-3xl text-brand-deep overflow-hidden">
+            {business.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={assetUrl(business.logoUrl)} alt="" className="w-full h-full object-cover" />
+            ) : (
+              business.name.charAt(0)
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
@@ -91,7 +96,8 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
                   <span className="text-muted font-semibold"> ({business.reviews.count})</span>
                 </span>
               )}
-              <VerifiedBadge status={business.verificationStatus} />
+              <VerifiedBadge level={business.verificationLevel} hygiene={business.fhrsRating} />
+              <FoodbellTag show={business.isFoodbellClient} />
               {business.followerCount > 0 && (
                 <span className="text-muted">{business.followerCount} followers</span>
               )}
@@ -131,7 +137,6 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
         </div>
       </div>
 
-      <ImportedSourceNotice imported={business.imported} businessSlug={business.slug} className="mb-5" />
       <ClaimBanner business={business} />
 
       {/* Tabs */}
@@ -170,6 +175,11 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
 
       {tab === 'Menu' && (
         <div className="flex flex-col gap-6">
+          {business.menuPdfUrl && (
+            <a href={assetUrl(business.menuPdfUrl)} target="_blank" rel="noopener noreferrer" className="bg-card border border-line rounded-2xl p-5 font-bold text-primary hover:shadow-lg transition-shadow">
+              Open the full menu (PDF) →
+            </a>
+          )}
           {sections.map((section) => (
             <div key={section} className="bg-card border border-line rounded-2xl p-6">
               <h3 className="font-display text-lg font-extrabold mb-4">{section}</h3>
@@ -192,7 +202,7 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
               </div>
             </div>
           ))}
-          {menu.length === 0 && (
+          {menu.length === 0 && !business.menuPdfUrl && (
             <div className="bg-card border border-line rounded-2xl p-8 text-muted font-semibold text-center">
               Menu not added yet.
             </div>
@@ -232,6 +242,10 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
             <p className="text-[15px] font-semibold text-ink-soft leading-relaxed">
               {business.description || 'No description yet.'}
             </p>
+            <div className="flex gap-2 mt-4 flex-wrap">
+              {business.delivery !== false && <span className="text-[12px] font-extrabold bg-tint-mint text-verified px-2.5 py-1 rounded-full">Delivery</span>}
+              {business.collection !== false && <span className="text-[12px] font-extrabold bg-tint-mint text-verified px-2.5 py-1 rounded-full">Collection</span>}
+            </div>
             <h3 className="font-display text-lg font-extrabold mt-6 mb-3">Contact</h3>
             <dl className="text-[15px] font-semibold text-ink-soft space-y-1.5">
               {business.address && <div>{business.address}</div>}
@@ -242,6 +256,13 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
                   {business.website}
                 </a>
               )}
+              {Object.entries(business.socialLinks ?? {})
+                .filter(([, url]) => url)
+                .map(([network, url]) => (
+                  <a key={network} href={url} className="text-primary block capitalize" target="_blank" rel="noopener noreferrer">
+                    {network === 'x' ? 'X (Twitter)' : network}
+                  </a>
+                ))}
             </dl>
           </div>
           <div>
@@ -259,6 +280,17 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
               <p className="text-muted font-semibold">Not provided yet.</p>
             )}
           </div>
+          {business.photos?.length > 0 && (
+            <div className="md:col-span-2">
+              <h3 className="font-display text-lg font-extrabold mb-3">Photos</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {business.photos.map((photo) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={photo} src={assetUrl(photo)} alt="" className="w-full aspect-[4/3] object-cover rounded-2xl bg-surface" />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

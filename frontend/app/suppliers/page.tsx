@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { serverApi } from '@/lib/server-api';
 import type { Supplier } from '@/lib/types';
-import VerifiedBadge from '@/components/VerifiedBadge';
+import SupplierBadge from '@/components/SupplierBadge';
 
 export const metadata = {
   title: 'Supplier marketplace — TruOffers',
@@ -69,7 +69,7 @@ export default async function SuppliersPage({
           >
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <h2 className="font-display text-lg font-extrabold">{s.name}</h2>
-              <VerifiedBadge status={s.verificationStatus} className="text-[12px]" />
+              <SupplierBadge status={s.verificationStatus} className="text-[12px]" />
               {s.featured && (
                 <span className="text-[11px] font-extrabold uppercase bg-primary text-cream px-2.5 py-0.5 rounded-full">
                   Featured

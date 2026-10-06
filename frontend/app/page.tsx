@@ -9,7 +9,15 @@ import CategoryExplorer from '@/components/CategoryExplorer';
 import BusinessCard from '@/components/BusinessCard';
 import { OffersIcon, PricingIcon, ShieldIcon, StoreIcon } from '@/components/icons';
 
-type BusinessPage = { items: Business[]; total: number };
+// What the admin sets in Content → Homepage, resolved by the API: live figures, featured takeaways,
+// "Our top picks" and "Ending soon" (paid placements first, labelled Promoted) and the banners.
+interface HomeContent {
+  stats: { listed: number; verified: number; liveOffers: number };
+  featured: Business[];
+  topPicks: Offer[];
+  flashDeals: Offer[];
+  banners: { id: string; text: string; link?: string; tone?: 'sun' | 'leaf' | 'tomato' }[];
+}
 
 // The three colour blocks under the hero, in the order the reference lays them out
 const BANNERS: { tone: BannerTone; kicker: string }[] = [
@@ -18,36 +26,53 @@ const BANNERS: { tone: BannerTone; kicker: string }[] = [
   { tone: 'leaf', kicker: 'Super delicious' },
 ];
 
+const STRIP_TONES = {
+  sun: 'bg-sun text-[#43310A]',
+  leaf: 'bg-leaf text-brand-deeper',
+  tomato: 'bg-tomato text-white',
+};
+
 export default async function HomePage() {
-  const [categories, offers, featured, all, verified] = await Promise.all([
-    serverApi<Category[]>('/categories'),
-    serverApi<Offer[]>('/offers?limit=12'),
-    serverApi<BusinessPage>('/businesses?featured=true&limit=3'),
-    serverApi<BusinessPage>('/businesses?limit=1'),
-    serverApi<BusinessPage>('/businesses?limit=1&verified=true'),
-  ]);
+  const [categories, home] = await Promise.all([serverApi<Category[]>('/categories'), serverApi<HomeContent>('/content/home')]);
 
   const cuisines = categories || [];
-  const liveOffers = offers || [];
-  const featuredBusinesses = featured?.items || [];
-
-  // Limited-run offers head up the flash-deal block; the rest are the top picks
-  const flashDeals = liveOffers.filter((o) => o.endsAt || o.maxRedemptions > 0).slice(0, 5);
-  const flashIds = new Set(flashDeals.map((o) => o._id));
-  const topPicks = liveOffers.filter((o) => !flashIds.has(o._id)).slice(0, 8);
+  const featuredBusinesses = (home?.featured ?? []).slice(0, 3);
+  const topPicks = (home?.topPicks ?? []).slice(0, 8);
+  const flashDeals = (home?.flashDeals ?? []).slice(0, 5);
+  const banners = home?.banners ?? [];
+  const listed = home?.stats.listed ?? 0;
 
   const bannerCategories = cuisines.filter((c) => c.businessCount > 0).slice(0, 3);
   const topRated = featuredBusinesses.find((b) => b.reviews?.rating > 0);
 
   const stats: [typeof StoreIcon, string, string, string][] = [
-    [StoreIcon, 'bg-tint-blue text-primary', String(all?.total ?? 0), 'takeaways listed'],
-    [ShieldIcon, 'bg-tint-mint text-verified', String(verified?.total ?? 0), 'verified businesses'],
-    [PricingIcon, 'bg-tint-peach text-star', '£0', 'cost to customers'],
-    [OffersIcon, 'bg-sun-soft text-brand', '0%', 'commission taken'],
+    [StoreIcon, 'bg-tint-blue text-primary', listed.toLocaleString('en-GB'), 'takeaways listed'],
+    [ShieldIcon, 'bg-tint-mint text-verified', (home?.stats.verified ?? 0).toLocaleString('en-GB'), 'verified businesses'],
+    [OffersIcon, 'bg-sun-soft text-brand', (home?.stats.liveOffers ?? 0).toLocaleString('en-GB'), 'live offers'],
+    [PricingIcon, 'bg-tint-peach text-star', '0%', 'commission taken'],
   ];
 
   return (
     <div>
+      {banners.length > 0 && (
+        <div className="flex flex-col">
+          {banners.map((b) => {
+            const body = <span className="font-extrabold text-[14px]">{b.text}</span>;
+            return (
+              <div key={b.id} className={`${STRIP_TONES[b.tone ?? 'sun']} text-center px-5 py-2.5`}>
+                {b.link ? (
+                  <Link href={b.link} className="hover:underline underline-offset-4">
+                    {body} →
+                  </Link>
+                ) : (
+                  body
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* ---------------- Hero ---------------- */}
       <section className="bg-brand-deep hero-pattern text-white rounded-b-[2rem] md:rounded-b-[3rem]">
         <div className="mx-auto max-w-7xl px-5 md:px-10 pt-10 md:pt-14 pb-20 md:pb-28 grid md:grid-cols-[1.05fr_0.95fr] gap-8 items-center">
@@ -115,7 +140,7 @@ export default async function HomePage() {
                   ))}
                 </span>
                 <span className="text-[12px] font-extrabold leading-tight">
-                  {all?.total ?? 0} takeaways
+                  {listed.toLocaleString('en-GB')} takeaways
                   <span className="block text-muted font-bold">listed and live</span>
                 </span>
               </div>
@@ -194,7 +219,7 @@ export default async function HomePage() {
             </div>
           ) : (
             <div className="bg-surface rounded-3xl p-10 text-center text-muted font-semibold">
-              No live offers yet — start the API and run the seed script.
+              No live offers yet. Check back soon.
             </div>
           )}
           <div className="flex justify-center mt-9">
