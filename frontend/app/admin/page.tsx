@@ -1,247 +1,162 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
-import { api } from '@/lib/api';
-import { DateChip, PageHeader, StatStrip, Tabs } from '@/components/ui';
-import { ClickIcon, DashboardIcon, EyeIcon, OffersIcon, PricingIcon, SearchIcon, ShieldIcon, StoreIcon, UsersIcon } from '@/components/icons';
+import { Alert, Card, DateChip, SectionTitle, Spinner, StatStrip } from '@/components/ui';
+import {
+  AlertIcon,
+  BadgeCheckIcon,
+  CardIcon,
+  ChartIcon,
+  ClickIcon,
+  FlagIcon,
+  MegaphoneIcon,
+  OffersIcon,
+  PricingIcon,
+  SearchIcon,
+  StoreIcon,
+  UsersIcon,
+} from '@/components/icons';
+import TrendChart from '@/components/TrendChart';
+import { useApi } from '@/lib/hooks';
+import { age, date, money } from '@/lib/format';
+import { AdminPage } from './_components/admin-ui';
 
-interface Dashboard {
-  supply: { listedBusinesses: number; claimedBusinesses: number; activeOffers: number; claimedRate: number };
-  demand: { users: number; searches30d: number; orderClicks30d: number; topSearchAreas: { _id: string; count: number }[] };
-  revenue: { paidAccounts: number; mrr: number; arpa: number };
-  moderation: { pendingClaims: number; pendingOffers: number };
+interface Overview {
+  supply: { listed: number; claimed: number; verified: number; liveOffers: number; claimedRate: number };
+  queues: {
+    claimsWaiting: number;
+    oldestClaimAgeHours: number | null;
+    claimsInfoRequested: number;
+    pendingProfileChanges: number;
+    offersWaiting: number;
+    oldestOfferAgeHours: number | null;
+    reportsOpen: number;
+    suspensionReviews: number;
+  };
+  demand: {
+    users: number;
+    signups7d: number;
+    searches30d: number;
+    orderClicks30d: number;
+    topSearchAreas: { _id: string | null; count: number }[];
+    signupsByDay: { _id: string; count: number }[];
+  };
+  revenue: { paidAccounts: number; mrr: number; arpa: number; pastDue: number; failedPayments30d: number; promotionsLive: number };
 }
 
-interface AdminClaim {
-  _id: string;
-  method: string;
-  status: string;
-  riskLevel: string;
-  evidence?: string;
-  createdAt: string;
-  businessId?: { name: string; slug: string; town?: string; postcode?: string };
-  userId?: { name: string; email: string; phone?: string };
+/** One queue: how many are waiting and how long the oldest has waited. Click through to the queue. */
+function QueueCard({ href, label, count, oldest, hint }: { href: string; label: string; count: number; oldest?: number | null; hint?: string }) {
+  const late = oldest !== undefined && oldest !== null && oldest >= 48;
+  return (
+    <Link href={href} className="bg-surface hover:bg-tint-blue/60 transition-colors rounded-3xl p-5 flex flex-col gap-1">
+      <span className="text-[13px] text-muted font-semibold">{label}</span>
+      <span className="font-display text-3xl font-extrabold">{count}</span>
+      {oldest !== undefined && <span className={`text-[12.5px] font-bold ${late ? 'text-danger' : 'text-muted'}`}>Oldest: {age(oldest)}</span>}
+      {hint && <span className="text-[12.5px] font-bold text-muted">{hint}</span>}
+    </Link>
+  );
 }
 
-interface AdminOffer {
-  _id: string;
-  title: string;
-  displayLabel: string;
-  terms?: string;
-  status: string;
-  createdAt: string;
-  businessId?: { name: string; slug: string; town?: string; verificationStatus?: string };
-}
+export default function AdminOverviewPage() {
+  const { data, error } = useApi<Overview>('/admin/overview');
 
-const TABS = ['Overview', 'Claim queue', 'Offer queue'] as const;
-
-export default function AdminPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Overview');
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [claims, setClaims] = useState<AdminClaim[]>([]);
-  const [offers, setOffers] = useState<AdminOffer[]>([]);
-  const [denied, setDenied] = useState(false);
-
-  const load = useCallback(() => {
-    void api<Dashboard>('/admin/dashboard').then(setDashboard).catch((e) => {
-      if (e?.status === 403) setDenied(true);
-    });
-    void api<AdminClaim[]>('/admin/claims').then(setClaims).catch(() => {});
-    void api<AdminOffer[]>('/admin/offers').then(setOffers).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!loading && !user) router.push('/login?next=/admin');
-    if (user) load();
-  }, [loading, user, router, load]);
-
-  if (loading || !user) return <div className="py-24 text-center text-muted font-bold">Loading…</div>;
-  if (denied) {
+  if (error) {
     return (
-      <div className="py-24 text-center">
-        <h1 className="font-display text-2xl font-extrabold">Admin access required</h1>
-      </div>
+      <AdminPage title="Overview">
+        <Alert tone="danger">{error}</Alert>
+      </AdminPage>
     );
   }
-
-  async function reviewClaim(claim: AdminClaim, approve: boolean) {
-    await api(`/admin/claims/${claim._id}/review`, {
-      method: 'PATCH',
-      body: JSON.stringify({ approve }),
-    }).catch(() => {});
-    load();
-  }
-
-  async function moderateOffer(offer: AdminOffer, approve: boolean) {
-    const note = approve ? undefined : prompt('Rejection note (shown to the owner):') || undefined;
-    await api(`/admin/offers/${offer._id}/moderate`, {
-      method: 'PATCH',
-      body: JSON.stringify({ approve, note }),
-    }).catch(() => {});
-    load();
-  }
+  if (!data) return <Spinner />;
+  const { supply, queues, demand, revenue } = data;
 
   return (
-    <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
-      <PageHeader
-        title={`Hello, ${user.name.split(' ')[0]}`}
-        subtitle="Keep an eye on supply, demand and the review queues."
-        actions={
-          <>
-            <Link href="/admin/scraper" className="btn-soft text-sm font-bold px-5 py-3 rounded-2xl">
-              Website import robot →
-            </Link>
-            <DateChip />
-          </>
-        }
-      />
+    <AdminPage title="Overview" subtitle="The site at a glance. Every figure opens the list behind it." actions={<DateChip />}>
+      <section className="mb-10">
+        <SectionTitle>Queues</SectionTitle>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <QueueCard href="/admin/claims" label="Claims to review" count={queues.claimsWaiting} oldest={queues.oldestClaimAgeHours} />
+          <QueueCard href="/admin/claims?tab=changes" label="Profile changes" count={queues.pendingProfileChanges} hint="Locked fields" />
+          <QueueCard href="/admin/offers?status=pending" label="Offers to review" count={queues.offersWaiting} oldest={queues.oldestOfferAgeHours} />
+          <QueueCard href="/admin/reports" label="Open reports" count={queues.reportsOpen} />
+          <QueueCard href="/admin/businesses?flag=suspension_review" label="Suspension reviews" count={queues.suspensionReviews} />
+        </div>
+        {queues.claimsInfoRequested > 0 && (
+          <p className="text-sm text-muted font-semibold mt-3">
+            {queues.claimsInfoRequested} claim{queues.claimsInfoRequested === 1 ? ' is' : 's are'} waiting on the business for more information.
+          </p>
+        )}
+      </section>
 
-      <div className="mb-7">
-        <Tabs
-          tabs={TABS.map((t) => ({ value: t, label: t }))}
-          active={tab}
-          onChange={setTab}
-          counts={{ 'Claim queue': claims.length, 'Offer queue': offers.length }}
+      <section className="mb-10">
+        <SectionTitle>Supply</SectionTitle>
+        <StatStrip
+          stats={[
+            { icon: StoreIcon, tint: 'blue', label: 'Listed takeaways', value: supply.listed.toLocaleString('en-GB'), href: '/admin/businesses' },
+            { icon: BadgeCheckIcon, tint: 'mint', label: 'Claimed', value: supply.claimed.toLocaleString('en-GB'), note: { text: `${supply.claimedRate}%`, tone: 'neutral' }, href: '/admin/businesses?level=1' },
+            { icon: BadgeCheckIcon, tint: 'lilac', label: 'Verified', value: supply.verified.toLocaleString('en-GB'), href: '/admin/businesses?level=2' },
+            { icon: OffersIcon, tint: 'peach', label: 'Live offers', value: supply.liveOffers.toLocaleString('en-GB'), href: '/admin/offers?status=active' },
+          ]}
         />
-      </div>
+      </section>
 
-      {tab === 'Overview' && dashboard && (
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-x-8 gap-y-8">
-          <div className="min-w-0 flex flex-col gap-6">
-            <StatStrip
-              stats={[
-                { icon: StoreIcon, tint: 'blue', label: 'Listed businesses', value: dashboard.supply.listedBusinesses },
-                {
-                  icon: ShieldIcon,
-                  tint: 'mint',
-                  label: 'Claimed',
-                  value: dashboard.supply.claimedBusinesses,
-                  note: { text: `${dashboard.supply.claimedRate}%`, tone: 'neutral' },
-                },
-                { icon: OffersIcon, tint: 'peach', label: 'Active offers', value: dashboard.supply.activeOffers },
-                { icon: UsersIcon, tint: 'lilac', label: 'Users', value: dashboard.demand.users },
-              ]}
-            />
-            <StatStrip
-              stats={[
-                { icon: SearchIcon, tint: 'blue', label: 'Searches (30d)', value: dashboard.demand.searches30d },
-                { icon: ClickIcon, tint: 'mint', label: 'Order clicks (30d)', value: dashboard.demand.orderClicks30d },
-                { icon: PricingIcon, tint: 'peach', label: 'Paid accounts', value: dashboard.revenue.paidAccounts },
-                { icon: DashboardIcon, tint: 'lilac', label: 'MRR', value: `£${dashboard.revenue.mrr}` },
-              ]}
-            />
-          </div>
+      <section className="mb-10">
+        <SectionTitle>Revenue</SectionTitle>
+        <StatStrip
+          stats={[
+            { icon: PricingIcon, tint: 'mint', label: 'Monthly recurring revenue', value: money(revenue.mrr), href: '/admin/billing' },
+            { icon: CardIcon, tint: 'blue', label: 'Paying businesses', value: revenue.paidAccounts, note: { text: `ARPA ${money(revenue.arpa)}`, tone: 'neutral' }, href: '/admin/billing' },
+            {
+              icon: AlertIcon,
+              tint: 'peach',
+              label: 'Failed payments (30 days)',
+              value: revenue.failedPayments30d,
+              note: revenue.pastDue ? { text: `${revenue.pastDue} past due`, tone: 'bad' } : undefined,
+              href: '/admin/billing?tab=failed',
+            },
+            { icon: MegaphoneIcon, tint: 'lilac', label: 'Live promotions', value: revenue.promotionsLive, href: '/admin/promotions' },
+          ]}
+        />
+      </section>
 
-          <aside>
-            <div className="flex items-baseline justify-between mb-4">
-              <h2 className="font-display text-[15px] font-extrabold">Top search areas</h2>
-              <span className="text-[13px] text-muted">30 days</span>
-            </div>
-            <ul>
-              {dashboard.demand.topSearchAreas.map((a) => (
-                <li key={a._id || 'unknown'} className="flex items-center gap-3 py-3 border-b border-line last:border-0">
-                  <span className="w-9 h-9 rounded-full bg-tint-blue text-primary flex items-center justify-center flex-none">
-                    <EyeIcon className="w-4 h-4" />
-                  </span>
-                  <span className="flex-1 text-sm font-bold">{a._id || '—'}</span>
-                  <span className="text-sm text-muted">{a.count}</span>
+      <section className="mb-10">
+        <SectionTitle>Demand</SectionTitle>
+        <StatStrip
+          stats={[
+            { icon: UsersIcon, tint: 'blue', label: 'Customers', value: demand.users.toLocaleString('en-GB'), note: { text: `+${demand.signups7d} this week`, tone: demand.signups7d ? 'good' : 'neutral' }, href: '/admin/users' },
+            { icon: SearchIcon, tint: 'lilac', label: 'Postcode searches (30 days)', value: demand.searches30d.toLocaleString('en-GB') },
+            { icon: ClickIcon, tint: 'mint', label: 'Order clicks (30 days)', value: demand.orderClicks30d.toLocaleString('en-GB') },
+            { icon: FlagIcon, tint: 'peach', label: 'Open reports', value: queues.reportsOpen, href: '/admin/reports' },
+          ]}
+        />
+      </section>
+
+      <div className="grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-6">
+        <Card>
+          <SectionTitle aside={<ChartIcon className="w-5 h-5 text-muted" />}>Sign-ups, last 30 days</SectionTitle>
+          {demand.signupsByDay.length ? (
+            <TrendChart metric="Sign-ups" points={demand.signupsByDay.map((d) => ({ label: date(d._id, { day: 'numeric', month: 'short' }), value: d.count }))} />
+          ) : (
+            <p className="text-sm text-muted">No sign-ups in the last 30 days.</p>
+          )}
+        </Card>
+        <Card>
+          <SectionTitle>Top searched areas</SectionTitle>
+          {demand.topSearchAreas.length ? (
+            <ol className="flex flex-col gap-2 text-sm">
+              {demand.topSearchAreas.map((area, i) => (
+                <li key={area._id ?? i} className="flex items-center gap-3">
+                  <span className="w-6 text-muted font-bold">{i + 1}</span>
+                  <span className="flex-1 font-bold">{area._id || 'Unknown'}</span>
+                  <span className="font-extrabold">{area.count.toLocaleString('en-GB')}</span>
                 </li>
               ))}
-              {dashboard.demand.topSearchAreas.length === 0 && (
-                <li className="text-sm text-muted">No searches yet.</li>
-              )}
-            </ul>
-          </aside>
-        </div>
-      )}
-
-      {tab === 'Claim queue' && (
-        <div className="flex flex-col gap-3">
-          {claims.map((claim) => (
-            <div key={claim._id} className="bg-card border border-line rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="font-extrabold">
-                  {claim.businessId?.name}{' '}
-                  <span className="text-muted font-semibold text-sm">
-                    · {claim.businessId?.town} {claim.businessId?.postcode}
-                  </span>
-                </div>
-                <div className="text-[13px] font-semibold text-muted mt-1">
-                  Claimed by {claim.userId?.name} ({claim.userId?.email}) · method:{' '}
-                  <span className="font-bold">{claim.method}</span> · risk:{' '}
-                  <span className="font-bold">{claim.riskLevel}</span>
-                </div>
-                {claim.evidence && (
-                  <div className="text-[13px] font-semibold text-ink-soft mt-1">Evidence: {claim.evidence}</div>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => reviewClaim(claim, true)}
-                  className="bg-verified text-white text-sm font-bold px-5 py-2.5 rounded-full cursor-pointer hover:opacity-90"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => reviewClaim(claim, false)}
-                  className="border border-danger text-danger text-sm font-bold px-5 py-2.5 rounded-full cursor-pointer hover:bg-danger hover:text-white transition-colors"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
-          {claims.length === 0 && (
-            <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
-              Claim queue is empty. 🎉
-            </div>
+            </ol>
+          ) : (
+            <p className="text-sm text-muted">No searches yet.</p>
           )}
-        </div>
-      )}
-
-      {tab === 'Offer queue' && (
-        <div className="flex flex-col gap-3">
-          {offers.map((offer) => (
-            <div key={offer._id} className="bg-card border border-line rounded-2xl p-6 flex flex-col md:flex-row md:items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="font-display text-lg font-extrabold text-primary">{offer.displayLabel}</span>
-                  <span className="font-extrabold">{offer.title}</span>
-                </div>
-                <div className="text-[13px] font-semibold text-muted mt-1">
-                  {offer.businessId?.name} · {offer.businessId?.town} ·{' '}
-                  {offer.businessId?.verificationStatus}
-                  {offer.terms ? ` · Terms: ${offer.terms}` : ''}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => moderateOffer(offer, true)}
-                  className="bg-verified text-white text-sm font-bold px-5 py-2.5 rounded-full cursor-pointer hover:opacity-90"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => moderateOffer(offer, false)}
-                  className="border border-danger text-danger text-sm font-bold px-5 py-2.5 rounded-full cursor-pointer hover:bg-danger hover:text-white transition-colors"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
-          {offers.length === 0 && (
-            <div className="bg-card border border-line rounded-2xl p-10 text-center text-muted font-semibold">
-              No offers awaiting moderation.
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+        </Card>
+      </div>
+    </AdminPage>
   );
 }

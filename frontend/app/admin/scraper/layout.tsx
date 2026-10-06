@@ -1,13 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { usePathname } from 'next/navigation';
 import { DateChip, PageHeader } from '@/components/ui';
+import { RequireCapability } from '../_components/admin-ui';
 import { OverviewProvider, useOverview } from './_components/overview';
-
-const ADMIN_ROLES = ['super_admin', 'support_admin', 'sales_admin'];
 
 const NAV = [
   { href: '/admin/scraper', label: 'Overview', exact: true },
@@ -35,7 +32,7 @@ function ScraperNav() {
   };
 
   return (
-    <nav className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 lg:bg-surface lg:rounded-3xl lg:p-3 lg:sticky lg:top-8 lg:self-start">
+    <nav className="flex xl:flex-col gap-1.5 overflow-x-auto xl:overflow-visible pb-2 xl:pb-0 xl:bg-surface xl:rounded-3xl xl:p-3 xl:sticky xl:top-8 xl:self-start">
       {NAV.map((item) => {
         const active = 'exact' in item ? pathname === item.href : pathname.startsWith(item.href);
         const count = 'badge' in item ? badges[item.badge] : 0;
@@ -75,41 +72,19 @@ function HaltBanner() {
 }
 
 export default function ScraperAdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    if (!loading && !user) router.push(`/login?next=${encodeURIComponent(pathname)}`);
-  }, [loading, user, router, pathname]);
-
-  if (loading || !user) return <div className="py-24 text-center text-muted font-bold">Loading…</div>;
-  if (!ADMIN_ROLES.includes(user.role)) {
-    return (
-      <div className="py-24 text-center">
-        <h1 className="font-display text-2xl font-extrabold">Admin access required</h1>
-      </div>
-    );
-  }
-
+  // Sign-in and staff checks happen in the admin layout; the robot is one module of the admin sidebar.
   return (
-    <OverviewProvider>
-      <div className="mx-auto max-w-7xl px-5 md:px-10 py-8">
-        <PageHeader
-          title="Website import robot"
-          subtitle={
-            <Link href="/admin" className="hover:text-primary">
-              ← Admin panel
-            </Link>
-          }
-          actions={<DateChip />}
-        />
-        <HaltBanner />
-        <div className="grid lg:grid-cols-[220px_minmax(0,1fr)] gap-x-8 gap-y-6">
-          <ScraperNav />
-          <div className="min-w-0">{children}</div>
+    <RequireCapability capability="scraper">
+      <OverviewProvider>
+        <div className="px-5 md:px-10 py-8 w-full max-w-[1400px]">
+          <PageHeader title="Import robot" subtitle="Finds offers on takeaway websites and sends them for review." actions={<DateChip />} />
+          <HaltBanner />
+          <div className="grid xl:grid-cols-[220px_minmax(0,1fr)] gap-x-8 gap-y-6">
+            <ScraperNav />
+            <div className="min-w-0">{children}</div>
+          </div>
         </div>
-      </div>
-    </OverviewProvider>
+      </OverviewProvider>
+    </RequireCapability>
   );
 }
