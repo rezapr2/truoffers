@@ -33,6 +33,9 @@ fi
 if [[ "${1:-}" != "--no-git-pull" ]]; then
   echo "==> Pulling latest code"
   git pull --ff-only
+  # Carry on with the deploy.sh that was just pulled, not the copy bash already has open: otherwise a
+  # change to this script would only take effect on the deploy after it.
+  exec "$(pwd)/$(basename "$0")" --no-git-pull
 fi
 
 echo "==> Pulling images${IMAGE_TAG:+ (tag: ${IMAGE_TAG})}"
@@ -100,6 +103,17 @@ while true; do
   fi
   sleep 3
 done
+
+# Data migrations. Each is idempotent and records the one-off steps it has done, so running it on every
+# deploy is safe; the MVP code expects the MVP data model (verification levels, roles, plans, settings).
+echo "==> Running data migrations"
+if ! docker compose exec -T api test -f dist/scripts/migrate-mvp.js; then
+  echo "    this build has no MVP migration (older image); skipped"
+elif ! docker compose exec -T api node dist/scripts/migrate-mvp.js; then
+  echo "ERROR: the MVP migration failed. The site is up but may show wrong verification levels or plans." >&2
+  echo "       Re-run it after fixing the cause: docker compose exec api npm run migrate:mvp:prod" >&2
+  exit 1
+fi
 
 # The site doesn't depend on the scraper worker, so an unhealthy worker is reported, not fatal.
 worker_status="$(health_of worker)"
