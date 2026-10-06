@@ -36,6 +36,7 @@ cd backend
 npm install
 npm run seed              # wipes + seeds demo data (idempotent, dev only)
 npm run migrate:scraper   # website import robot indexes + adapters (idempotent)
+npm run migrate:mvp       # only for a database from before the MVP spec (idempotent; the seed doesn't need it)
 npm run start:dev         # API at http://localhost:4000/api
 npm run start:worker      # in a second terminal: the website import robot's worker
 # Optional, a third terminal: the render worker, for JavaScript-only sites and ordering-platform menus.
@@ -52,10 +53,70 @@ npm run dev           # http://localhost:3000
 
 | Role           | Email                     | What to try                                            |
 | -------------- | ------------------------- | ------------------------------------------------------ |
-| Super admin    | admin@truoffers.co.uk     | `/admin` — executive dashboard, claim & offer queues   |
-| Business owner | owner@bellanapoli.co.uk   | `/dashboard` — analytics, offer manager, billing (Professional plan) |
-| Customer       | customer@example.com      | Follow takeaways, save offers                          |
-| Supplier       | sales@packright.co.uk     | `/dashboard` — lead inbox                              |
+| Super admin    | admin@truoffers.co.uk     | `/admin`: every module, including plans, billing, settings and the admin team |
+| Moderator      | moderator@truoffers.co.uk | `/admin`: verification queue, offer moderation, reports (no money or settings) |
+| Business owner | owner@bellanapoli.co.uk   | `/dashboard`: offers, promote, insights, team, billing (verified, Professional plan) |
+| Business staff | staff@bellanapoli.co.uk   | `/dashboard`: offers only; billing and team are owner-only |
+| Claimant       | li@goldendragon.example   | `/dashboard/verification`: a claim waiting for review (approve it as the moderator) |
+| Customer       | customer@example.com      | Follow takeaways, save offers, report an offer         |
+| Supplier       | sales@packright.co.uk     | `/dashboard`: lead inbox                               |
+
+Staff accounts sign in with two-factor authentication. Locally, either add the seed's dev secret
+`JBSWY3DPEHPK3PXPTRUOFFERSDEVONLY` to an authenticator app, or set `ADMIN_2FA_DISABLED=true` in
+`backend/.env` (ignored in production). In development the claim phone check shows its code on
+screen instead of sending an SMS, and emails go to the log in `/admin/notifications`.
+
+## MVP spec (October 2026)
+
+The "TruOffers MVP: Product Proposal & Developer Spec" is implemented on top of the blueprint below.
+Where the two disagree, the MVP spec wins.
+
+- **One design system**: the green and yellow look across the public site, the business dashboard
+  and the admin panel.
+- **Roles and permissions**: guest, customer, business staff, business owner, moderator, admin and
+  super admin, checked on every API route (`backend/src/common/permissions.ts`). Business rights are
+  per business: staff manage offers, owners also manage billing, the team and the profile.
+- **Business teams**: a business has owners and staff, invited by email. People who run several
+  businesses switch between them in the dashboard.
+- **Audit log**: every admin, moderator and owner action, with before and after values, in
+  `/admin/audit` (filters and CSV). Entries can't be edited.
+- **Claim and verification**: claim an existing listing or add a new one (with a duplicate check),
+  pass a phone check by SMS or voice (Twilio Verify; 3 attempts, 10 minutes) to reach level 1
+  (drafts only), then add one more piece of evidence: a document (private storage), a domain email
+  or website meta tag, a food hygiene (FHRS) match, or a shop-front photo with a code. A moderator
+  reviews it side by side with a checklist and can approve, ask for more information (the claim
+  closes after 14 days) or reject with a reason. A second claim on an owned listing freezes it as a
+  dispute. Edits to the name, address, phone or order link of a verified listing wait for a
+  moderator, and verification is renewed every 12 months.
+- **Verification levels 0 to 3** and the public badge ("✓ TruOffers verified" or "Not verified",
+  plus "Claim this business"). "Foodbell partner" is a separate tag, and imported offers look the
+  same as owner offers in public.
+- **Offer lifecycle**: draft, pending, live or scheduled, paused, expired, rejected, hidden by
+  reports, removed. Offers publish without review only for verified businesses on a plan with
+  auto-approve, and only when no moderation rule is hit (banned words, discount over 70%, a link
+  that isn't the business's own domain or a known ordering provider).
+- **Business dashboard**: overview, offers with a four-step editor and live preview, promote,
+  profile, verification, billing and invoices, insights (per offer, per day, CSV), team, branches,
+  reports and notifications.
+- **Admin panel**: overview with queues and drill-down figures, verification queue, offer
+  moderation with the rules editor, reports, businesses (create, edit, merge, change owner, set
+  level, suspend, view as business), users (edit, reset link, ban, GDPR delete, login history),
+  plans, promotions, subscriptions and payments (refunds), coupons, categories and cities, content
+  (homepage blocks, banners, FAQs, help pages), email templates, admin team, audit log, settings,
+  and the import robot. Lists have search, filters, bulk actions where they make sense, CSV export
+  and a detail drawer.
+- **Reports**: customers report an offer (guests pass reCAPTCHA). Reports from three different
+  people within 7 days hide it until a moderator decides; an upheld report is a strike, and three
+  strikes in 90 days flag the business for a suspension review. Businesses can reply and appeal once.
+- **Plans**: Free, Standard and Professional are on sale; Starter and Premium are hidden, so
+  existing subscribers keep them. Prices, VAT, trials, limits and features are edited in
+  `/admin/plans`. Stripe webhooks are the source of truth for subscriptions.
+- **Promotions**: Top of search (per postcode area), Category feature (per category and city),
+  Flash deal and Homepage spot, with slots, optional approval and a "Promoted" label. They replace
+  the old ad wallet.
+- **Keys in Settings**: Stripe, Twilio, Resend (email) and reCAPTCHA keys can be entered in
+  `/admin/settings`. They are stored encrypted and never shown again; environment variables are the
+  fallback.
 
 ## What's implemented (blueprint → code)
 
@@ -318,12 +379,11 @@ Honest gaps against the blueprint, so nobody plans around something that isn't t
 - **Two verification methods (§8)** — `email_domain` and `google_profile_match` exist as enum
   values but perform no automated check: picking them just files a claim for manual admin review.
   Working today: phone OTP, document upload, manual review, Foodbell auto-verify.
-- **Admin tooling (§14.1)** — duplicate-listing detection/merge, complaint handling, blog/category
-  CMS, and the email/SMS/push campaign manager are not built. Claim + offer moderation queues,
-  plans, users and the dashboards *are*.
-- **`support_tickets` (§11)** — this collection doesn't exist; support runs over email for now.
-  An audit log exists for the website import robot's admin actions (`adminauditlogs`), but not
-  yet for the rest of the admin area.
+- **Admin tooling (§14.1)**: the email/SMS/push campaign manager and a blog CMS are not built.
+  Listing merge, reports, categories, homepage content, help pages and email templates are.
+- **`support_tickets` (§11)**: this collection doesn't exist; support runs over email for now.
+- **File storage**: uploads (photos, menus, private verification documents) go to a Docker volume on
+  the VPS, not to object storage. Back it up with the database (see Backups).
 - **Foodbell deep integration (§27)** — only the hooks exist (`isFoodbellClient`, the verified
   badge, tracked order links). Menu import and dashboard publishing need a real Foodbell API.
 
@@ -373,8 +433,11 @@ gitignored.
 | `.env.build` | build machine (Mac/CI) | `build-and-push.sh` | `SITE_URL`, `PLATFORM`, `REGISTRY`, public client IDs — **no secrets** |
 | `.env` (repo root) | **VPS only** | `docker compose` / `deploy.sh` | `SITE_DOMAIN`, `SITE_URL`, `JWT_SECRET`, Stripe/API keys |
 
-Every optional key (Stripe, OAuth, Google Places, Anthropic) degrades gracefully when blank — the
-feature switches to mock/template mode rather than crashing.
+Every optional key (Stripe, Twilio, Resend, reCAPTCHA, OAuth, Google Places, Anthropic) degrades
+gracefully when blank: the feature switches to mock or template mode rather than crashing. Stripe,
+Twilio, Resend and reCAPTCHA keys can also be entered in `/admin/settings` after deploying; a key
+saved there wins over the environment. They're encrypted with `SETTINGS_ENCRYPTION_KEY` (or
+`JWT_SECRET` when that is blank), so set it once and don't change it.
 
 The split is deliberate: production secrets exist **only** on the VPS, never on your laptop or in CI.
 
@@ -518,6 +581,11 @@ docker compose exec api npm run seed:prod                # ONCE, first setup onl
 docker compose exec api npm run migrate:scraper:prod     # website import robot indexes (idempotent)
 ```
 
+`deploy.sh` also runs the MVP data migration (`migrate:mvp:prod`) on every deploy. It is idempotent:
+it converts a pre-MVP database (verification levels, roles, plans, settings, wallet promotions) once
+and does nothing on later runs. In production the seeded staff accounts set up their authenticator
+app at their first sign-in; change the seeded passwords straight away.
+
 > **Upgrading an existing database?** Run only the migration, never the seed. If two listings share
 > a postcode and name, the migration lists them and stops. Merge or rename them, or rerun with
 > `-- --skip-duplicates` to leave the newer listing unindexed until you do.
@@ -557,7 +625,8 @@ IMAGE_TAG=sha-a1b2c3d ./deploy.sh
 
 ### Backups
 
-`backup.sh` writes a gzipped `mongodump` archive and keeps the newest 14. Schedule it nightly:
+`backup.sh` writes a gzipped `mongodump` archive and a tarball of the uploaded files (photos, menus,
+private verification documents), and keeps the newest 14 of each. Schedule it nightly:
 
 ```bash
 crontab -e
@@ -568,6 +637,7 @@ Restore with:
 
 ```bash
 docker compose exec -T mongo mongorestore --archive --gzip --drop < /var/backups/truoffers/<file>
+docker compose exec -T api tar xzf - -C /app/uploads < /var/backups/truoffers/<uploads file>
 ```
 
 ### Operating it

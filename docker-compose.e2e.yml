@@ -12,6 +12,10 @@ services:
     build: ./backend
     environment:
       FRONTEND_URL: http://web:3000
+      # Not production: the flows sign in as the seeded super admin without an authenticator app.
+      # (ADMIN_2FA_DISABLED is ignored when NODE_ENV=production.)
+      NODE_ENV: e2e
+      ADMIN_2FA_DISABLED: "true"
 
   worker:
     image: truoffers-api:e2e

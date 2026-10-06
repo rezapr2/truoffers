@@ -11,11 +11,15 @@ const owner = await login('owner@bellanapoli.co.uk');
 await call('GET', '/admin/scraper/candidates', { token: owner, expect: 403 });
 log('Signed in; merchants are kept out of the scraper admin');
 
-// The owner also runs Pizza Palace, whose website the admin is about to import.
-const listing = await call('POST', '/businesses', {
-  token: owner,
+// The owner also runs Pizza Palace, whose website the admin is about to import. Since the MVP spec, owners add
+// a business through the claim flow; here an admin creates the listing and makes the owner its (claimed,
+// not yet verified) owner.
+const listing = await call('POST', '/admin/businesses', {
+  token: admin,
   body: { name: 'Pizza Palace', postcode: 'LS1 4AP', phone: '0113 496 0123', town: 'Leeds', address: '14 Call Lane' },
 });
+await call('POST', `/admin/businesses/${listing._id}/owner`, { token: admin, body: { email: 'owner@bellanapoli.co.uk' } });
+await call('POST', `/admin/businesses/${listing._id}/level`, { token: admin, body: { level: 1, note: 'E2E: claimed, not verified' } });
 await call('PATCH', '/admin/scraper/settings', { token: admin, body: { defaultRateLimitMs: 500 } });
 log(`Created the Pizza Palace listing (${listing.slug}) and set a 500ms per-domain rate limit`);
 
@@ -54,10 +58,11 @@ const [first, second, third] = approvable;
 const unverified = await call('POST', `/admin/scraper/candidates/${first._id}/approve`, { token: admin, body: { verification: 'unverified' } });
 const verified = await call('POST', `/admin/scraper/candidates/${second._id}/approve`, { token: admin, body: { verification: 'admin_verified', note: 'Checked on the website' } });
 const publicOffer = await call('GET', `/offers/${unverified.offerIds[0]}`);
-assert.equal(publicOffer.imported?.domain, 'pizza-palace.test');
-assert.equal(publicOffer.evidence, undefined);
-assert.equal(publicOffer.sources, undefined);
-log('Approved one offer as unverified and one as admin-verified; the public offer shows its source');
+// MVP spec: imported offers look exactly like owner offers in public: no source, no evidence.
+for (const field of ['imported', 'sourceDomain', 'evidence', 'sources', 'origin', 'verification']) {
+  assert.equal(publicOffer[field], undefined, `public offer exposes ${field}`);
+}
+log('Approved one offer as unverified and one as admin-verified; the public offer does not reveal it was imported');
 
 await call('POST', `/admin/scraper/candidates/${third._id}/request-merchant-confirmation`, { token: admin });
 const pending = await call('GET', `/businesses/${listing._id}/imported-offers/pending`, { token: owner });
@@ -67,7 +72,7 @@ assert.equal(confirmed.verification, 'merchant_verified');
 assert.equal(confirmed.managedBy, 'merchant_managed');
 // A claimed (not yet verified) business goes through the existing moderation queue.
 assert.equal(confirmed.status, 'pending');
-await call('PATCH', `/admin/offers/${confirmed._id}/moderate`, { token: admin, body: { approve: true } });
+await call('POST', `/admin/offers/${confirmed._id}/approve`, { token: admin });
 await call('GET', `/offers/${confirmed._id}`);
 log('The business confirmed an offer found on its website; moderation published it');
 
@@ -91,12 +96,14 @@ const resumed = await call('POST', '/admin/scraper/jobs/resume', { token: admin 
 assert.equal(resumed.halted, false);
 log('Emergency stop halted the queues and resume released them');
 
-const audit = await call('GET', '/admin/scraper/audit-log', { token: admin });
-const actions = new Set(audit.map((entry) => entry.action));
-for (const action of ['website.submitted', 'settings.updated', 'candidate.approved', 'candidate.merchant_confirmation_requested', 'offer.merchant_confirmed', 'removal.requested', 'offer.removed', 'queue.emergency_stop', 'queue.resumed']) {
-  assert.ok(actions.has(action), `audit log is missing ${action}`);
+// One query per action: the log is shared with the rest of the admin panel, so a page of the newest entries
+// no longer holds every scraper action.
+const expected = ['website.submitted', 'settings.updated', 'candidate.approved', 'candidate.merchant_confirmation_requested', 'offer.merchant_confirmed', 'removal.requested', 'offer.removed', 'queue.emergency_stop', 'queue.resumed', 'offer.approved', 'business.owner_changed'];
+for (const action of expected) {
+  const entries = await call('GET', `/admin/scraper/audit-log?action=${action}`, { token: admin });
+  assert.ok(entries.length > 0, `audit log is missing ${action}`);
 }
-log(`Audit log has all ${actions.size} expected kinds of entry`);
+log(`Audit log has all ${expected.length} expected kinds of entry`);
 
 for (const [path, text] of [['/bot', 'TruOffersBot'], ['/removal-request', 'removal']]) {
   const res = await fetch(`${WEB}${path}`);

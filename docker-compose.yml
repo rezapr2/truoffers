@@ -56,12 +56,28 @@ services:
       JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env - generate one with 'openssl rand -hex 32'}"
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       FRONTEND_URL: ${SITE_URL:?set SITE_URL in .env}
+      # Links in emails point here
+      SITE_URL: ${SITE_URL:?set SITE_URL in .env}
+      # Keys below can also be entered in /admin/settings (stored encrypted); a key saved there wins.
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_VERIFY_SERVICE_SID: ${TWILIO_VERIFY_SERVICE_SID:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      RECAPTCHA_SITE_KEY: ${RECAPTCHA_SITE_KEY:-}
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY:-}
+      # Encrypts the keys saved in /admin/settings. Falls back to JWT_SECRET; changing it makes saved keys unreadable.
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
+      # Photos, menus, verification documents and report photos (private files are never served publicly)
+      UPLOAD_DIR: /app/uploads
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
       GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - api-uploads:/app/uploads
     depends_on:
       mongo:
         condition: service_healthy
@@ -173,5 +189,6 @@ services:
 volumes:
   mongo-data:
   redis-data:
+  api-uploads:
   caddy-data:
   caddy-config:
