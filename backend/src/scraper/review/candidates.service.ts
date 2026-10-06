@@ -97,7 +97,7 @@ export class CandidatesService {
     const site = await this.sites
       .findById(candidate.scrapedWebsiteRef)
       .select('domain seedUrl authorisationStatus adapterId adapterVersion businesses providerRef')
-      .populate('businesses.businessRef', 'name slug postcode phone town verificationStatus ownerId')
+      .populate('businesses.businessRef', 'name slug postcode phone town verificationLevel ownerId')
       .populate('businesses.suggestions.businessRef', 'name slug postcode phone town')
       .lean();
     const branches = (site?.businesses ?? []).filter((b) => candidate.branchPaths.includes(b.branchPath));

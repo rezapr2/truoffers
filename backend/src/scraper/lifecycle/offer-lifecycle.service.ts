@@ -2,7 +2,8 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ActorContext } from '../../common/actor-context';
-import { LIVE_OFFER_STATUSES, OfferStatus, VerificationStatus } from '../../common/enums';
+import { isVerifiedLevel, LIVE_OFFER_STATUSES, OfferStatus } from '../../common/enums';
+import { isMember } from '../../common/business-access';
 import { recountActiveOffers } from '../../common/offer-counts';
 import {
   ActorKind,
@@ -29,13 +30,6 @@ import type { ExtractedOffer } from '../extraction/adapter.types';
 import { validateExtractedOffer } from '../extraction/validate-offer';
 import { RECHECK, RETENTION } from '../scraper.constants';
 import { PublishableOffer, publishedFieldsOf } from './offer-mapping';
-
-const AUTO_LIVE_VERIFICATION = [
-  VerificationStatus.VERIFIED,
-  VerificationStatus.FOODBELL_VERIFIED,
-  VerificationStatus.TRUSTED_PARTNER,
-  VerificationStatus.FRANCHISE_VERIFIED,
-];
 
 function redactedSources(sources: { url: string; pageTitle?: string; checkedAt: Date }[]) {
   return sources.map((s) => ({ url: s.url, pageTitle: s.pageTitle, checkedAt: s.checkedAt, excerpt: '' }));
@@ -234,10 +228,11 @@ export class OfferLifecycleService {
     const branch = resolved.find((r) => String(r.businessId) === businessId);
     if (!branch) throw new ForbiddenException('This offer does not belong to your business');
     const business = await this.businesses.findById(businessId).lean();
-    if (!business || String(business.ownerId) !== actor.userId) throw new ForbiddenException('You do not manage this business');
+    if (!business || !isMember(business, actor.userId)) throw new ForbiddenException('You do not manage this business');
     this.assertPublishable(candidate);
 
-    const live = AUTO_LIVE_VERIFICATION.includes(business.verificationStatus);
+    // A business confirming an offer from its own website: live once it is verified, otherwise a moderator checks it.
+    const live = isVerifiedLevel(business.verificationLevel);
     const offer = await this.offers.create({
       ...this.offerFields(candidate, business, site.domain),
       businessId: business._id,
@@ -276,7 +271,7 @@ export class OfferLifecycleService {
     }
     const { resolved } = await this.resolveBranches(candidate);
     const business = await this.businesses.findById(businessId).lean();
-    if (!resolved.some((r) => String(r.businessId) === businessId) || String(business?.ownerId) !== actor.userId) {
+    if (!resolved.some((r) => String(r.businessId) === businessId) || !isMember(business, actor.userId)) {
       throw new ForbiddenException('This offer does not belong to your business');
     }
     candidate.set({
@@ -298,7 +293,7 @@ export class OfferLifecycleService {
     const offer = Types.ObjectId.isValid(offerId) ? await this.offers.findById(offerId) : null;
     if (!offer) throw new NotFoundException('Offer not found');
     const business = await this.businesses.findById(offer.businessId).lean();
-    if (!business || String(business.ownerId) !== actor.userId) throw new ForbiddenException('You do not manage this business');
+    if (!business || !isMember(business, actor.userId)) throw new ForbiddenException('You do not manage this business');
     if (offer.origin !== OfferOrigin.SCRAPER) throw new BadRequestException('Only imported offers need confirming');
     offer.set({ verification: OfferVerification.MERCHANT_VERIFIED, managedBy: OfferManagedBy.MERCHANT, sourceChanged: false });
     await offer.save();
@@ -377,7 +372,7 @@ export class OfferLifecycleService {
     const offer = Types.ObjectId.isValid(offerId) ? await this.offers.findById(offerId) : null;
     if (!offer) throw new NotFoundException('Offer not found');
     const business = await this.businesses.findById(offer.businessId).lean();
-    if (!business || String(business.ownerId) !== actor.userId) throw new ForbiddenException('You do not manage this business');
+    if (!business || !isMember(business, actor.userId)) throw new ForbiddenException('You do not manage this business');
     offer.set({ sourceChanged: false });
     await offer.save();
     return offer;

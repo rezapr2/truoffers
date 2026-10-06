@@ -1,320 +1,141 @@
+import { Body, Controller, Get, Headers, Module, Param, Patch, Post, Query, RawBodyRequest, Req, Res } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { Type } from 'class-transformer';
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  ForbiddenException,
-  Get,
-  Headers,
-  Injectable,
-  Logger,
-  Module,
-  NotFoundException,
-  Post,
-  RawBodyRequest,
-  Req,
-} from '@nestjs/common';
-import { InjectModel, MongooseModule } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { IsEnum, IsIn, IsMongoId, IsOptional } from 'class-validator';
-import type { Request } from 'express';
-import Stripe from 'stripe';
-import { Plan, PlanDocument, PlanSchema } from '../schemas/plan.schema';
-import {
-  Subscription,
-  SubscriptionDocument,
-  SubscriptionSchema,
-} from '../schemas/subscription.schema';
-import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';
-import { Wallet, WalletDocument, WalletSchema } from '../schemas/wallet.schema';
-import {
-  WalletTransaction,
-  WalletTransactionDocument,
-  WalletTransactionSchema,
-} from '../schemas/wallet-transaction.schema';
-import { CurrentUser, Public } from '../common/decorators';
-import { PlanKey, Role, SubscriptionStatus } from '../common/enums';
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
+import type { Request, Response } from 'express';
+import { AuthUser, CurrentUser, Public } from '../common/decorators';
+import { csvResponse, toCsv } from '../common/csv';
+import { Capability, RequireCapability } from '../common/permissions';
+import { Business, BusinessSchema } from '../schemas/business.schema';
+import { Coupon, CouponSchema, Payment, PaymentSchema, StripeEvent, StripeEventSchema } from '../schemas/payment.schema';
+import { Plan, PlanSchema } from '../schemas/plan.schema';
+import { Subscription, SubscriptionSchema } from '../schemas/subscription.schema';
+import { User, UserSchema } from '../schemas/user.schema';
+import { BillingAdminService } from './billing-admin.service';
+import { BillingJobs } from './billing.jobs';
+import { BillingService, Interval } from './billing.service';
+import { StripeService } from './stripe.service';
+
+// ---------------------------------------------------------------------------------------------------------
+// DTOs
+// ---------------------------------------------------------------------------------------------------------
 
 export class CheckoutDto {
-  @IsEnum(PlanKey)
-  planKey: PlanKey;
-
-  @IsIn(['monthly', 'annual'])
-  interval: 'monthly' | 'annual';
-
-  @IsOptional()
-  @IsMongoId()
-  businessId?: string;
-
-  @IsOptional()
-  @IsMongoId()
-  supplierId?: string;
+  @IsString() @MaxLength(40) planKey: string;
+  @IsIn(['monthly', 'annual']) interval: Interval;
+  @IsOptional() @IsString() @MaxLength(30) couponCode?: string;
 }
 
-// Billing is Stripe-ready: when STRIPE_SECRET_KEY is set, checkout creates a
-// Stripe Checkout Session and the webhook activates the plan. Without a key
-// (dev/MVP demo) it activates the subscription directly (mock mode).
-@Injectable()
-export class BillingService {
-  private readonly logger = new Logger(BillingService.name);
-  private readonly stripe: Stripe | null;
-
-  constructor(
-    @InjectModel(Plan.name) private planModel: Model<PlanDocument>,
-    @InjectModel(Subscription.name) private subModel: Model<SubscriptionDocument>,
-    @InjectModel(Business.name) private businessModel: Model<BusinessDocument>,
-    @InjectModel(Wallet.name) private walletModel: Model<WalletDocument>,
-    @InjectModel(WalletTransaction.name)
-    private walletTxModel: Model<WalletTransactionDocument>,
-  ) {
-    const key = process.env.STRIPE_SECRET_KEY;
-    this.stripe = key ? new Stripe(key) : null;
-  }
-
-  get stripeEnabled() {
-    return this.stripe !== null;
-  }
-
-  listPlans(audience?: string) {
-    const filter: any = {};
-    if (audience) filter.audience = audience;
-    return this.planModel.find(filter).sort({ sortOrder: 1 });
-  }
-
-  async checkout(dto: CheckoutDto, user: { userId: string; role: Role }) {
-    const plan = await this.planModel.findOne({ key: dto.planKey });
-    if (!plan) throw new NotFoundException('Plan not found');
-    if (plan.monthlyPrice === 0) throw new BadRequestException('Free plan needs no checkout');
-
-    if (dto.businessId) {
-      const business = await this.businessModel.findById(dto.businessId);
-      if (!business) throw new NotFoundException('Business not found');
-      const isAdmin = [Role.SUPER_ADMIN, Role.SALES_ADMIN].includes(user.role);
-      if (!isAdmin && String(business.ownerId) !== user.userId) {
-        throw new ForbiddenException('You do not manage this business');
-      }
-    }
-
-    const price = dto.interval === 'annual' ? plan.annualPrice : plan.monthlyPrice;
-
-    if (this.stripe) {
-      // Production path: Stripe Checkout Session; the webhook activates the plan.
-      const frontend = process.env.FRONTEND_URL?.split(',')[0] || 'http://localhost:3000';
-      const session = await this.stripe.checkout.sessions.create({
-        mode: 'subscription',
-        line_items: [
-          {
-            quantity: 1,
-            price_data: {
-              currency: 'gbp',
-              unit_amount: Math.round(price * 100),
-              recurring: { interval: dto.interval === 'annual' ? 'year' : 'month' },
-              product_data: { name: `TruOffers ${plan.name} (${dto.interval})` },
-            },
-          },
-        ],
-        metadata: {
-          type: 'subscription',
-          planKey: dto.planKey,
-          interval: dto.interval,
-          userId: user.userId,
-          businessId: dto.businessId || '',
-          supplierId: dto.supplierId || '',
-        },
-        success_url: `${frontend}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${frontend}/dashboard?checkout=cancelled`,
-      });
-      return { mode: 'stripe', url: session.url };
-    }
-
-    // Mock mode: activate directly
-    const sub = await this.activateSubscription({
-      userId: user.userId,
-      businessId: dto.businessId,
-      supplierId: dto.supplierId,
-      planKey: dto.planKey,
-      interval: dto.interval,
-      price,
-    });
-    return { mode: 'mock', subscription: sub };
-  }
-
-  /** Cancel any existing active sub for the entity, then activate the new one. */
-  async activateSubscription(params: {
-    userId: string;
-    businessId?: string;
-    supplierId?: string;
-    planKey: PlanKey;
-    interval: string;
-    price: number;
-    stripeSubscriptionId?: string;
-    stripeCustomerId?: string;
-  }) {
-    const entityFilter: any = params.businessId
-      ? { businessId: new Types.ObjectId(params.businessId) }
-      : params.supplierId
-        ? { supplierId: new Types.ObjectId(params.supplierId) }
-        : { userId: new Types.ObjectId(params.userId) };
-    await this.subModel.updateMany(
-      { ...entityFilter, status: SubscriptionStatus.ACTIVE },
-      { status: SubscriptionStatus.CANCELLED, cancelledAt: new Date() },
-    );
-
-    const periodDays = params.interval === 'annual' ? 365 : 30;
-    return this.subModel.create({
-      userId: new Types.ObjectId(params.userId),
-      businessId: params.businessId ? new Types.ObjectId(params.businessId) : undefined,
-      supplierId: params.supplierId ? new Types.ObjectId(params.supplierId) : undefined,
-      planKey: params.planKey,
-      interval: params.interval,
-      price: params.price,
-      status: SubscriptionStatus.ACTIVE,
-      stripeSubscriptionId: params.stripeSubscriptionId,
-      stripeCustomerId: params.stripeCustomerId,
-      currentPeriodEnd: new Date(Date.now() + periodDays * 24 * 3600 * 1000),
-    });
-  }
-
-  /** Stripe Checkout Session for an ad-wallet top-up (one-off payment). */
-  async createTopupSession(businessId: string, amount: number, userId: string) {
-    if (!this.stripe) throw new BadRequestException('Stripe not configured');
-    const frontend = process.env.FRONTEND_URL?.split(',')[0] || 'http://localhost:3000';
-    const session = await this.stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: 'gbp',
-            unit_amount: Math.round(amount * 100),
-            product_data: { name: 'TruOffers ad wallet top-up' },
-          },
-        },
-      ],
-      metadata: { type: 'wallet_topup', businessId, userId, amount: String(amount) },
-      success_url: `${frontend}/dashboard?topup=success`,
-      cancel_url: `${frontend}/dashboard?topup=cancelled`,
-    });
-    return { mode: 'stripe', url: session.url };
-  }
-
-  async handleWebhook(rawBody: Buffer | undefined, signature: string | undefined) {
-    if (!this.stripe) throw new BadRequestException('Stripe not configured');
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!secret) throw new BadRequestException('STRIPE_WEBHOOK_SECRET not configured');
-    if (!rawBody || !signature) throw new BadRequestException('Missing webhook payload/signature');
-
-    let event: Stripe.Event;
-    try {
-      event = this.stripe.webhooks.constructEvent(rawBody, signature, secret);
-    } catch (err) {
-      this.logger.warn(`Webhook signature verification failed: ${(err as Error).message}`);
-      throw new BadRequestException('Invalid webhook signature');
-    }
-
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object;
-        const meta = session.metadata || {};
-        if (meta.type === 'subscription') {
-          await this.activateSubscription({
-            userId: meta.userId,
-            businessId: meta.businessId || undefined,
-            supplierId: meta.supplierId || undefined,
-            planKey: meta.planKey as PlanKey,
-            interval: meta.interval,
-            price: (session.amount_total || 0) / 100,
-            stripeSubscriptionId:
-              typeof session.subscription === 'string'
-                ? session.subscription
-                : session.subscription?.id,
-            stripeCustomerId:
-              typeof session.customer === 'string' ? session.customer : session.customer?.id,
-          });
-          this.logger.log(`Activated ${meta.planKey} for business ${meta.businessId || '-'}`);
-        } else if (meta.type === 'wallet_topup') {
-          await this.creditWallet(
-            meta.businessId,
-            (session.amount_total || 0) / 100,
-            `Stripe top-up (${session.id})`,
-          );
-          this.logger.log(`Credited wallet for business ${meta.businessId}`);
-        }
-        break;
-      }
-      case 'customer.subscription.deleted': {
-        const sub = event.data.object;
-        await this.subModel.updateMany(
-          { stripeSubscriptionId: sub.id, status: { $ne: SubscriptionStatus.CANCELLED } },
-          { status: SubscriptionStatus.CANCELLED, cancelledAt: new Date() },
-        );
-        break;
-      }
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice;
-        const subId = (invoice as any).subscription;
-        if (typeof subId === 'string') {
-          await this.subModel.updateMany(
-            { stripeSubscriptionId: subId, status: SubscriptionStatus.ACTIVE },
-            { status: SubscriptionStatus.PAST_DUE },
-          );
-        }
-        break;
-      }
-      case 'invoice.paid': {
-        const invoice = event.data.object as Stripe.Invoice;
-        const subId = (invoice as any).subscription;
-        if (typeof subId === 'string') {
-          await this.subModel.updateMany(
-            { stripeSubscriptionId: subId, status: SubscriptionStatus.PAST_DUE },
-            { status: SubscriptionStatus.ACTIVE },
-          );
-        }
-        break;
-      }
-      default:
-        break;
-    }
-    return { received: true };
-  }
-
-  async creditWallet(businessId: string, amount: number, note: string) {
-    const wallet = await this.walletModel.findOneAndUpdate(
-      { businessId: new Types.ObjectId(businessId) },
-      { $inc: { balance: amount, totalToppedUp: amount } },
-      { upsert: true, new: true },
-    );
-    await this.walletTxModel.create({
-      businessId: new Types.ObjectId(businessId),
-      type: 'topup',
-      amount,
-      note,
-    });
-    return wallet;
-  }
-
-  async mySubscriptions(userId: string) {
-    return this.subModel
-      .find({ userId: new Types.ObjectId(userId) })
-      .sort({ createdAt: -1 })
-      .populate('businessId', 'name slug');
-  }
-
-  async cancel(subscriptionId: string, userId: string) {
-    const sub = await this.subModel.findById(subscriptionId);
-    if (!sub || String(sub.userId) !== userId) throw new NotFoundException('Subscription not found');
-    if (this.stripe && sub.stripeSubscriptionId) {
-      try {
-        await this.stripe.subscriptions.cancel(sub.stripeSubscriptionId);
-      } catch (err) {
-        this.logger.warn(`Stripe cancel failed: ${(err as Error).message}`);
-      }
-    }
-    sub.status = SubscriptionStatus.CANCELLED;
-    sub.cancelledAt = new Date();
-    await sub.save();
-    return sub;
-  }
+class ChangePlanDto {
+  @IsString() @MaxLength(40) planKey: string;
+  @IsIn(['monthly', 'annual']) interval: Interval;
 }
+
+class CouponPreviewDto {
+  @IsString() @MaxLength(30) code: string;
+  @IsString() @MaxLength(40) planKey: string;
+  @IsIn(['monthly', 'annual']) interval: Interval;
+}
+
+class PlanLimitsDto {
+  @IsOptional() @IsInt() @Min(-1) @Max(10000) maxLiveOffers?: number;
+  @IsOptional() @IsInt() @Min(-1) @Max(10000) maxPhotos?: number;
+  @IsOptional() @IsInt() @Min(-1) @Max(1000) maxBranches?: number;
+}
+
+class PlanFlagsDto {
+  @IsOptional() @IsBoolean() scheduledOffers?: boolean;
+  @IsOptional() @IsBoolean() couponCodes?: boolean;
+  @IsOptional() @IsIn(['views', 'full', 'full_report']) analytics?: 'views' | 'full' | 'full_report';
+  @IsOptional() @IsBoolean() aiOfferWriter?: boolean;
+  @IsOptional() @IsBoolean() qrCodes?: boolean;
+  @IsOptional() @IsInt() @Min(0) @Max(2) rankingBoost?: number;
+  @IsOptional() @IsBoolean() prioritySupport?: boolean;
+  @IsOptional() @IsInt() @Min(0) @Max(4) freeTopOfSearchWeeksPerMonth?: number;
+}
+
+class PlanDto {
+  @IsOptional() @IsString() @MaxLength(40) key?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) name?: string;
+  @IsOptional() @IsIn(['takeaway', 'supplier']) audience?: string;
+  @IsOptional() @IsNumber() @Min(0) @Max(10000) monthlyPrice?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100000) annualPrice?: number;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0) @Max(50) vatRatePercent?: number | null;
+  @IsOptional() @IsInt() @Min(0) @Max(365) trialDays?: number;
+  @IsOptional() @IsString() @MaxLength(120) bestFor?: string;
+  @IsOptional() @IsObject() @Type(() => PlanLimitsDto) limits?: PlanLimitsDto;
+  @IsOptional() @IsObject() @Type(() => PlanFlagsDto) flags?: PlanFlagsDto;
+  @IsOptional() @IsArray() @ArrayMaxSize(30) @IsString({ each: true }) @MaxLength(120, { each: true }) features?: string[];
+  @IsOptional() @IsBoolean() autoApprove?: boolean;
+  @IsOptional() @IsBoolean() isPublic?: boolean;
+  @IsOptional() @IsInt() sortOrder?: number;
+  @IsOptional() @IsString() @MaxLength(30) badgeText?: string;
+  @IsOptional() @IsBoolean() migrateExisting?: boolean;
+}
+
+class ArchiveDto {
+  @IsBoolean() archived: boolean;
+}
+
+class RefundDto {
+  @IsOptional() @IsNumber() @Min(0.01) amount?: number;
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
+}
+
+class SetPlanDto {
+  @IsString() @MaxLength(40) planKey: string;
+  @IsIn(['monthly', 'annual']) interval: Interval;
+  @IsBoolean() comp: boolean;
+  @IsOptional() @IsInt() @Min(1) @Max(36) months?: number;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+
+class CancelSubDto {
+  @IsBoolean() immediately: boolean;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+
+class CouponDto {
+  @IsOptional() @IsString() @MaxLength(30) code?: string;
+  @IsOptional() @IsString() @MaxLength(200) description?: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() percentOff?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(0.01) amountOff?: number | null;
+  @IsOptional() @IsIn(['once', 'repeating', 'forever']) duration?: string;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(1) @Max(36) durationInMonths?: number | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) appliesToPlans?: string[];
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(1) maxUses?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null && v !== '') @IsDateString() expiresAt?: string | null;
+  @IsOptional() @IsBoolean() active?: boolean;
+}
+
+class ListQuery {
+  @IsOptional() @IsString() status?: string;
+  @IsOptional() @IsString() plan?: string;
+  @IsOptional() @IsString() kind?: string;
+  @IsOptional() @IsString() q?: string;
+  @IsOptional() @IsString() page?: string;
+  @IsOptional() @IsIn(['json', 'csv']) format?: string;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Controllers
+// ---------------------------------------------------------------------------------------------------------
 
 @Controller('billing')
 export class BillingController {
@@ -322,22 +143,19 @@ export class BillingController {
 
   @Public()
   @Get('plans')
-  plans() {
-    return this.service.listPlans();
+  plans(@Query('audience') audience?: string) {
+    return this.service.publicPlans(audience);
   }
 
-  @Post('checkout')
-  checkout(@Body() dto: CheckoutDto, @CurrentUser() user: { userId: string; role: Role }) {
-    return this.service.checkout(dto, user);
+  @Post('coupons/preview')
+  preview(@Body() dto: CouponPreviewDto) {
+    return this.service.previewCoupon(dto.code, dto.planKey, dto.interval);
   }
 
   // Stripe calls this endpoint; authenticity is proven by the signature header.
   @Public()
   @Post('webhook')
-  webhook(
-    @Req() req: RawBodyRequest<Request>,
-    @Headers('stripe-signature') signature?: string,
-  ) {
+  webhook(@Req() req: RawBodyRequest<Request>, @Headers('stripe-signature') signature?: string) {
     return this.service.handleWebhook(req.rawBody, signature);
   }
 
@@ -345,25 +163,180 @@ export class BillingController {
   mine(@CurrentUser('userId') userId: string) {
     return this.service.mySubscriptions(userId);
   }
+}
+
+@Controller('businesses/:businessId/billing')
+export class BusinessBillingController {
+  constructor(private readonly service: BillingService) {}
+
+  @Get()
+  overview(@Param('businessId') businessId: string, @CurrentUser() user: AuthUser) {
+    return this.service.overview(businessId, user);
+  }
+
+  @Post('checkout')
+  checkout(@Param('businessId') businessId: string, @Body() dto: CheckoutDto, @CurrentUser() user: AuthUser) {
+    return this.service.checkout(businessId, dto, user);
+  }
+
+  @Post('change')
+  change(@Param('businessId') businessId: string, @Body() dto: ChangePlanDto, @CurrentUser() user: AuthUser) {
+    return this.service.changePlan(businessId, dto, user);
+  }
 
   @Post('cancel')
-  cancel(@Body('subscriptionId') subscriptionId: string, @CurrentUser('userId') userId: string) {
-    return this.service.cancel(subscriptionId, userId);
+  cancel(@Param('businessId') businessId: string, @CurrentUser() user: AuthUser) {
+    return this.service.cancel(businessId, user);
+  }
+
+  @Post('resume')
+  resume(@Param('businessId') businessId: string, @CurrentUser() user: AuthUser) {
+    return this.service.resume(businessId, user);
+  }
+
+  @Post('portal')
+  portal(@Param('businessId') businessId: string, @CurrentUser() user: AuthUser) {
+    return this.service.portal(businessId, user);
+  }
+
+  @Get('invoices/:paymentId')
+  invoice(@Param('businessId') businessId: string, @Param('paymentId') paymentId: string, @CurrentUser() user: AuthUser) {
+    return this.service.invoice(businessId, paymentId, user);
   }
 }
 
+@Controller('admin/plans')
+@RequireCapability(Capability.PLANS_MANAGE)
+export class AdminPlansController {
+  constructor(private readonly admin: BillingAdminService) {}
+
+  @Get()
+  list() {
+    return this.admin.listPlans();
+  }
+
+  @Post()
+  create(@Body() dto: PlanDto) {
+    return this.admin.createPlan(dto);
+  }
+
+  @Patch(':key')
+  update(@Param('key') key: string, @Body() dto: PlanDto) {
+    return this.admin.updatePlan(key, dto);
+  }
+
+  @Post(':key/archive')
+  archive(@Param('key') key: string, @Body() dto: ArchiveDto) {
+    return this.admin.setArchived(key, dto.archived);
+  }
+}
+
+@Controller('admin/billing')
+export class AdminBillingController {
+  constructor(private readonly admin: BillingAdminService) {}
+
+  @RequireCapability(Capability.BILLING_VIEW)
+  @Get('subscriptions')
+  async subscriptions(@Query() query: ListQuery, @Res({ passthrough: true }) res: Response) {
+    if (query.format === 'csv') {
+      const { items } = await this.admin.listSubscriptions({ ...query, page: '1' }, 10000);
+      return csvResponse(res, 'subscriptions.csv', toCsv(items as unknown as Record<string, unknown>[], [
+        { key: 'business', label: 'Business', value: (s) => (s.businessId as { name?: string } | undefined)?.name },
+        { key: 'planKey', label: 'Plan' },
+        { key: 'interval', label: 'Interval' },
+        { key: 'price', label: 'Price' },
+        { key: 'status', label: 'Status' },
+        { key: 'comp', label: 'Comp' },
+        { key: 'currentPeriodEnd', label: 'Renews' },
+        { key: 'cancelAtPeriodEnd', label: 'Cancelling' },
+        { key: 'stripeSubscriptionId', label: 'Stripe ID' },
+        { key: 'createdAt', label: 'Started' },
+      ]));
+    }
+    return this.admin.listSubscriptions(query);
+  }
+
+  @RequireCapability(Capability.BILLING_VIEW)
+  @Get('payments')
+  async payments(@Query() query: ListQuery, @Res({ passthrough: true }) res: Response) {
+    if (query.format === 'csv') {
+      const { items } = await this.admin.listPayments({ ...query, page: '1' }, 10000);
+      return csvResponse(res, 'payments.csv', toCsv(items as unknown as Record<string, unknown>[], [
+        { key: 'number', label: 'Invoice' },
+        { key: 'business', label: 'Business', value: (p) => (p.businessId as { name?: string } | undefined)?.name },
+        { key: 'kind', label: 'Kind' },
+        { key: 'description', label: 'Description' },
+        { key: 'amount', label: 'Net' },
+        { key: 'vat', label: 'VAT' },
+        { key: 'total', label: 'Total' },
+        { key: 'refundedAmount', label: 'Refunded' },
+        { key: 'status', label: 'Status' },
+        { key: 'createdAt', label: 'Date' },
+      ]));
+    }
+    return this.admin.listPayments(query);
+  }
+
+  @RequireCapability(Capability.BILLING_VIEW)
+  @Get('failed')
+  failed() {
+    return this.admin.failed();
+  }
+
+  @RequireCapability(Capability.BILLING_MANAGE)
+  @Post('payments/:id/refund')
+  refund(@Param('id') id: string, @Body() dto: RefundDto) {
+    return this.admin.refund(id, dto);
+  }
+
+  @RequireCapability(Capability.BILLING_MANAGE)
+  @Post('businesses/:businessId/plan')
+  setPlan(@Param('businessId') businessId: string, @Body() dto: SetPlanDto, @CurrentUser('userId') userId: string) {
+    return this.admin.setPlan(businessId, dto, userId);
+  }
+
+  @RequireCapability(Capability.BILLING_MANAGE)
+  @Post('subscriptions/:id/cancel')
+  cancel(@Param('id') id: string, @Body() dto: CancelSubDto) {
+    return this.admin.cancelSubscription(id, dto.immediately, dto.note);
+  }
+}
+
+@Controller('admin/coupons')
+@RequireCapability(Capability.COUPONS_MANAGE)
+export class AdminCouponsController {
+  constructor(private readonly admin: BillingAdminService) {}
+
+  @Get()
+  list() {
+    return this.admin.listCoupons();
+  }
+
+  @Post()
+  create(@Body() dto: CouponDto) {
+    return this.admin.createCoupon(dto);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: CouponDto) {
+    return this.admin.updateCoupon(id, dto);
+  }
+}
+
+export const BILLING_MODELS = MongooseModule.forFeature([
+  { name: Plan.name, schema: PlanSchema },
+  { name: Subscription.name, schema: SubscriptionSchema },
+  { name: Payment.name, schema: PaymentSchema },
+  { name: Coupon.name, schema: CouponSchema },
+  { name: StripeEvent.name, schema: StripeEventSchema },
+  { name: Business.name, schema: BusinessSchema },
+  { name: User.name, schema: UserSchema },
+]);
+
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: Plan.name, schema: PlanSchema },
-      { name: Subscription.name, schema: SubscriptionSchema },
-      { name: Business.name, schema: BusinessSchema },
-      { name: Wallet.name, schema: WalletSchema },
-      { name: WalletTransaction.name, schema: WalletTransactionSchema },
-    ]),
-  ],
-  controllers: [BillingController],
-  providers: [BillingService],
-  exports: [BillingService],
+  imports: [BILLING_MODELS],
+  controllers: [BillingController, BusinessBillingController, AdminPlansController, AdminBillingController, AdminCouponsController],
+  providers: [BillingService, BillingAdminService, BillingJobs, StripeService],
+  exports: [BillingService, BillingAdminService, StripeService],
 })
 export class BillingModule {}

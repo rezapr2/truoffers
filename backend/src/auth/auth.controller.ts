@@ -1,10 +1,19 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { AuthService } from './auth.service';
+import type { Request } from 'express';
+import { AuthService, RequestMeta } from './auth.service';
 import { OAuthService } from './oauth.service';
-import { LoginDto, RegisterDto } from './auth.dto';
-import { CurrentUser, Public } from '../common/decorators';
+import {
+  ForgotPasswordDto,
+  LoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+  TokenDto,
+  TwoFactorChallengeDto,
+  TwoFactorCodeDto,
+} from './auth.dto';
+import { AuthUser, CurrentUser, Public } from '../common/decorators';
 import { Role } from '../common/enums';
 
 export class GoogleLoginDto {
@@ -34,6 +43,8 @@ const CREDENTIAL_LIMIT = { default: { limit: 10, ttl: 60_000 } };
 // Read-only session endpoints run on every page load, so they keep the normal site-wide limit.
 const SESSION_LIMIT = { default: { limit: 100, ttl: 60_000 } };
 
+const meta = (req: Request): RequestMeta => ({ ip: req.ip, userAgent: req.headers['user-agent'] });
+
 @Throttle(CREDENTIAL_LIMIT)
 @Controller('auth')
 export class AuthController {
@@ -44,14 +55,14 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  register(@Body() dto: RegisterDto, @Req() req: Request) {
+    return this.authService.register(dto, meta(req));
   }
 
   @Public()
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  login(@Body() dto: LoginDto, @Req() req: Request) {
+    return this.authService.login(dto, meta(req));
   }
 
   @Public()
@@ -66,21 +77,66 @@ export class AuthController {
 
   @Public()
   @Post('google')
-  async google(@Body() dto: GoogleLoginDto) {
+  async google(@Body() dto: GoogleLoginDto, @Req() req: Request) {
     const profile = await this.oauthService.verifyGoogleToken(dto.idToken);
-    return this.authService.oauthLogin(profile, dto.role);
+    return this.authService.oauthLogin(profile, dto.role, meta(req));
   }
 
   @Public()
   @Post('apple')
-  async apple(@Body() dto: AppleLoginDto) {
+  async apple(@Body() dto: AppleLoginDto, @Req() req: Request) {
     const profile = await this.oauthService.verifyAppleToken(dto.identityToken, dto.name);
-    return this.authService.oauthLogin(profile, dto.role);
+    return this.authService.oauthLogin(profile, dto.role, meta(req));
+  }
+
+  // ---- Staff second factor ----
+
+  @Public()
+  @Post('2fa/setup')
+  twoFactorSetup(@Body() dto: TwoFactorChallengeDto) {
+    return this.authService.twoFactorSetup(dto.challengeToken);
+  }
+
+  @Public()
+  @Post('2fa/enable')
+  twoFactorEnable(@Body() dto: TwoFactorCodeDto, @Req() req: Request) {
+    return this.authService.twoFactorEnable(dto.challengeToken, dto.code, meta(req));
+  }
+
+  @Public()
+  @Post('2fa/verify')
+  twoFactorVerify(@Body() dto: TwoFactorCodeDto, @Req() req: Request) {
+    return this.authService.twoFactorVerify(dto.challengeToken, dto.code, meta(req));
+  }
+
+  // ---- Email verification and password reset ----
+
+  @Public()
+  @Post('email/verify')
+  verifyEmail(@Body() dto: TokenDto) {
+    return this.authService.verifyEmail(dto.token);
+  }
+
+  @Post('email/resend')
+  resend(@CurrentUser('userId') userId: string) {
+    return this.authService.resendVerification(userId);
+  }
+
+  @Public()
+  @Post('password/forgot')
+  forgot(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Public()
+  @Post('password/reset')
+  reset(@Body() dto: ResetPasswordDto, @Req() req: Request) {
+    return this.authService.resetPassword(dto.token, dto.password, meta(req));
   }
 
   @Throttle(SESSION_LIMIT)
   @Get('me')
-  me(@CurrentUser('userId') userId: string) {
-    return this.authService.me(userId);
+  me(@CurrentUser() user: AuthUser) {
+    return this.authService.me(user.userId, user.impersonatedBy);
   }
 }

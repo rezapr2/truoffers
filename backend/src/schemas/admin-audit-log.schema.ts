@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
-import { ActorKind, AuditAction } from '../common/scraper.enums';
+import { ActorKind } from '../common/scraper.enums';
 
 export type AdminAuditLogDocument = HydratedDocument<AdminAuditLog>;
 
@@ -20,8 +20,9 @@ export class AdminAuditLog {
   @Prop({ type: AuditActorSchema, required: true })
   actor: AuditActor;
 
-  @Prop({ type: String, enum: Object.values(AuditAction), required: true })
-  action: AuditAction;
+  // An AuditAction for the import robot, or a dotted name such as "claim.approved" for the rest of the platform.
+  @Prop({ type: String, required: true })
+  action: string;
 
   @Prop({ required: true })
   targetType: string;
@@ -43,6 +44,7 @@ export const AdminAuditLogSchema = SchemaFactory.createForClass(AdminAuditLog);
 AdminAuditLogSchema.index({ targetType: 1, targetId: 1, createdAt: -1 });
 AdminAuditLogSchema.index({ action: 1, createdAt: -1 });
 AdminAuditLogSchema.index({ createdAt: -1 });
+AdminAuditLogSchema.index({ 'actor.userId': 1, createdAt: -1 });
 
 const immutable = new Error('Audit log entries are append-only');
 

@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, Length, MaxLength, MinLength } from 'class-validator';
 import { Role } from '../common/enums';
 
 export class RegisterDto {
@@ -33,5 +33,41 @@ export class LoginDto {
   email: string;
 
   @IsString()
+  password: string;
+}
+
+export class TwoFactorChallengeDto {
+  @IsString()
+  challengeToken: string;
+}
+
+export class TwoFactorCodeDto {
+  @IsString()
+  challengeToken: string;
+
+  @IsString()
+  @Length(6, 6)
+  code: string;
+}
+
+export class TokenDto {
+  @IsString()
+  @MinLength(10)
+  token: string;
+}
+
+export class ForgotPasswordDto {
+  @IsEmail()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  @MinLength(10)
+  token: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(72)
   password: string;
 }

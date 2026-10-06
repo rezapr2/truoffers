@@ -62,7 +62,7 @@ export class OutreachService {
     const [businesses, total] = await Promise.all([
       this.businesses
         .find(query)
-        .select('name slug town postcode phone website verificationStatus importSource activeOfferCount')
+        .select('name slug town postcode phone website verificationLevel importSource activeOfferCount')
         .sort({ activeOfferCount: -1, name: 1 })
         .skip((page - 1) * limit)
         .limit(limit)

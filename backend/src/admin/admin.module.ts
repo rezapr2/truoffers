@@ -1,249 +1,359 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Injectable,
-  Module,
-  NotFoundException,
-  Param,
-  Patch,
-  Query,
-} from '@nestjs/common';
-import { InjectModel, MongooseModule } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';
-import { Claim, ClaimDocument, ClaimSchema } from '../schemas/claim.schema';
-import { Offer, OfferDocument, OfferSchema } from '../schemas/offer.schema';
-import { User, UserDocument, UserSchema } from '../schemas/user.schema';
-import {
-  Subscription,
-  SubscriptionDocument,
-  SubscriptionSchema,
-} from '../schemas/subscription.schema';
-import {
-  AnalyticsEvent,
-  AnalyticsEventDocument,
-  AnalyticsEventSchema,
-} from '../schemas/analytics-event.schema';
-import { CurrentUser, Roles } from '../common/decorators';
-import {
-  ClaimStatus,
-  OfferStatus,
-  PUBLIC_OFFER_STATUSES,
-  Role,
-  SubscriptionStatus,
-  VerificationStatus,
-} from '../common/enums';
+import { Body, Controller, Delete, Get, Module, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsEmail, IsEnum, IsIn, IsInt, IsMongoId, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import type { Response } from 'express';
+import { AuthModule } from '../auth/auth.module';
 import { BusinessesModule } from '../businesses/businesses.module';
-import { BusinessesService } from '../businesses/businesses.service';
+import { CreateBusinessDto, UpdateBusinessDto } from '../businesses/businesses.dto';
+import { ClaimsModule } from '../claims/claims.module';
+import { AuthUser, CurrentUser } from '../common/decorators';
+import { csvResponse, toCsv } from '../common/csv';
+import { Role } from '../common/enums';
+import { Capability, RequireCapability } from '../common/permissions';
+import { AnalyticsEvent, AnalyticsEventSchema } from '../schemas/analytics-event.schema';
+import { Business, BusinessSchema } from '../schemas/business.schema';
+import { Claim, ClaimSchema } from '../schemas/claim.schema';
+import { LoginEvent, LoginEventSchema } from '../schemas/login-event.schema';
+import { MenuItem, MenuItemSchema } from '../schemas/menu.schema';
+import { Offer, OfferSchema } from '../schemas/offer.schema';
+import { Payment, PaymentSchema } from '../schemas/payment.schema';
+import { Promotion, PromotionSchema } from '../schemas/promotion.schema';
+import { BusinessStrike, BusinessStrikeSchema, Report, ReportCase, ReportCaseSchema, ReportSchema } from '../schemas/report.schema';
+import { Subscription, SubscriptionSchema } from '../schemas/subscription.schema';
+import { User, UserSchema } from '../schemas/user.schema';
+import { AdminBusinessesService, BusinessQuery } from './admin-businesses.service';
+import { AdminOverviewService } from './admin-overview.service';
+import { AdminUsersService } from './admin-users.service';
 
-@Injectable()
-export class AdminService {
-  constructor(
-    @InjectModel(Business.name) private businessModel: Model<BusinessDocument>,
-    @InjectModel(Claim.name) private claimModel: Model<ClaimDocument>,
-    @InjectModel(Offer.name) private offerModel: Model<OfferDocument>,
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(Subscription.name) private subModel: Model<SubscriptionDocument>,
-    @InjectModel(AnalyticsEvent.name) private eventModel: Model<AnalyticsEventDocument>,
-    private businessesService: BusinessesService,
-  ) {}
+// ---------------------------------------------------------------------------------------------------------
+// DTOs
+// ---------------------------------------------------------------------------------------------------------
 
-  claimsQueue(status?: string) {
-    return this.claimModel
-      .find({ status: status || ClaimStatus.PENDING })
-      .sort({ createdAt: 1 })
-      .populate('businessId', 'name slug town postcode verificationStatus')
-      .populate('userId', 'name email phone');
+class ListQuery {
+  @IsOptional() @IsString() q?: string;
+  @IsOptional() @IsString() level?: string;
+  @IsOptional() @IsString() status?: string;
+  @IsOptional() @IsString() city?: string;
+  @IsOptional() @IsString() plan?: string;
+  @IsOptional() @IsString() source?: string;
+  @IsOptional() @IsString() flag?: string;
+  @IsOptional() @IsString() role?: string;
+  @IsOptional() @IsString() page?: string;
+  @IsOptional() @IsIn(['json', 'csv']) format?: string;
+}
+
+class AdminUpdateBusinessDto extends UpdateBusinessDto {}
+
+class LevelDto {
+  @Type(() => Number) @IsInt() @Min(0) @Max(3) level: number;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+
+class FlagsDto {
+  @IsOptional() @IsBoolean() isFoodbellClient?: boolean;
+  @IsOptional() @IsBoolean() featured?: boolean;
+}
+
+class ReasonDto {
+  @IsString() @MinLength(3) @MaxLength(1000) reason: string;
+}
+
+class ResolutionDto {
+  @IsString() @MinLength(2) @MaxLength(500) resolution: string;
+}
+
+class ChangeOwnerDto {
+  @IsEmail() email: string;
+  @IsOptional() @IsBoolean() keepPreviousOwners?: boolean;
+}
+
+class MergeDto {
+  @IsMongoId() intoId: string;
+}
+
+class AdminUpdateUserDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) name?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() @MaxLength(30) phone?: string;
+  @IsOptional() @IsEnum(Role) role?: Role;
+  @IsOptional() @IsBoolean() offerAlerts?: boolean;
+}
+
+class ResetLinkDto {
+  @IsOptional() @IsBoolean() send?: boolean;
+}
+
+class AddStaffDto {
+  @IsEmail() email: string;
+  @IsOptional() @IsString() @MaxLength(80) name?: string;
+  @IsIn([Role.MODERATOR, Role.ADMIN, Role.SUPER_ADMIN]) role: Role;
+}
+
+class StaffRoleDto {
+  @IsIn([Role.MODERATOR, Role.ADMIN, Role.SUPER_ADMIN]) role: Role;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Controllers
+// ---------------------------------------------------------------------------------------------------------
+
+@Controller('admin')
+export class AdminOverviewController {
+  constructor(private readonly overview: AdminOverviewService) {}
+
+  @RequireCapability(Capability.ADMIN_PANEL)
+  @Get('overview')
+  get() {
+    return this.overview.overview();
   }
 
-  async reviewClaim(claimId: string, approve: boolean, reviewerId: string, note?: string) {
-    const claim = await this.claimModel.findById(claimId);
-    if (!claim) throw new NotFoundException('Claim not found');
-    claim.status = approve ? ClaimStatus.APPROVED : ClaimStatus.REJECTED;
-    claim.reviewedBy = new Types.ObjectId(reviewerId);
-    claim.reviewNote = note;
-    await claim.save();
-    if (approve) {
-      await this.businessesService.approveClaimEffects(claim);
-    }
-    return claim;
-  }
-
-  offersQueue(status?: string) {
-    return this.offerModel
-      .find({ status: status || OfferStatus.PENDING })
-      .sort({ createdAt: 1 })
-      .populate('businessId', 'name slug town verificationStatus');
-  }
-
-  async moderateOffer(offerId: string, approve: boolean, note?: string) {
-    const offer = await this.offerModel.findById(offerId);
-    if (!offer) throw new NotFoundException('Offer not found');
-    offer.status = approve ? OfferStatus.ACTIVE : OfferStatus.REJECTED;
-    offer.moderationNote = note;
-    await offer.save();
-    if (approve) {
-      const count = await this.offerModel.countDocuments({
-        businessId: offer.businessId,
-        status: { $in: PUBLIC_OFFER_STATUSES },
-      });
-      await this.businessModel.findByIdAndUpdate(offer.businessId, { activeOfferCount: count });
-    }
-    return offer;
-  }
-
-  async setVerification(businessId: string, status: VerificationStatus) {
-    const business = await this.businessModel.findByIdAndUpdate(
-      businessId,
-      { verificationStatus: status },
-      { new: true },
-    );
-    if (!business) throw new NotFoundException('Business not found');
-    return business;
-  }
-
-  async setFeatured(businessId: string, featured: boolean) {
-    const business = await this.businessModel.findByIdAndUpdate(
-      businessId,
-      { featured },
-      { new: true },
-    );
-    if (!business) throw new NotFoundException('Business not found');
-    return business;
-  }
-
-  // Executive dashboard (blueprint 16.3): supply, demand, revenue
-  async executiveDashboard() {
-    const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000);
-    const [
-      listedBusinesses,
-      claimedBusinesses,
-      activeOffers,
-      pendingClaims,
-      pendingOffers,
-      users,
-      activeSubs,
-      searches30d,
-      orderClicks30d,
-    ] = await Promise.all([
-      this.businessModel.countDocuments({}),
-      this.businessModel.countDocuments({
-        verificationStatus: { $ne: VerificationStatus.UNCLAIMED },
-      }),
-      this.offerModel.countDocuments({ status: { $in: PUBLIC_OFFER_STATUSES } }),
-      this.claimModel.countDocuments({ status: ClaimStatus.PENDING }),
-      this.offerModel.countDocuments({ status: OfferStatus.PENDING }),
-      this.userModel.countDocuments({}),
-      this.subModel.find({ status: SubscriptionStatus.ACTIVE }),
-      this.eventModel.countDocuments({ eventName: 'postcode_search', createdAt: { $gte: since30 } }),
-      this.eventModel.countDocuments({ eventName: 'order_click', createdAt: { $gte: since30 } }),
-    ]);
-
-    const mrr = activeSubs.reduce(
-      (sum, s) => sum + (s.interval === 'annual' ? s.price / 12 : s.price),
-      0,
-    );
-
-    const topSearchAreas = await this.eventModel.aggregate([
-      { $match: { eventName: 'postcode_search', createdAt: { $gte: since30 } } },
-      { $group: { _id: '$postcodeArea', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 10 },
-    ]);
-
-    return {
-      supply: {
-        listedBusinesses,
-        claimedBusinesses,
-        activeOffers,
-        claimedRate: listedBusinesses ? Math.round((claimedBusinesses / listedBusinesses) * 100) : 0,
-      },
-      demand: { users, searches30d, orderClicks30d, topSearchAreas },
-      revenue: {
-        paidAccounts: activeSubs.length,
-        mrr: Math.round(mrr * 100) / 100,
-        arpa: activeSubs.length ? Math.round((mrr / activeSubs.length) * 100) / 100 : 0,
-      },
-      moderation: { pendingClaims, pendingOffers },
-    };
-  }
-
-  listBusinesses(q?: string) {
-    const filter: any = {};
-    if (q) filter.name = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    return this.businessModel.find(filter).sort({ createdAt: -1 }).limit(100);
+  // Older clients
+  @RequireCapability(Capability.ADMIN_PANEL)
+  @Get('dashboard')
+  dashboard() {
+    return this.overview.overview();
   }
 }
 
-@Roles(Role.SUPER_ADMIN, Role.SUPPORT_ADMIN, Role.SALES_ADMIN)
-@Controller('admin')
-export class AdminController {
-  constructor(private readonly service: AdminService) {}
+@Controller('admin/businesses')
+export class AdminBusinessesController {
+  constructor(private readonly service: AdminBusinessesService) {}
 
-  @Get('dashboard')
-  dashboard() {
-    return this.service.executiveDashboard();
+  @RequireCapability(Capability.ADMIN_PANEL)
+  @Get()
+  async list(@Query() query: ListQuery, @Res({ passthrough: true }) res: Response) {
+    if (query.format === 'csv') {
+      const { items } = await this.service.list({ ...(query as BusinessQuery), page: '1' }, 5000);
+      return csvResponse(
+        res,
+        'businesses.csv',
+        toCsv(items as unknown as Record<string, unknown>[], [
+          { key: 'name', label: 'Name' },
+          { key: 'slug', label: 'Slug' },
+          { key: 'town', label: 'Town' },
+          { key: 'postcode', label: 'Postcode' },
+          { key: 'phone', label: 'Phone' },
+          { key: 'verificationLevel', label: 'Level' },
+          { key: 'status', label: 'Status' },
+          { key: 'plan', label: 'Plan' },
+          { key: 'source', label: 'Source' },
+          { key: 'isFoodbellClient', label: 'Foodbell partner' },
+          { key: 'owner', label: 'Owner', value: (b) => (b.ownerId as { email?: string } | undefined)?.email },
+          { key: 'orderUrl', label: 'Order link' },
+          { key: 'orderLinkCheck', label: 'Order link check' },
+          { key: 'activeOfferCount', label: 'Live offers' },
+          { key: 'createdAt', label: 'Created' },
+        ]),
+      );
+    }
+    return this.service.list(query as BusinessQuery);
   }
 
-  @Get('claims')
-  claims(@Query('status') status?: string) {
-    return this.service.claimsQueue(status);
+  @RequireCapability(Capability.ADMIN_PANEL)
+  @Get(':id')
+  detail(@Param('id') id: string) {
+    return this.service.detail(id);
   }
 
-  @Patch('claims/:id/review')
-  reviewClaim(
-    @Param('id') id: string,
-    @Body('approve') approve: boolean,
-    @Body('note') note: string,
-    @CurrentUser('userId') reviewerId: string,
-  ) {
-    return this.service.reviewClaim(id, approve, reviewerId, note);
+  @RequireCapability(Capability.BUSINESS_MANAGE)
+  @Post()
+  create(@Body() dto: CreateBusinessDto) {
+    return this.service.create(dto);
   }
 
-  @Get('offers')
-  offers(@Query('status') status?: string) {
-    return this.service.offersQueue(status);
+  @RequireCapability(Capability.BUSINESS_EDIT)
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: AdminUpdateBusinessDto, @CurrentUser() user: AuthUser) {
+    return this.service.update(id, dto, user);
   }
 
-  @Patch('offers/:id/moderate')
-  moderateOffer(
-    @Param('id') id: string,
-    @Body('approve') approve: boolean,
-    @Body('note') note?: string,
-  ) {
-    return this.service.moderateOffer(id, approve, note);
+  @RequireCapability(Capability.BUSINESS_MANAGE)
+  @Post(':id/level')
+  level(@Param('id') id: string, @Body() dto: LevelDto) {
+    return this.service.setLevel(id, dto.level, dto.note);
   }
 
-  @Patch('businesses/:id/verification')
-  setVerification(@Param('id') id: string, @Body('status') status: VerificationStatus) {
-    return this.service.setVerification(id, status);
+  @RequireCapability(Capability.BUSINESS_MANAGE)
+  @Post(':id/flags')
+  flags(@Param('id') id: string, @Body() dto: FlagsDto) {
+    return this.service.setFlags(id, dto);
   }
 
-  @Patch('businesses/:id/featured')
-  setFeatured(@Param('id') id: string, @Body('featured') featured: boolean) {
-    return this.service.setFeatured(id, featured);
+  @RequireCapability(Capability.BUSINESS_SUSPEND)
+  @Post(':id/suspend')
+  suspend(@Param('id') id: string, @Body() dto: ReasonDto) {
+    return this.service.suspend(id, dto.reason);
   }
 
-  @Get('businesses')
-  businesses(@Query('q') q?: string) {
-    return this.service.listBusinesses(q);
+  @RequireCapability(Capability.BUSINESS_SUSPEND)
+  @Post(':id/unsuspend')
+  unsuspend(@Param('id') id: string) {
+    return this.service.unsuspend(id);
+  }
+
+  @RequireCapability(Capability.SUSPENSION_SUGGEST)
+  @Post(':id/suspension-review')
+  flagForReview(@Param('id') id: string, @Body() dto: ReasonDto, @CurrentUser('userId') userId: string) {
+    return this.service.flagForReview(id, dto.reason, userId);
+  }
+
+  @RequireCapability(Capability.BUSINESS_SUSPEND)
+  @Post(':id/suspension-review/resolve')
+  resolveReview(@Param('id') id: string, @Body() dto: ResolutionDto) {
+    return this.service.resolveReview(id, dto.resolution);
+  }
+
+  @RequireCapability(Capability.BUSINESS_MANAGE)
+  @Post(':id/owner')
+  changeOwner(@Param('id') id: string, @Body() dto: ChangeOwnerDto) {
+    return this.service.changeOwner(id, dto);
+  }
+
+  @RequireCapability(Capability.BUSINESS_MANAGE)
+  @Post(':id/merge')
+  merge(@Param('id') id: string, @Body() dto: MergeDto) {
+    return this.service.merge(id, dto.intoId);
+  }
+
+  @RequireCapability(Capability.BUSINESS_MANAGE)
+  @Post(':id/archive')
+  archive(@Param('id') id: string) {
+    return this.service.archive(id);
+  }
+
+  @RequireCapability(Capability.BUSINESS_IMPERSONATE)
+  @Post(':id/impersonate')
+  impersonate(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.impersonate(id, user);
+  }
+}
+
+@Controller('admin/users')
+export class AdminUsersController {
+  constructor(private readonly service: AdminUsersService) {}
+
+  @RequireCapability(Capability.USERS_VIEW)
+  @Get()
+  async list(@Query() query: ListQuery, @Res({ passthrough: true }) res: Response) {
+    if (query.format === 'csv') {
+      const { items } = await this.service.list({ ...query, page: '1' }, 10000);
+      return csvResponse(
+        res,
+        'users.csv',
+        toCsv(items as unknown as Record<string, unknown>[], [
+          { key: 'name', label: 'Name' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Phone' },
+          { key: 'role', label: 'Role' },
+          { key: 'status', label: 'Status' },
+          { key: 'emailVerifiedAt', label: 'Email verified' },
+          { key: 'businessCount', label: 'Businesses' },
+          { key: 'lastLoginAt', label: 'Last login' },
+          { key: 'createdAt', label: 'Joined' },
+        ]),
+      );
+    }
+    return this.service.list(query);
+  }
+
+  @RequireCapability(Capability.USERS_VIEW)
+  @Get(':id')
+  detail(@Param('id') id: string) {
+    return this.service.detail(id);
+  }
+
+  @RequireCapability(Capability.USERS_MANAGE)
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: AdminUpdateUserDto, @CurrentUser() user: AuthUser) {
+    return this.service.update(id, dto, user);
+  }
+
+  @RequireCapability(Capability.USERS_MANAGE)
+  @Post(':id/reset-password')
+  reset(@Param('id') id: string, @Body() dto: ResetLinkDto, @CurrentUser() user: AuthUser) {
+    return this.service.resetPasswordLink(id, user, dto.send !== false);
+  }
+
+  @RequireCapability(Capability.USERS_MANAGE)
+  @Post(':id/verify-email')
+  verifyEmail(@Param('id') id: string) {
+    return this.service.verifyEmail(id);
+  }
+
+  @RequireCapability(Capability.USERS_MANAGE)
+  @Post(':id/ban')
+  ban(@Param('id') id: string, @Body() dto: ReasonDto, @CurrentUser() user: AuthUser) {
+    return this.service.ban(id, dto.reason, user);
+  }
+
+  @RequireCapability(Capability.USERS_MANAGE)
+  @Post(':id/unban')
+  unban(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.unban(id, user);
+  }
+
+  @RequireCapability(Capability.USERS_MANAGE)
+  @Delete(':id')
+  erase(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.erase(id, user);
+  }
+}
+
+@Controller('admin/team')
+@RequireCapability(Capability.TEAM_MANAGE)
+export class AdminTeamController {
+  constructor(private readonly service: AdminUsersService) {}
+
+  @Get()
+  list() {
+    return this.service.team();
+  }
+
+  @Post()
+  add(@Body() dto: AddStaffDto) {
+    return this.service.addStaff(dto);
+  }
+
+  @Patch(':id')
+  setRole(@Param('id') id: string, @Body() dto: StaffRoleDto, @CurrentUser() user: AuthUser) {
+    return this.service.setStaffRole(id, dto.role, user);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.removeStaff(id, user);
+  }
+
+  @Post(':id/reset-2fa')
+  resetTwoFactor(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.resetTwoFactor(id, user);
   }
 }
 
 @Module({
   imports: [
+    AuthModule,
     BusinessesModule,
+    ClaimsModule,
     MongooseModule.forFeature([
       { name: Business.name, schema: BusinessSchema },
       { name: Claim.name, schema: ClaimSchema },
       { name: Offer.name, schema: OfferSchema },
       { name: User.name, schema: UserSchema },
       { name: Subscription.name, schema: SubscriptionSchema },
+      { name: Payment.name, schema: PaymentSchema },
+      { name: Promotion.name, schema: PromotionSchema },
+      { name: MenuItem.name, schema: MenuItemSchema },
+      { name: Report.name, schema: ReportSchema },
+      { name: ReportCase.name, schema: ReportCaseSchema },
+      { name: BusinessStrike.name, schema: BusinessStrikeSchema },
       { name: AnalyticsEvent.name, schema: AnalyticsEventSchema },
+      { name: LoginEvent.name, schema: LoginEventSchema },
     ]),
   ],
-  controllers: [AdminController],
-  providers: [AdminService],
+  controllers: [AdminOverviewController, AdminBusinessesController, AdminUsersController, AdminTeamController],
+  providers: [AdminOverviewService, AdminBusinessesService, AdminUsersService],
+  exports: [AdminBusinessesService],
 })
 export class AdminModule {}

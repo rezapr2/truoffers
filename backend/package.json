@@ -14,6 +14,8 @@
     "seed:prod": "node dist/seed/seed.js",
     "migrate:scraper": "ts-node -r tsconfig-paths/register src/scripts/migrate-scraper.ts",
     "migrate:scraper:prod": "node dist/scripts/migrate-scraper.js",
+    "migrate:mvp": "ts-node -r tsconfig-paths/register src/scripts/migrate-mvp.ts",
+    "migrate:mvp:prod": "node dist/scripts/migrate-mvp.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "jest --runInBand",

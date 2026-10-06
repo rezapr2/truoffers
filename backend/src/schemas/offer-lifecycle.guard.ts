@@ -20,6 +20,9 @@ const BACKGROUND_WRITABLE_ON_MERCHANT_OFFERS = new Set([
   'redemptionCount',
   'status', // only to expired — checked separately
   'expiredAt',
+  'expiryWarnedAt',
+  'hiddenByReportsAt',
+  'publishedAt',
   'dedupeKey',
   // Added to every update by Mongoose itself (timestamps plugin, version key).
   'updatedAt',
@@ -120,6 +123,35 @@ const RECHECK_PUBLIC_FROM: Partial<Record<OfferStatus, OfferStatus[]>> = {
 
 type UpdateFilter = Record<string, unknown> | undefined;
 
+/**
+ * The MVP's automatic transitions, each allowed to one system component and only through a query update whose
+ * filter pins the current status to one of `from` (a string, or `{ $in: [...] }`):
+ * - the scheduler publishes an approved offer at its start time;
+ * - reports hide a published offer once enough people report it, until an admin decides.
+ */
+export const SCHEDULER_COMPONENT = 'offer-scheduler';
+export const REPORTS_COMPONENT = 'offer-reports';
+const SYSTEM_TRANSITIONS: Record<string, { to: OfferStatus; from: OfferStatus[] }[]> = {
+  [SCHEDULER_COMPONENT]: [{ to: OfferStatus.ACTIVE, from: [OfferStatus.SCHEDULED] }],
+  [REPORTS_COMPONENT]: [
+    { to: OfferStatus.HIDDEN_BY_REPORTS, from: [OfferStatus.ACTIVE, OfferStatus.REVISION_PENDING, OfferStatus.SCHEDULED] },
+  ],
+};
+
+function pinnedStatuses(filter: UpdateFilter): OfferStatus[] | null {
+  const pinned = filter?.status;
+  if (typeof pinned === 'string') return [pinned as OfferStatus];
+  const list = pinned && typeof pinned === 'object' ? (pinned as { $in?: unknown }).$in : undefined;
+  return Array.isArray(list) && list.length > 0 && list.every((s) => typeof s === 'string') ? (list as OfferStatus[]) : null;
+}
+
+function isSystemTransition(actor: Actor, to: OfferStatus | undefined, filter: UpdateFilter): boolean {
+  if (actor.kind !== ActorKind.SYSTEM || !to) return false;
+  const rule = (SYSTEM_TRANSITIONS[actor.component] ?? []).find((r) => r.to === to);
+  const from = pinnedStatuses(filter);
+  return !!rule && !!from && from.every((status) => rule.from.includes(status));
+}
+
 function isRecheckTransition(actor: Actor, to: OfferStatus, filter: UpdateFilter): boolean {
   if (actor.kind !== ActorKind.SYSTEM || actor.component !== RECHECK_COMPONENT || !filter) return false;
   const from = filter.status;
@@ -144,11 +176,17 @@ function checkUpdate(fields: Map<string, unknown>, actor: Actor, filter?: Update
   if (fields.has('verification')) assertVerification(fields.get('verification'), actor);
   if (fields.has('managedBy')) assertCanChangeManagement(actor);
   const status = fields.get('status') as OfferStatus | undefined;
+  const systemTransition = isSystemTransition(actor, status, filter);
   // Query updates can't see the matched documents' origin, so any publish through one needs a human.
-  if (status && PUBLIC_OFFER_STATUSES.includes(status) && !isRecheckTransition(actor, status, filter)) assertCanPublish(actor);
+  if (status && PUBLIC_OFFER_STATUSES.includes(status) && !isRecheckTransition(actor, status, filter) && !systemTransition) {
+    assertCanPublish(actor);
+  }
   if (status === OfferStatus.POSSIBLY_REMOVED) assertCanMarkPossiblyRemoved(actor, filter);
 
   if (ActorContext.isHuman(actor)) return { restrictToScraperManaged: false };
+  if (systemTransition && [...fields.keys()].every((field) => field === 'status' || BACKGROUND_WRITABLE_ON_MERCHANT_OFFERS.has(field))) {
+    return { restrictToScraperManaged: false };
+  }
   const retention = actor.kind === ActorKind.SYSTEM && actor.component === RETENTION_COMPONENT;
   const touchesMerchantData = [...fields.keys()].some(
     (field) =>

@@ -1,7 +1,8 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ADMIN_ROLES, Role } from '../../common/enums';
+import { hasBusinessAccess } from '../../common/business-access';
+import { Role } from '../../common/enums';
 import { CandidateStatus, RESOLVED_BRANCH_STATUSES } from '../../common/scraper.enums';
 import { Business, BusinessDocument } from '../../schemas/business.schema';
 import {
@@ -63,9 +64,9 @@ export class MerchantImportsService {
   }
 
   private async assertCanManage(businessId: string, user: { userId: string; role: Role }) {
-    const business = Types.ObjectId.isValid(businessId) ? await this.businesses.findById(businessId).select('_id ownerId').lean() : null;
+    const business = Types.ObjectId.isValid(businessId) ? await this.businesses.findById(businessId).select('_id ownerId members').lean() : null;
     if (!business) throw new NotFoundException('Business not found');
-    if (!ADMIN_ROLES.includes(user.role) && String(business.ownerId) !== user.userId) {
+    if (!hasBusinessAccess(business, user, 'staff')) {
       throw new ForbiddenException('You do not manage this business');
     }
     return business;

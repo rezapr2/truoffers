@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
-import { DiscountType, OfferStatus, RedemptionType } from '../common/enums';
+import { DiscountType, OfferRejectReason, OfferStatus, RedemptionType } from '../common/enums';
 import {
   OfferManagedBy,
   OfferOrigin,
@@ -93,8 +93,43 @@ export class Offer {
   @Prop({ type: String, enum: Object.values(OfferStatus), default: OfferStatus.PENDING })
   status: OfferStatus;
 
+  // The moderator's reason when rejecting, shown to the business
   @Prop()
   moderationNote?: string;
+
+  @Prop({ type: String, enum: Object.values(OfferRejectReason) })
+  rejectReasonCode?: OfferRejectReason;
+
+  // Why an offer that could have auto-published went to the queue instead (banned word, discount, link)
+  @Prop({ type: [String], default: undefined })
+  moderationFlags?: string[];
+
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
+  approvedBy?: Types.ObjectId;
+
+  @Prop({ type: Date })
+  approvedAt?: Date;
+
+  // First went live
+  @Prop({ type: Date })
+  publishedAt?: Date;
+
+  // Saved while the business is not verified yet: submitted automatically once it is (spec "Rules for the developer")
+  @Prop({ default: false })
+  submitWhenVerified: boolean;
+
+  @Prop()
+  imageUrl?: string;
+
+  // Shown in "Featured" placements by an admin
+  @Prop({ default: false })
+  featured: boolean;
+
+  @Prop({ type: Date })
+  expiryWarnedAt?: Date;
+
+  @Prop({ type: Date })
+  hiddenByReportsAt?: Date;
 
   // Analytics counters (denormalised for fast dashboards)
   @Prop({ default: 0 })
@@ -218,6 +253,8 @@ export class Offer {
 
 export const OfferSchema = SchemaFactory.createForClass(Offer);
 OfferSchema.index({ status: 1, endsAt: 1 });
+OfferSchema.index({ status: 1, startsAt: 1 });
+OfferSchema.index({ businessId: 1, status: 1 });
 OfferSchema.index({ businessId: 1, contentFingerprint: 1 });
 OfferSchema.index({ scrapedWebsiteRef: 1, status: 1 });
 OfferSchema.index(

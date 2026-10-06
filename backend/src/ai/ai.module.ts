@@ -14,14 +14,10 @@ import { IsIn, IsMongoId, IsNumber, IsOptional, IsString, MaxLength, Min } from 
 import Anthropic from '@anthropic-ai/sdk';
 import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';
 import { Category, CategoryDocument, CategorySchema } from '../schemas/category.schema';
-import { Plan, PlanDocument, PlanSchema } from '../schemas/plan.schema';
-import {
-  Subscription,
-  SubscriptionDocument,
-  SubscriptionSchema,
-} from '../schemas/subscription.schema';
 import { CurrentUser } from '../common/decorators';
-import { DiscountType, PlanKey, Role, SubscriptionStatus } from '../common/enums';
+import { DiscountType, Role } from '../common/enums';
+import { hasBusinessAccess } from '../common/business-access';
+import { PlansService } from '../plans/plans.service';
 
 export class OfferWriterDto {
   @IsMongoId()
@@ -82,8 +78,7 @@ export class AiService {
   constructor(
     @InjectModel(Business.name) private businessModel: Model<BusinessDocument>,
     @InjectModel(Category.name) private categoryModel: Model<CategoryDocument>,
-    @InjectModel(Plan.name) private planModel: Model<PlanDocument>,
-    @InjectModel(Subscription.name) private subModel: Model<SubscriptionDocument>,
+    private readonly plans: PlansService,
   ) {
     this.anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
   }
@@ -91,8 +86,7 @@ export class AiService {
   async writeOfferCopy(dto: OfferWriterDto, user: { userId: string; role: Role }) {
     const business = await this.businessModel.findById(dto.businessId);
     if (!business) throw new NotFoundException('Business not found');
-    const isAdmin = [Role.SUPER_ADMIN, Role.SUPPORT_ADMIN, Role.SALES_ADMIN].includes(user.role);
-    if (!isAdmin && String(business.ownerId) !== user.userId) {
+    if (!hasBusinessAccess(business, user, 'staff')) {
       throw new ForbiddenException('You do not manage this business');
     }
     await this.assertPlanAllows(business);
@@ -215,16 +209,9 @@ export class AiService {
   }
 
   private async assertPlanAllows(business: BusinessDocument) {
-    const sub = await this.subModel.findOne({
-      businessId: business._id,
-      status: { $in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING] },
-    });
-    const key = sub?.planKey || PlanKey.FREE;
-    const plan = await this.planModel.findOne({ key });
-    if (!plan?.limits?.aiOfferWriter) {
-      throw new ForbiddenException(
-        'The AI offer writer is available on Professional and Premium plans. Upgrade to use it.',
-      );
+    const plan = await this.plans.planFor(business._id);
+    if (!plan.flags?.aiOfferWriter) {
+      throw new ForbiddenException(`The AI offer writer is not on the ${plan.name} plan. Upgrade to use it.`);
     }
   }
 }
@@ -244,8 +231,6 @@ export class AiController {
     MongooseModule.forFeature([
       { name: Business.name, schema: BusinessSchema },
       { name: Category.name, schema: CategorySchema },
-      { name: Plan.name, schema: PlanSchema },
-      { name: Subscription.name, schema: SubscriptionSchema },
     ]),
   ],
   controllers: [AiController],

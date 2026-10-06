@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { Model, Types } from 'mongoose';
+import { BusinessSource } from '../../common/enums';
 import { BusinessesService } from '../../businesses/businesses.service';
 import type { CreateBusinessDto } from '../../businesses/businesses.dto';
 import {
@@ -210,7 +211,7 @@ export class WebsitesService {
   }
 
   async detail(id: string) {
-    const site = await this.find(id).then((s) => s.populate([{ path: 'providerRef', select: 'name status basis agreementReference robotsOverride' }, { path: 'businesses.businessRef', select: 'name slug postcode phone town verificationStatus' }, { path: 'businesses.suggestions.businessRef', select: 'name slug postcode phone town' }]));
+    const site = await this.find(id).then((s) => s.populate([{ path: 'providerRef', select: 'name status basis agreementReference robotsOverride' }, { path: 'businesses.businessRef', select: 'name slug postcode phone town verificationLevel' }, { path: 'businesses.suggestions.businessRef', select: 'name slug postcode phone town' }]));
     const [runs, candidates, config] = await Promise.all([
       this.jobs.find({ scrapedWebsiteRef: site._id }).select('runId type status progress resultCounts errorLog startedAt finishedAt createdAt').sort({ createdAt: -1 }).limit(60).lean(),
       this.candidates.aggregate([{ $match: { scrapedWebsiteRef: site._id } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
@@ -383,7 +384,8 @@ export class WebsitesService {
       }
     } else if (decision.action === 'create') {
       // New businesses exist only after an admin creates them from the extracted details (spec §8).
-      const created = await this.businessesService.create(decision.business, undefined, false, {
+      const created = await this.businessesService.create(decision.business, {
+        source: BusinessSource.IMPORT,
         importSource: { scrapedWebsiteRef: site._id, domain: site.domain, importedAt: new Date(), lastCheckedAt: site.lastSuccessfulCheckAt },
       });
       businessRef = created._id;

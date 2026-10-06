@@ -1,23 +1,14 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { BusinessesService } from './businesses.service';
 import {
-  CreateBusinessDto,
   CreateMenuItemDto,
-  StartClaimDto,
+  InviteMemberDto,
   UpdateBusinessDto,
-  VerifyClaimOtpDto,
+  UpdateMemberDto,
+  UpdateMenuItemDto,
 } from './businesses.dto';
-import { CurrentUser, Public, Roles } from '../common/decorators';
-import { Role } from '../common/enums';
+import { AuthUser, CurrentUser, Public } from '../common/decorators';
 
 @Controller('businesses')
 export class BusinessesController {
@@ -51,20 +42,21 @@ export class BusinessesController {
     return this.service.towns();
   }
 
-  @Get('mine')
-  myBusinesses(@CurrentUser('userId') userId: string) {
-    return this.service.myBusinesses(userId);
+  @Public()
+  @Get('stats')
+  stats() {
+    return this.service.publicStats();
   }
 
-  // Multi-location (franchise) stats across every business the user owns
+  @Get('mine')
+  myBusinesses(@CurrentUser('userId') userId: string) {
+    return this.service.mine(userId);
+  }
+
+  // Multi-location stats across every business the user is on the team of
   @Get('mine/stats')
   myBusinessesStats(@CurrentUser('userId') userId: string) {
     return this.service.myBusinessesStats(userId);
-  }
-
-  @Get('claims/mine')
-  myClaims(@CurrentUser('userId') userId: string) {
-    return this.service.myClaims(userId);
   }
 
   @Public()
@@ -73,55 +65,86 @@ export class BusinessesController {
     return this.service.findBySlug(slug);
   }
 
-  // Owners can add their own (unlisted) business; it starts as claimed by them
-  @Roles(Role.BUSINESS_OWNER, Role.SALES_ADMIN, Role.SUPER_ADMIN)
-  @Post()
-  create(@Body() dto: CreateBusinessDto, @CurrentUser('userId') userId: string) {
-    return this.service.create(dto, userId, true);
+  @Get(':id/manage')
+  manage(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.manage(id, user);
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateBusinessDto,
-    @CurrentUser() user: { userId: string; role: Role },
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateBusinessDto, @CurrentUser() user: AuthUser) {
     return this.service.update(id, dto, user);
   }
 
-  @Post(':id/claim')
-  startClaim(
-    @Param('id') id: string,
-    @Body() dto: StartClaimDto,
-    @CurrentUser('userId') userId: string,
-  ) {
-    return this.service.startClaim(id, userId, dto);
+  @Get(':id/change-requests')
+  changeRequests(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.changeRequests(id, user);
   }
 
-  @Post('claims/:claimId/verify-otp')
-  verifyOtp(
-    @Param('claimId') claimId: string,
-    @Body() dto: VerifyClaimOtpDto,
-    @CurrentUser('userId') userId: string,
-  ) {
-    return this.service.verifyClaimOtp(claimId, userId, dto.otp);
+  // ---- Team ----
+
+  @Get(':id/team')
+  team(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.team(id, user);
+  }
+
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post(':id/team/invites')
+  invite(@Param('id') id: string, @Body() dto: InviteMemberDto, @CurrentUser() user: AuthUser) {
+    return this.service.invite(id, dto, user);
+  }
+
+  @Delete(':id/team/invites/:inviteId')
+  revokeInvite(@Param('id') id: string, @Param('inviteId') inviteId: string, @CurrentUser() user: AuthUser) {
+    return this.service.revokeInvite(id, inviteId, user);
+  }
+
+  @Patch(':id/team/:userId')
+  updateMember(@Param('id') id: string, @Param('userId') memberId: string, @Body() dto: UpdateMemberDto, @CurrentUser() user: AuthUser) {
+    return this.service.updateMember(id, memberId, dto.role, user);
+  }
+
+  @Delete(':id/team/:userId')
+  removeMember(@Param('id') id: string, @Param('userId') memberId: string, @CurrentUser() user: AuthUser) {
+    return this.service.removeMember(id, memberId, user);
+  }
+
+  // ---- Menu ----
+
+  @Get(':id/menu')
+  menu(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.menu(id, user);
   }
 
   @Post(':id/menu')
-  addMenuItem(
-    @Param('id') id: string,
-    @Body() dto: CreateMenuItemDto,
-    @CurrentUser() user: { userId: string; role: Role },
-  ) {
+  addMenuItem(@Param('id') id: string, @Body() dto: CreateMenuItemDto, @CurrentUser() user: AuthUser) {
     return this.service.addMenuItem(id, dto, user);
   }
 
+  @Patch(':id/menu/:itemId')
+  updateMenuItem(@Param('id') id: string, @Param('itemId') itemId: string, @Body() dto: UpdateMenuItemDto, @CurrentUser() user: AuthUser) {
+    return this.service.updateMenuItem(id, itemId, dto, user);
+  }
+
   @Delete(':id/menu/:itemId')
-  removeMenuItem(
-    @Param('id') id: string,
-    @Param('itemId') itemId: string,
-    @CurrentUser() user: { userId: string; role: Role },
-  ) {
+  removeMenuItem(@Param('id') id: string, @Param('itemId') itemId: string, @CurrentUser() user: AuthUser) {
     return this.service.removeMenuItem(id, itemId, user);
+  }
+}
+
+// The link in a team invitation email.
+@Controller('team-invites')
+export class TeamInvitesController {
+  constructor(private readonly service: BusinessesService) {}
+
+  @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Get(':token')
+  resolve(@Param('token') token: string) {
+    return this.service.resolveInvite(token);
+  }
+
+  @Post(':token/accept')
+  accept(@Param('token') token: string, @CurrentUser() user: AuthUser) {
+    return this.service.acceptInvite(token, user);
   }
 }

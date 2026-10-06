@@ -6,7 +6,8 @@ import { ActorKind, AuditAction } from '../../common/scraper.enums';
 import { AdminAuditLog, AdminAuditLogDocument } from '../../schemas/admin-audit-log.schema';
 
 export interface AuditEntry {
-  action: AuditAction;
+  // The import robot's actions are AuditAction values; the rest of the platform uses dotted names, e.g. "offer.approved".
+  action: AuditAction | string;
   targetType: string;
   targetId?: string | Types.ObjectId;
   before?: Record<string, unknown>;
@@ -14,7 +15,20 @@ export interface AuditEntry {
   note?: string;
 }
 
-// Spec §12: written for every approval, rejection, merge, adapter change, opt-out and emergency stop.
+export interface AuditQuery {
+  action?: string;
+  targetType?: string;
+  targetId?: string;
+  actorId?: string;
+  actorKind?: string;
+  from?: Date;
+  to?: Date;
+  limit?: number;
+  before?: Date;
+  page?: number;
+}
+
+// Spec §12 and the MVP's audit rule: who, what, when, before and after, for every admin, moderator and owner action.
 @Injectable()
 export class AuditService {
   constructor(@InjectModel(AdminAuditLog.name) private readonly model: Model<AdminAuditLogDocument>) {}
@@ -37,16 +51,45 @@ export class AuditService {
     });
   }
 
-  list(filter: { action?: AuditAction; targetType?: string; targetId?: string; limit?: number; before?: Date }) {
+  private filterOf(filter: AuditQuery) {
     const query: Record<string, unknown> = {};
-    if (filter.action) query.action = filter.action;
+    // A trailing dot matches every action in a family, e.g. "offer." for all offer actions.
+    if (filter.action) query.action = filter.action.endsWith('.') ? new RegExp(`^${filter.action.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) : filter.action;
     if (filter.targetType) query.targetType = filter.targetType;
     if (filter.targetId) query.targetId = filter.targetId;
-    if (filter.before) query.createdAt = { $lt: filter.before };
+    if (filter.actorId && Types.ObjectId.isValid(filter.actorId)) query['actor.userId'] = new Types.ObjectId(filter.actorId);
+    if (filter.actorKind) query['actor.kind'] = filter.actorKind;
+    const createdAt: Record<string, Date> = {};
+    if (filter.from) createdAt.$gte = filter.from;
+    if (filter.to) createdAt.$lte = filter.to;
+    if (filter.before) createdAt.$lt = filter.before;
+    if (Object.keys(createdAt).length) query.createdAt = createdAt;
+    return query;
+  }
+
+  list(filter: AuditQuery) {
+    const limit = Math.min(500, filter.limit ?? 50);
     return this.model
-      .find(query)
+      .find(this.filterOf(filter))
       .sort({ createdAt: -1 })
-      .limit(Math.min(200, filter.limit ?? 50))
+      .skip(Math.max(0, (filter.page ?? 1) - 1) * limit)
+      .limit(limit)
+      .populate('actor.userId', 'name email')
+      .lean();
+  }
+
+  async page(filter: AuditQuery) {
+    const limit = Math.min(500, filter.limit ?? 50);
+    const [items, total] = await Promise.all([this.list({ ...filter, limit }), this.model.countDocuments(this.filterOf(filter))]);
+    return { items, total, page: filter.page ?? 1, pages: Math.ceil(total / limit) };
+  }
+
+  /** Every entry about one thing, e.g. a business's audit trail. */
+  trail(targetType: string, targetId: string, limit = 100) {
+    return this.model
+      .find({ targetType, targetId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
       .populate('actor.userId', 'name email')
       .lean();
   }

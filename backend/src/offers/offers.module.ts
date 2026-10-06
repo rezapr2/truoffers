@@ -4,9 +4,12 @@ import { Offer, OfferSchema } from '../schemas/offer.schema';
 import { Business, BusinessSchema } from '../schemas/business.schema';
 import { Redemption, RedemptionSchema } from '../schemas/redemption.schema';
 import { Subscription, SubscriptionSchema } from '../schemas/subscription.schema';
-import { Plan, PlanSchema } from '../schemas/plan.schema';
-import { OffersController } from './offers.controller';
+import { User, UserSchema } from '../schemas/user.schema';
+import { AdminOffersController, OffersController } from './offers.controller';
 import { OffersService } from './offers.service';
+import { OffersAdminService } from './offers-admin.service';
+import { OfferPublishingService } from './offer-publishing.service';
+import { OffersJobs } from './offers.jobs';
 
 @Module({
   imports: [
@@ -15,11 +18,11 @@ import { OffersService } from './offers.service';
       { name: Business.name, schema: BusinessSchema },
       { name: Redemption.name, schema: RedemptionSchema },
       { name: Subscription.name, schema: SubscriptionSchema },
-      { name: Plan.name, schema: PlanSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
-  controllers: [OffersController],
-  providers: [OffersService],
-  exports: [OffersService],
+  controllers: [OffersController, AdminOffersController],
+  providers: [OffersService, OffersAdminService, OfferPublishingService, OffersJobs],
+  exports: [OffersService, OffersAdminService, OfferPublishingService],
 })
 export class OffersModule {}

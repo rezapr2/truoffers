@@ -88,7 +88,7 @@ export class ImportedOffersService {
     const offer = Types.ObjectId.isValid(id) ? await this.offers.findOne({ _id: id, origin: OfferOrigin.SCRAPER }).lean() : null;
     if (!offer) throw new NotFoundException('Imported offer not found');
     const [business, website, revisions] = await Promise.all([
-      this.businesses.findById(offer.businessId).select('name slug town postcode phone ownerId verificationStatus').lean(),
+      this.businesses.findById(offer.businessId).select('name slug town postcode phone ownerId verificationLevel').lean(),
       offer.scrapedWebsiteRef
         ? this.sites.findById(offer.scrapedWebsiteRef).select('domain authorisationStatus adapterId adapterVersion nextCheckAt lastSuccessfulCheckAt lastFailedCheckAt lastError failureCount').lean()
         : null,

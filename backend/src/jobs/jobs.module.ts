@@ -4,11 +4,11 @@ import { InjectModel, MongooseModule } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Offer, OfferDocument, OfferSchema } from '../schemas/offer.schema';
 import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';
-import { OfferStatus, PUBLIC_OFFER_STATUSES } from '../common/enums';
+import { PUBLIC_OFFER_STATUSES } from '../common/enums';
 
 /**
- * Background jobs per blueprint §22: expired offers must leave search results
- * automatically and denormalised counters must stay accurate.
+ * Background jobs per blueprint §22: denormalised counters must stay accurate. Offer scheduling and expiry
+ * live with the offers (offers/offers.jobs.ts); each feature module schedules its own jobs.
  */
 @Injectable()
 export class JobsService {
@@ -18,21 +18,6 @@ export class JobsService {
     @InjectModel(Offer.name) private offerModel: Model<OfferDocument>,
     @InjectModel(Business.name) private businessModel: Model<BusinessDocument>,
   ) {}
-
-  @Cron(CronExpression.EVERY_10_MINUTES)
-  async expireOffers() {
-    const now = new Date();
-    const result = await this.offerModel.updateMany(
-      // Published offers, and imported ones hidden while a recheck confirms they're still offered.
-      { status: { $in: [...PUBLIC_OFFER_STATUSES, OfferStatus.POSSIBLY_REMOVED] }, endsAt: { $ne: null, $lt: now } },
-      // expiredAt starts the retention clock for imported offers' stored excerpts.
-      { $set: { status: OfferStatus.EXPIRED, expiredAt: now } },
-    );
-    if (result.modifiedCount > 0) {
-      this.logger.log(`Expired ${result.modifiedCount} offer(s)`);
-      await this.refreshActiveOfferCounts();
-    }
-  }
 
   @Cron(CronExpression.EVERY_HOUR)
   async refreshActiveOfferCounts() {

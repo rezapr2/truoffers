@@ -14,6 +14,7 @@ import { Model } from 'mongoose';
 import { Business, BusinessDocument, BusinessSchema } from '../schemas/business.schema';
 import { CurrentUser } from '../common/decorators';
 import { Role } from '../common/enums';
+import { hasBusinessAccess } from '../common/business-access';
 
 const PLACES_BASE = 'https://places.googleapis.com/v1';
 
@@ -39,8 +40,7 @@ export class ReviewsService {
   async syncBusiness(businessId: string, user: { userId: string; role: Role }) {
     const business = await this.businessModel.findById(businessId);
     if (!business) throw new NotFoundException('Business not found');
-    const isAdmin = [Role.SUPER_ADMIN, Role.SUPPORT_ADMIN, Role.SALES_ADMIN].includes(user.role);
-    if (!isAdmin && String(business.ownerId) !== user.userId) {
+    if (!hasBusinessAccess(business, user, 'staff')) {
       throw new ForbiddenException('You do not manage this business');
     }
     if (!this.enabled) {
