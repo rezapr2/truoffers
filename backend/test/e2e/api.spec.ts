@@ -9,7 +9,7 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { deriveBusinessIdentity } from '../../src/common/business-identity';
-import { OfferStatus, Role, VerificationStatus } from '../../src/common/enums';
+import { OfferStatus, Role, VerificationLevel } from '../../src/common/enums';
 import {
   AuditAction,
   AuthorisationSource,
@@ -109,7 +109,7 @@ describe('scraper API, end to end', () => {
       postcode: 'LS1 4AP',
       phone: '0113 496 0123',
       ownerId: merchantId,
-      verificationStatus: VerificationStatus.VERIFIED,
+      verificationLevel: VerificationLevel.VERIFIED,
       ...deriveBusinessIdentity({ name: 'Pizza Palace', postcode: 'LS1 4AP', phone: '0113 496 0123' }),
     });
   });
@@ -382,9 +382,10 @@ describe('scraper API, end to end', () => {
       businessId: listing._id,
     });
 
+    // MVP spec: imported offers look identical to owner offers in public. Source and checks stay with admins
+    // and the business itself.
     const publicOffer = await request(http).get(`/api/offers/${adminVerifiedOfferId}`).expect(200);
-    expect(publicOffer.body.imported).toMatchObject({ domain: 'pizza-palace.test', verification: OfferVerification.ADMIN_VERIFIED });
-    for (const internal of ['sources', 'evidence', 'confidenceScore', 'dedupeKey', 'contentFingerprint']) {
+    for (const internal of ['sources', 'evidence', 'confidenceScore', 'dedupeKey', 'contentFingerprint', 'imported', 'origin', 'sourceDomain', 'verification', 'lastCheckedAt']) {
       expect(publicOffer.body).not.toHaveProperty(internal);
     }
     const page = await request(http).get(`/api/businesses/${listing.slug}`).expect(200);
@@ -444,13 +445,16 @@ describe('scraper API, end to end', () => {
     expect(await offers.findById(adminVerifiedOfferId).lean()).toMatchObject({
       managedBy: OfferManagedBy.MERCHANT,
       verification: OfferVerification.ADMIN_VERIFIED,
-      status: OfferStatus.ACTIVE,
+      // MVP rule: on the Free plan an edited offer goes back to the moderator queue.
+      status: OfferStatus.PENDING,
       // A calendar day ends at 23:59:59.999 UK time: in September that is BST, one hour ahead of UTC.
       endsAt: new Date('2030-09-30T22:59:59.999Z'),
     });
+    await request(http).post(`/api/admin/offers/${adminVerifiedOfferId}/approve`).set(as('admin')).expect(201);
+    expect((await offers.findById(adminVerifiedOfferId).lean())!.status).toBe(OfferStatus.ACTIVE);
     // Imported offers don't count towards the free plan's two live offers.
     const manage = await request(http).get(`/api/businesses/${listing._id}/offers/manage`).set(as('merchant')).expect(200);
-    expect(manage.body.filter((o: { status: string }) => o.status === OfferStatus.ACTIVE)).toHaveLength(3);
+    expect(manage.body.offers.filter((o: { status: string }) => o.status === OfferStatus.ACTIVE)).toHaveLength(3);
   });
 
   it('removes imported offers at once on a public removal request, leaving merchant-managed offers alone', async () => {

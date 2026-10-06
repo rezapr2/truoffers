@@ -30,20 +30,30 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('outreach only ever produces text for an admin to send (spec §14)', () => {
-  it('has no way to send a message from anywhere in the API', () => {
+  // The MVP sends transactional email and phone codes from src/platform; the import robot, which is where claim
+  // invitations to businesses that never signed up come from, must never send anything itself.
+  const ROBOT = path.join(SRC, 'scraper');
+  const PLATFORM_SENDERS = /platform\/(?:email|notifications|phone-verification)\.service/;
+
+  it('has no way to send a message from the import robot', () => {
     const offenders: string[] = [];
-    for (const file of sourceFiles(SRC)) {
-      // The scan itself lists the patterns it looks for.
-      if (file.endsWith(path.join('test', 'unit', 'outreach-sends-nothing.spec.ts'))) continue;
+    for (const file of sourceFiles(ROBOT)) {
       readFileSync(file, 'utf8')
         .split('\n')
         .forEach((line, index) => {
           for (const pattern of SENDERS) {
             if (pattern.test(line)) offenders.push(`${path.relative(SRC, file)}:${index + 1}: ${line.trim()}`);
           }
+          if (PLATFORM_SENDERS.test(line)) offenders.push(`${path.relative(SRC, file)}:${index + 1}: ${line.trim()}`);
         });
     }
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps the platform’s email and SMS senders out of the outreach module’s dependencies', () => {
+    const outreach = readFileSync(path.join(ROBOT, 'outreach', 'outreach.service.ts'), 'utf8');
+    expect(outreach).not.toMatch(PLATFORM_SENDERS);
+    expect(outreach).not.toMatch(/EmailService|NotificationsService|PhoneVerificationService/);
   });
 
   it('depends on no email, SMS or messaging client', () => {

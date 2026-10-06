@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { Actor, ActorContext } from '../../../src/common/actor-context';
 import { deriveBusinessIdentity } from '../../../src/common/business-identity';
-import { DiscountType, OfferStatus, RedemptionType, Role, VerificationStatus } from '../../../src/common/enums';
+import { DiscountType, OfferStatus, RedemptionType, Role, VerificationLevel } from '../../../src/common/enums';
 import {
   ActorKind,
   AuditAction,
@@ -59,7 +59,7 @@ describe('offer lifecycle service (spec §9)', () => {
       slug: 'pizza-palace-leeds',
       postcode: 'LS1 4AP',
       ownerId: new Types.ObjectId(ownerId),
-      verificationStatus: VerificationStatus.CLAIMED,
+      verificationLevel: VerificationLevel.CLAIM_PENDING,
       ...deriveBusinessIdentity({ name: 'Pizza Palace', postcode: 'LS1 4AP' }),
     });
     site = await models.sites.create({

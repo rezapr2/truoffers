@@ -71,7 +71,10 @@ describe('website network, fingerprints and selector adapters, end to end', () =
     candidates = app.get(getModelToken(ExtractedOfferCandidate.name));
     adapters = app.get(getModelToken(ScraperAdapter.name));
     audit = app.get(getModelToken(AdminAuditLog.name));
-    token = app.get(JwtService, { strict: false }).sign({ sub: String(new Types.ObjectId()), email: 'admin@example.test', role: Role.SUPER_ADMIN, name: 'Ada' });
+    // Sessions belong to real, active accounts.
+    const adminId = new Types.ObjectId();
+    await connection.collection('users').insertOne({ _id: adminId, name: 'Ada', email: 'admin@example.test', role: Role.SUPER_ADMIN, status: 'active' });
+    token = app.get(JwtService, { strict: false }).sign({ sub: String(adminId), email: 'admin@example.test', role: Role.SUPER_ADMIN, name: 'Ada' });
 
     // Before discovery: one Saffron site is already known from a link (pending), and the decoy has opted out.
     const known = (domain: string, extra: Record<string, unknown>) =>

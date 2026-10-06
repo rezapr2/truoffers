@@ -9,7 +9,7 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { deriveBusinessIdentity } from '../../src/common/business-identity';
-import { OfferStatus, Role, VerificationStatus } from '../../src/common/enums';
+import { OfferStatus, Role, VerificationLevel } from '../../src/common/enums';
 import {
   AuditAction,
   ImportJobStatus,
@@ -119,7 +119,7 @@ describe('rechecks, revisions and expiry, end to end (spec §9/§10)', () => {
       phone: '0113 496 0456',
       town: 'Leeds',
       ownerId: merchantId,
-      verificationStatus: VerificationStatus.VERIFIED,
+      verificationLevel: VerificationLevel.VERIFIED,
       ...deriveBusinessIdentity({ name: 'Deals Diner', postcode: 'LS2 7EX', phone: '0113 496 0456' }),
     });
     await app.get(ScraperSettingsService).update({ defaultRateLimitMs: 250 });

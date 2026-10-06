@@ -9,7 +9,7 @@ import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { ActorContext } from '../../src/common/actor-context';
 import { deriveBusinessIdentity } from '../../src/common/business-identity';
-import { DiscountType, OfferStatus, RedemptionType, Role, VerificationStatus } from '../../src/common/enums';
+import { DiscountType, OfferStatus, RedemptionType, Role, VerificationLevel } from '../../src/common/enums';
 import { ActorKind, AuditAction, OfferManagedBy, OfferOrigin } from '../../src/common/scraper.enums';
 import { CLAIM_PITCH } from '../../src/scraper/outreach/invitation-messages';
 import { AdminAuditLog } from '../../src/schemas/admin-audit-log.schema';
@@ -50,8 +50,8 @@ describe('claim invitations and outreach, end to end (spec §14)', () => {
     const jwt = app.get(JwtService, { strict: false });
     const users = app.get<Model<User>>(getModelToken(User.name), { strict: false });
     const people = [
-      { _id: adminId, name: 'Ada Admin', email: 'admin@example.test', role: Role.SUPER_ADMIN },
-      { _id: ownerId, name: 'Owen Owner', email: 'owner@wok-this-way.test', role: Role.BUSINESS_OWNER, phone: '0113 496 0777' },
+      { _id: adminId, name: 'Ada Admin', email: 'admin@example.test', role: Role.SUPER_ADMIN, emailVerifiedAt: new Date() },
+      { _id: ownerId, name: 'Owen Owner', email: 'owner@wok-this-way.test', role: Role.BUSINESS_OWNER, phone: '0113 496 0777', emailVerifiedAt: new Date() },
     ];
     await users.insertMany(people);
     for (const [key, person] of [['admin', people[0]], ['owner', people[1]]] as const) {
@@ -63,7 +63,7 @@ describe('claim invitations and outreach, end to end (spec §14)', () => {
       ...identity,
       slug: 'wok-this-way-leeds',
       town: 'Leeds',
-      verificationStatus: VerificationStatus.UNCLAIMED,
+      verificationLevel: VerificationLevel.UNCLAIMED,
       importSource: { scrapedWebsiteRef: new Types.ObjectId(), domain: 'wok-this-way.test', importedAt: new Date() },
       ...deriveBusinessIdentity(identity),
     });
@@ -73,7 +73,7 @@ describe('claim invitations and outreach, end to end (spec §14)', () => {
       postcode: 'LS1 1AA',
       phone: '0113 496 0999',
       ownerId,
-      verificationStatus: VerificationStatus.CLAIMED,
+      verificationLevel: VerificationLevel.CLAIM_PENDING,
       ...deriveBusinessIdentity({ name: 'Owned Already', postcode: 'LS1 1AA', phone: '0113 496 0999' }),
     });
 
@@ -165,16 +165,19 @@ describe('claim invitations and outreach, end to end (spec §14)', () => {
   });
 
   it('marks the invitation claimed once the business claims the listing', async () => {
-    const started = await request(http)
-      .post(`/api/businesses/${unclaimed._id}/claim`)
-      .set(as('owner'))
-      .send({ method: 'phone_otp' })
-      .expect(201);
+    // The MVP claim flow: phone code to the listing's number, one more piece of evidence, then a moderator approves.
+    const started = await request(http).post('/api/claims').set(as('owner')).send({ businessId: String(unclaimed._id) }).expect(201);
+    const claimId = started.body._id;
+    const sent = await request(http).post(`/api/claims/${claimId}/phone/send`).set(as('owner')).send({ channel: 'sms' }).expect(201);
+    await request(http).post(`/api/claims/${claimId}/phone/verify`).set(as('owner')).send({ code: sent.body.devCode }).expect(201);
     await request(http)
-      .post(`/api/businesses/claims/${started.body.claimId}/verify-otp`)
+      .post(`/api/claims/${claimId}/documents`)
       .set(as('owner'))
-      .send({ otp: started.body.devOtp })
+      .field('type', 'utility_bill')
+      .attach('file', Buffer.from('%PDF-1.4\n% utility bill\n%%EOF\n'), 'bill.pdf')
       .expect(201);
+    await request(http).post(`/api/claims/${claimId}/submit`).set(as('owner')).expect(201);
+    await request(http).post(`/api/admin/claims/${claimId}/approve`).set(as('admin')).send({}).expect(201);
 
     const invitation = await invitations.findOne({ tokenHint: token.slice(0, 6) }).lean();
     expect(invitation!.claimedAt).toBeInstanceOf(Date);
