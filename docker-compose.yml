@@ -69,6 +69,9 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-}
       RECAPTCHA_SITE_KEY: ${RECAPTCHA_SITE_KEY:-}
       RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY:-}
+      # Foodbell integration (README "Foodbell integration"); Foodbell holds the same secret
+      FOODBELL_SHARED_SECRET: ${FOODBELL_SHARED_SECRET:-}
+      FOODBELL_API_URL: ${FOODBELL_API_URL:-}
       # Encrypts the keys saved in /admin/settings. Falls back to JWT_SECRET; changing it makes saved keys unreadable.
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
       # Photos, menus, verification documents and report photos (private files are never served publicly).

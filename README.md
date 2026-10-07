@@ -159,8 +159,9 @@ Also built on top of the spec, closing the blueprint's remaining gaps:
   formulas) and the admin executive dashboard (MRR, ARPA, supply/demand, top search areas).
 - **Supplier marketplace (§7.3)** — supplier directory + profiles, quote-request leads, supplier
   lead inbox with status pipeline.
-- **Foodbell hooks (§27)** — `isFoodbellClient` flag, Foodbell-verified badge, order links tracked
-  via `order_click` events.
+- **Foodbell integration (§27)** — owners connect their Foodbell site with a one-time code; the
+  listing then mirrors its profile, hours, menu and chosen deals, and orders TruOffers sends are
+  reported back. See [Foodbell integration](#foodbell-integration).
 - **SEO pages (§17.2)** — town pages (`/takeaways/{town}`), business profiles
   (`/takeaway/{slug}`), category pages, per-page metadata.
 - **Real Stripe checkout + webhooks** — with `STRIPE_SECRET_KEY` set, plan checkout and wallet
@@ -397,11 +398,53 @@ Honest gaps against the blueprint, so nobody plans around something that isn't t
   responsive and installable (it has a web app manifest, so phones can add it to the home screen).
 - **Web push notifications**: campaigns and alerts reach people by email, text and the in-app
   notification bell, not by browser push.
-- **Foodbell deep integration (§27)**: only the hooks exist (the Foodbell partner tag and tracked order
-  links). Menu import and publishing from the Foodbell dashboard need Foodbell's API.
 
 The blueprint's `email_domain` and `google_profile_match` claim methods were replaced by the MVP spec's
 evidence list (domain email or website meta tag, FHRS match, documents, shop-front photo).
+
+## Foodbell integration
+
+Blueprint §27. A takeaway that runs its ordering site on Foodbell connects it to its TruOffers listing;
+from then on TruOffers mirrors the store and Foodbell reports the orders TruOffers sent. Code: backend
+`src/foodbell/`, frontend `app/dashboard/foodbell`; on the Foodbell side `routes/truoffersPartner.js`,
+`routes/truoffersAdmin.js`, `jobs/truoffers.js` and `services/truoffersSnapshot.js`.
+
+**Connecting.** In the Foodbell dashboard (Site settings → TruOffers) the owner clicks *Connect to
+TruOffers* and gets a code that works for 30 minutes. They paste it into **Dashboard → Foodbell** on
+TruOffers (owners only). TruOffers redeems it with Foodbell and gets the first snapshot.
+
+**What is mirrored.**
+- *Profile:* description, logo, delivery/collection, opening hours and social links fill in. The order
+  link becomes the Foodbell site. Name, address, postcode and phone are verified identity: a verified
+  listing keeps its own and the Foodbell page lists any differences.
+- *Menu:* replaces the items that came from Foodbell (items typed in by the owner stay).
+- *Deals:* each deal the owner leaves switched on in Foodbell becomes an offer, created as the owner, so
+  plan limits, coupon-code plan gating, moderation and verification holds all apply. Game prizes,
+  automated win-back codes, loyalty and returning-customer deals are never sent. Synced offers can be
+  paused on TruOffers but are edited and switched off in Foodbell (the API refuses edits and deletes);
+  a deal that stops being published in Foodbell ends here.
+- *Orders:* order links carry `utm_source=truoffers&utm_campaign=<offer id or listing>&tro=<click id>`.
+  The Foodbell shop keeps that for 7 days and stores it on the order; when the order is done, Foodbell
+  sends `order.completed` with the click id, order type and total (no customer details). It shows as
+  *Foodbell orders* in Insights and on the Foodbell page.
+
+**Keeping in step.** Foodbell sends `store.updated` (debounced, 30 s) when the menu, deals or details
+change, and `store.disconnected`. A cron re-syncs connections not synced for 6 hours. Owners and admins
+(business drawer) can *Sync now*.
+
+**Security.** Both directions are signed with one shared secret: header `x-truoffers-signature:
+t=<unix time>,v1=<hex HMAC-SHA256 of "<t>.<METHOD>.<path and query>.<raw body>">`, rejected after 5 minutes.
+Codes are stored hashed and work once.
+
+**Setting it up.**
+1. Generate a secret: `openssl rand -hex 32`.
+2. TruOffers: `FOODBELL_SHARED_SECRET` (or Admin → Settings → Integrations → Foodbell) and
+   `FOODBELL_API_URL` (default `https://api.foodbell.co.uk/api`, also in Settings).
+3. Foodbell backend: `TRUOFFERS_SHARED_SECRET` (the same value) and `TRUOFFERS_API_URL`, e.g.
+   `https://truoffers.co.uk/api`. The Foodbell worker needs Redis (BullMQ) as for its EPOS webhooks.
+
+Until both sides have the secret the Foodbell page says the connection isn't available yet, and Foodbell
+sends nothing.
 
 ## Social login (Google & Apple)
 
