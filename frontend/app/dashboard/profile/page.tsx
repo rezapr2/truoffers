@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api, assetUrl, errorMessage, upload } from '@/lib/api';
 import { useBusiness } from '@/lib/business-context';
@@ -24,6 +25,8 @@ interface MenuItem {
   description?: string;
   price: number;
   section: string;
+  // 'foodbell' when mirrored from the business's Foodbell site
+  source?: string;
 }
 
 type Form = {
@@ -74,11 +77,23 @@ function MenuEditor({ businessId }: { businessId: string }) {
   const { data: items, reload } = useApi<MenuItem[]>(`/businesses/${businessId}/menu`);
   const [draft, setDraft] = useState({ section: '', name: '', description: '', price: '' });
   const [error, setError] = useState<string | null>(null);
-  const sections = [...new Set((items ?? []).map((i) => i.section))];
+  // While a Foodbell menu is mirrored it is the menu customers see; dishes typed in here wait behind it.
+  const mirrored = (items ?? []).some((i) => i.source === 'foodbell');
+  const shown = (items ?? []).filter((i) => !mirrored || i.source === 'foodbell');
+  const waiting = mirrored ? (items ?? []).filter((i) => i.source !== 'foodbell') : [];
+  const sections = [...new Set(shown.map((i) => i.section))];
+  const remove = (item: MenuItem) =>
+    api(`/businesses/${businessId}/menu/${item._id}`, { method: 'DELETE' })
+      .then(reload)
+      .catch((err) => setError(errorMessage(err)));
 
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
+  // The editor sits inside the profile form, so it can't be a form of its own: Enter and "Add" save the dish only.
+  async function add() {
     setError(null);
+    if (!draft.name.trim() || draft.price === '') {
+      setError('Add the dish name and its price.');
+      return;
+    }
     try {
       await api(`/businesses/${businessId}/menu`, { method: 'POST', body: JSON.stringify({ ...draft, price: Number(draft.price) || 0, section: draft.section || 'Menu' }) });
       setDraft({ ...draft, name: '', description: '', price: '' });
@@ -90,11 +105,16 @@ function MenuEditor({ businessId }: { businessId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {mirrored && (
+        <Alert tone="info" action={<Link href="/dashboard/foodbell" className={btn.small}>Foodbell</Link>}>
+          Your menu comes from your Foodbell site and updates by itself. Change dishes and prices in Foodbell.
+        </Alert>
+      )}
       {sections.map((section) => (
         <div key={section}>
           <div className="font-extrabold mb-2">{section}</div>
           <ul className="flex flex-col gap-1">
-            {(items ?? [])
+            {shown
               .filter((i) => i.section === section)
               .map((item) => (
                 <li key={item._id} className="flex items-center gap-3 bg-surface rounded-xl px-4 py-2 text-sm">
@@ -103,37 +123,70 @@ function MenuEditor({ businessId }: { businessId: string }) {
                     {item.description && <span className="text-muted"> · {item.description}</span>}
                   </span>
                   <span className="font-bold">£{item.price.toFixed(2)}</span>
-                  <button aria-label={`Remove ${item.name}`} className="text-muted hover:text-danger cursor-pointer" onClick={() => api(`/businesses/${businessId}/menu/${item._id}`, { method: 'DELETE' }).then(reload)}>
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
+                  {item.source !== 'foodbell' && (
+                    <button aria-label={`Remove ${item.name}`} className="text-muted hover:text-danger cursor-pointer" onClick={() => remove(item)}>
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  )}
                 </li>
               ))}
           </ul>
         </div>
       ))}
+      {waiting.length > 0 && (
+        <div>
+          <div className="font-extrabold mb-1">Your own dishes</div>
+          <p className="text-[13px] text-muted mb-2">Hidden while your Foodbell menu shows. They come back if you disconnect Foodbell.</p>
+          <ul className="flex flex-col gap-1">
+            {waiting.map((item) => (
+              <li key={item._id} className="flex items-center gap-3 bg-surface rounded-xl px-4 py-2 text-sm text-muted">
+                <span className="flex-1 min-w-0">
+                  {item.section} · <strong>{item.name}</strong>
+                </span>
+                <span className="font-bold">£{item.price.toFixed(2)}</span>
+                <button aria-label={`Remove ${item.name}`} className="hover:text-danger cursor-pointer" onClick={() => remove(item)}>
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {error && <Alert tone="danger">{error}</Alert>}
-      <form onSubmit={add} className="grid sm:grid-cols-[140px_1fr_1fr_100px_auto] gap-2 items-end">
-        <Field label="Section">
-          <input value={draft.section} list="menu-sections" onChange={(e) => setDraft({ ...draft, section: e.target.value })} placeholder="Pizzas" className={inputClass} />
-        </Field>
-        <datalist id="menu-sections">
-          {sections.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-        <Field label="Item">
-          <input required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputClass} />
-        </Field>
-        <Field label="Description">
-          <input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} className={inputClass} />
-        </Field>
-        <Field label="Price (£)">
-          <input required type="number" min={0} step={0.01} value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} className={inputClass} />
-        </Field>
-        <button type="submit" className={btn.secondary}>
-          Add
-        </button>
-      </form>
+      {!mirrored && (
+        <div
+          role="group"
+          aria-label="Add a dish"
+          className="grid sm:grid-cols-[140px_1fr_1fr_100px_auto] gap-2 items-end"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && e.target instanceof HTMLInputElement) {
+              e.preventDefault();
+              void add();
+            }
+          }}
+        >
+          <Field label="Section">
+            <input value={draft.section} list="menu-sections" onChange={(e) => setDraft({ ...draft, section: e.target.value })} placeholder="Pizzas" className={inputClass} />
+          </Field>
+          <datalist id="menu-sections">
+            {sections.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+          <Field label="Item">
+            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputClass} />
+          </Field>
+          <Field label="Description">
+            <input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} className={inputClass} />
+          </Field>
+          <Field label="Price (£)">
+            <input type="number" min={0} step={0.01} value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} className={inputClass} />
+          </Field>
+          <button type="button" className={btn.secondary} onClick={() => void add()}>
+            Add
+          </button>
+        </div>
+      )}
     </div>
   );
 }

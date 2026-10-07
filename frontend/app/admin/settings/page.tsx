@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAction, useApi } from '@/lib/hooks';
 import { AdminPage, RequireCapability } from '../_components/admin-ui';
 
-type SecretName = 'stripeSecretKey' | 'stripeWebhookSecret' | 'twilioAccountSid' | 'twilioAuthToken' | 'twilioVerifyServiceSid' | 'twilioMessagingServiceSid' | 'resendApiKey' | 'recaptchaSecretKey';
+type SecretName = 'stripeSecretKey' | 'stripeWebhookSecret' | 'twilioAccountSid' | 'twilioAuthToken' | 'twilioVerifyServiceSid' | 'twilioMessagingServiceSid' | 'resendApiKey' | 'recaptchaSecretKey' | 'foodbellSharedSecret';
 
 interface Settings {
   siteName: string;
@@ -22,6 +22,7 @@ interface Settings {
   knownOrderingDomains: string[];
   emailFrom: string;
   recaptchaSiteKey?: string;
+  foodbellApiUrl: string;
   secrets: Record<SecretName, { configured: boolean; source: 'settings' | 'environment' | null; hint?: string }>;
 }
 
@@ -54,6 +55,11 @@ const SECRET_GROUPS: { title: string; hint: string; secrets: { name: SecretName;
     title: 'reCAPTCHA',
     hint: 'Checks guest offer reports.',
     secrets: [{ name: 'recaptchaSecretKey', label: 'Secret key' }],
+  },
+  {
+    title: 'Foodbell',
+    hint: 'Signs the connection with Foodbell: menus, deals and orders of takeaways that connect their Foodbell site. Foodbell must hold the same value (TRUOFFERS_SHARED_SECRET there).',
+    secrets: [{ name: 'foodbellSharedSecret', label: 'Shared secret' }],
   },
 ];
 
@@ -181,6 +187,9 @@ function SettingsForm() {
           <SectionTitle>Ordering providers</SectionTitle>
           <Field label="Known ordering domains" hint="One per line. An order link on one of these, or on the business’s own website, passes the link check.">
             <textarea rows={7} className={inputClass} value={domains ?? s.knownOrderingDomains.join('\n')} onChange={(e) => setDomains(e.target.value)} />
+          </Field>
+          <Field label="Foodbell API" hint="Where takeaways’ Foodbell sites are reached, e.g. https://api.foodbell.co.uk/api. The FOODBELL_API_URL environment variable overrides it." className="mt-4">
+            <input className={inputClass} value={s.foodbellApiUrl ?? ''} onChange={(e) => set('foodbellApiUrl', e.target.value)} placeholder="https://api.foodbell.co.uk/api" />
           </Field>
         </Card>
 

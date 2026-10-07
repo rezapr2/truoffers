@@ -6,6 +6,7 @@ import { api, assetUrl } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { ukDate } from '@/lib/dates';
 import { offerHref } from '@/lib/offer-url';
+import { referralUrl, trackOrderClick } from '@/lib/order-link';
 import type { Business, Offer } from '@/lib/types';
 import Countdown from '@/components/Countdown';
 import FollowButton from '@/components/FollowButton';
@@ -209,11 +210,11 @@ export default function OfferDetail({ offer }: { offer: Offer }) {
           <div className="flex gap-3 flex-wrap">
             {orderUrl && offer.redemptionType !== 'phone' && (
               <a
-                href={orderUrl}
+                href={referralUrl(orderUrl, offer._id)}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => {
-                  track('order_click', { offerId: offer._id, businessId: business._id });
+                onClick={(e) => {
+                  trackOrderClick(e, orderUrl, offer._id, { offerId: offer._id, businessId: business._id });
                   if (offer.redemptionType === 'direct_link') redeemed('order_link');
                 }}
                 className="btn-soft font-bold px-7 py-3.5 rounded-2xl"

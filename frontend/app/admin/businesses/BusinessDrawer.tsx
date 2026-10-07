@@ -35,6 +35,7 @@ interface BusinessDetail {
     frozen?: boolean;
     featured?: boolean;
     isFoodbellClient?: boolean;
+    foodbell?: { storeId: string; domain?: string; status: 'connected' | 'disconnected'; connectedAt?: string; lastSyncAt?: string; lastSyncError?: string };
     trustScore: number;
     fhrsRating?: string;
     suspendedAt?: string;
@@ -47,7 +48,7 @@ interface BusinessDetail {
     members: { userId: string; role: string; addedAt?: string; user?: { _id: string; name: string; email: string; status: string; lastLoginAt?: string } }[];
   };
   orderLinkCheck: string;
-  offers: { _id: string; title: string; status: string; displayLabel: string; origin?: string; impressions: number; orderClicks: number; createdAt: string }[];
+  offers: { _id: string; title: string; status: string; displayLabel: string; origin?: string; external?: { provider: string }; impressions: number; orderClicks: number; createdAt: string }[];
   subscription?: { _id: string; planKey: string; status: string; interval: string; price: number; comp?: boolean; currentPeriodEnd?: string; cancelAtPeriodEnd?: boolean };
   payments: { _id: string; number?: string; description?: string; total: number; status: string; createdAt: string }[];
   claims: { _id: string; status: string; kind: string; userId?: { name: string; email: string }; submittedAt?: string; decidedAt?: string; reasonCode?: string }[];
@@ -380,6 +381,12 @@ export function BusinessDrawer({ id, onClose, onChanged, onOpen }: { id: string;
                 <Detail label="Order link">
                   <span className="break-all">{b.orderUrl ?? '—'}</span> <Tag tone={['own_domain', 'ordering_provider'].includes(data.orderLinkCheck) ? 'good' : data.orderLinkCheck === 'none' ? 'neutral' : 'bad'}>{humanise(data.orderLinkCheck)}</Tag>
                 </Detail>
+                {b.foodbell && (
+                  <Detail label="Foodbell">
+                    <Tag tone={b.foodbell.status === 'connected' ? 'good' : 'neutral'}>{humanise(b.foodbell.status)}</Tag> {b.foodbell.domain ?? b.foodbell.storeId} · last sync {dateTime(b.foodbell.lastSyncAt)}
+                    {b.foodbell.lastSyncError && <div className="text-danger text-[13px] font-bold mt-1">{b.foodbell.lastSyncError}</div>}
+                  </Detail>
+                )}
                 <Detail label="Categories">{b.categories.map((c) => c.name).join(', ') || '—'}</Detail>
                 <Detail label="Verified">
                   {b.verifiedAt ? `${date(b.verifiedAt)} · re-check due ${date(b.reverificationDueAt)}` : 'No'}
@@ -408,6 +415,11 @@ export function BusinessDrawer({ id, onClose, onChanged, onOpen }: { id: string;
                     <button className={btn.small} onClick={() => open('merge')}>
                       Merge into…
                     </button>
+                    {b.foodbell?.status === 'connected' && (
+                      <button className={btn.small} disabled={!!action.busy} onClick={() => post('/foodbell/sync', {}, 'Synced from Foodbell')}>
+                        Sync from Foodbell
+                      </button>
+                    )}
                   </>
                 )}
                 {can(user, 'business.impersonate') && b.members.some((m) => m.role === 'owner') && (
@@ -553,7 +565,7 @@ export function BusinessDrawer({ id, onClose, onChanged, onOpen }: { id: string;
                     <Link href={`/admin/offers?status=all&open=${o._id}`} className="flex-1 min-w-0">
                       <div className="font-extrabold truncate">{o.title}</div>
                       <div className="text-[12.5px] text-muted">
-                        {o.displayLabel} · {o.impressions} views · {o.orderClicks} order clicks{o.origin === 'scraper' ? ' · imported' : ''}
+                        {o.displayLabel} · {o.impressions} views · {o.orderClicks} order clicks{o.origin === 'scraper' ? ' · imported' : ''}{o.external?.provider === 'foodbell' ? ' · from Foodbell' : ''}
                       </div>
                     </Link>
                     <StatusPill status={o.status} />

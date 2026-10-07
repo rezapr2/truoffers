@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { track } from '@/lib/analytics';
+import { referralUrl, trackOrderClick } from '@/lib/order-link';
 import type { Business, Offer } from '@/lib/types';
 import VerifiedBadge, { FoodbellTag } from '@/components/VerifiedBadge';
 import { assetUrl } from '@/lib/api';
@@ -107,10 +108,10 @@ export default function BusinessProfilePage({ params }: { params: Promise<{ slug
         <div className="flex gap-3 mt-6 flex-wrap">
           {business.orderUrl && (
             <a
-              href={business.orderUrl}
+              href={referralUrl(business.orderUrl, 'listing')}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => track('order_click', { businessId: business._id })}
+              onClick={(e) => trackOrderClick(e, business.orderUrl!, 'listing', { businessId: business._id })}
               className="btn-soft font-bold px-7 py-3.5 rounded-2xl"
             >
               Order online

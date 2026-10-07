@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { download, errorMessage } from '@/lib/api';
+import { money } from '@/lib/format';
 import { useBusiness } from '@/lib/business-context';
 import { useApi } from '@/lib/hooks';
 import TrendChart from '@/components/TrendChart';
 import { Alert, btn, SectionTitle, Spinner, StatStrip, type Stat } from '@/components/ui';
-import { ChartIcon, ClickIcon, DownloadIcon, EyeIcon, FlipIcon, PhoneIcon, StoreIcon, TicketIcon, UsersIcon } from '@/components/icons';
+import { ChartIcon, ClickIcon, DownloadIcon, EyeIcon, FlipIcon, PhoneIcon, StoreIcon, TicketIcon, TruckIcon, UsersIcon } from '@/components/icons';
 import { DashboardPage } from '../_components/shared';
 
 interface Insights {
@@ -20,6 +21,8 @@ interface Insights {
   series: (Record<string, number> & { day: string })[];
   offers: (Record<string, number> & { _id: string; title: string; status: string; displayLabel: string })[];
   canExport: boolean;
+  foodbellRevenue?: number;
+  foodbellConnected?: boolean;
 }
 
 const ICONS: Record<string, Stat['icon']> = {
@@ -31,6 +34,7 @@ const ICONS: Record<string, Stat['icon']> = {
   calls: PhoneIcon,
   codeCopies: TicketIcon,
   newFollowers: UsersIcon,
+  foodbellOrders: TruckIcon,
 };
 const TINTS: Stat['tint'][] = ['blue', 'mint', 'peach', 'lilac'];
 
@@ -92,6 +96,14 @@ export default function InsightsPage() {
       )}
 
       <StatStrip stats={stats} />
+      {data.metrics.some((m) => m.key === 'foodbellOrders') && (
+        <p className="text-sm mt-4">
+          <TruckIcon className="w-4 h-4 inline mr-1.5 text-primary" />
+          <b>{data.totals.foodbellOrders ?? 0}</b> {data.totals.foodbellOrders === 1 ? 'order' : 'orders'} on your Foodbell site came from TruOffers in this period
+          {data.foodbellRevenue ? <>, worth <b>{money(data.foodbellRevenue)}</b></> : null}.
+          {!data.foodbellConnected && <span className="text-muted"> Foodbell is no longer connected.</span>}
+        </p>
+      )}
 
       <section className="mt-8">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">

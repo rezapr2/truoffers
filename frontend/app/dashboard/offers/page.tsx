@@ -7,7 +7,7 @@ import { api, API_URL, errorMessage } from '@/lib/api';
 import { useBusiness } from '@/lib/business-context';
 import { useApi } from '@/lib/hooks';
 import { calendarDate } from '@/lib/dates';
-import type { Offer, OfferSource } from '@/lib/types';
+import { isMirrored, type Offer, type OfferSource } from '@/lib/types';
 import { Alert, btn, EmptyState, Feedback, Spinner, StatusPill, Tabs } from '@/components/ui';
 import { MoreIcon, PlusIcon } from '@/components/icons';
 import { DashboardPage, PlanUsage } from '../_components/shared';
@@ -142,9 +142,11 @@ function RowMenu({ offer, qr, onAction }: { offer: Offer; qr: boolean; onAction:
               View on site
             </Link>
           )}
-          <button className={`${item} text-danger`} onClick={() => pick('delete')}>
-            Delete
-          </button>
+          {!isMirrored(offer) && (
+            <button className={`${item} text-danger`} onClick={() => pick('delete')}>
+              Delete
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -251,6 +253,11 @@ function OffersInner() {
                     From your website ({offer.imported.domain}){offer.imported.managedBy === 'merchant_managed' ? ' · managed by you' : ' · kept in sync until you edit or confirm it'}
                   </div>
                 )}
+                {isMirrored(offer) && (
+                  <div className="text-[12.5px] text-muted mt-1">
+                    From your Foodbell site · <Link href="/dashboard/foodbell" className="font-bold text-primary">change or switch it off in Foodbell</Link>
+                  </div>
+                )}
                 {offer.sourceChanged && <div className="text-[13px] font-bold text-star mt-1">Your website now shows something different from this offer.</div>}
               </div>
               <div className="text-sm font-bold">
@@ -265,7 +272,7 @@ function OffersInner() {
                     Promote
                   </Link>
                 )}
-                {!['expired', 'removed', 'hidden_by_reports', 'possibly_removed', 'expiry_review'].includes(offer.status) && (
+                {!['expired', 'removed', 'hidden_by_reports', 'possibly_removed', 'expiry_review'].includes(offer.status) && !isMirrored(offer) && (
                   <Link href={`/dashboard/offers/${offer._id}/edit`} className={btn.small}>
                     Edit
                   </Link>

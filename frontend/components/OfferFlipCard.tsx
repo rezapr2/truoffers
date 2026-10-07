@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { Offer, Business } from '@/lib/types';
 import { track } from '@/lib/analytics';
+import { referralUrl, trackOrderClick } from '@/lib/order-link';
 import { api } from '@/lib/api';
 import { endsLabel as formatEnds } from '@/lib/dates';
 import { offerHref } from '@/lib/offer-url';
@@ -127,12 +128,12 @@ export default function OfferFlipCard({ offer }: { offer: Offer }) {
           <div className="mt-auto flex gap-2 flex-wrap items-center">
             {orderUrl && offer.redemptionType !== 'phone' && (
               <a
-                href={orderUrl}
+                href={referralUrl(orderUrl, offer._id)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  track('order_click', { offerId: offer._id, businessId });
+                  trackOrderClick(e, orderUrl, offer._id, { offerId: offer._id, businessId });
                   if (offer.redemptionType === 'direct_link') redeemed('order_link');
                 }}
                 className="btn-sun text-[13px] font-extrabold px-4 py-2 rounded-full"

@@ -147,7 +147,12 @@ export interface Offer {
   sources?: OfferSource[];
   lastCheckedAt?: string;
   imported?: ImportNotice | null;
+  // Mirrored from the business's Foodbell site: changed there, not here
+  external?: { provider: string; id: string } | null;
 }
+
+/** A deal synced from Foodbell that is still running: edited and switched off in Foodbell. */
+export const isMirrored = (offer: Pick<Offer, 'external' | 'status'>) => offer.external?.provider === 'foodbell' && offer.status !== 'expired';
 
 // An imported offer hidden while a recheck confirms whether the takeaway still offers it.
 export interface CheckingOffer {

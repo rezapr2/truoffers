@@ -24,6 +24,7 @@ import {
   OffersIcon,
   PlusIcon,
   StoreIcon,
+  TruckIcon,
   UserIcon,
   UsersIcon,
 } from './icons';
@@ -43,6 +44,7 @@ const ITEMS: Item[] = [
   { href: '/dashboard/offers/new', label: 'Post an offer', icon: PlusIcon },
   { href: '/dashboard/promote', label: 'Promote', icon: MegaphoneIcon, ownerOnly: true },
   { href: '/dashboard/profile', label: 'Business profile', icon: StoreIcon },
+  { href: '/dashboard/foodbell', label: 'Foodbell', icon: TruckIcon },
   { href: '/dashboard/verification', label: 'Verification', icon: BadgeCheckIcon },
   { href: '/dashboard/billing', label: 'Plan and billing', icon: CardIcon, ownerOnly: true },
   { href: '/dashboard/insights', label: 'Insights', icon: ChartIcon },
