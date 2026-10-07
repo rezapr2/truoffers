@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Alert, btn, PageHeader } from '@/components/ui';
+import { Alert, btn, PageHeader, Spinner } from '@/components/ui';
 import { useBusiness, type ManageData } from '@/lib/business-context';
 import { date } from '@/lib/format';
 
@@ -16,11 +16,13 @@ export function DashboardPage({ title, subtitle, actions, children }: { title: R
 }
 
 /** Pages only owners can use (plan, promotions): staff see why instead. */
-export function OwnerOnly({ children }: { children: ReactNode }) {
-  const { isOwner, manage } = useBusiness();
-  if (!manage) return null;
+export function OwnerOnly({ children, pageTitle }: { children: ReactNode; pageTitle?: string }) {
+  const { isOwner, manage, loading } = useBusiness();
+  if (!manage) return loading ? <Spinner /> : null;
   if (!isOwner && manage.myRole !== 'staff_override') {
-    return <Alert tone="info" title="Owners only">Ask an owner of the business to do this. Staff can post and edit offers and the profile.</Alert>;
+    const message = <Alert tone="info" title="Owners only">Ask an owner of the business to do this. Staff can post and edit offers and the profile.</Alert>;
+    // Guarding a whole page: keep the page heading around the message
+    return pageTitle ? <DashboardPage title={pageTitle}>{message}</DashboardPage> : message;
   }
   return <>{children}</>;
 }

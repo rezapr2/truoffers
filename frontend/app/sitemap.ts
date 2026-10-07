@@ -23,12 +23,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === '' ? 1 : 0.8,
   }));
 
-  const [businesses, towns, help, offers] = await Promise.all([
+  const [businesses, towns, help, offers, blog] = await Promise.all([
     serverApi<{ items: Business[] }>('/businesses?limit=50'),
     serverApi<{ town: string }[]>('/businesses/towns'),
     serverApi<{ slug: string }[]>('/content/help'),
     serverApi<{ _id: string; slug?: string }[]>('/offers?limit=100'),
+    serverApi<{ items: { slug: string; publishedAt: string }[] }>('/blog'),
   ]);
+  const blogPages: MetadataRoute.Sitemap = (blog?.items || []).map((p) => ({ url: `${SITE_URL}/blog/${p.slug}`, lastModified: p.publishedAt, changeFrequency: 'monthly', priority: 0.5 }));
 
   const helpPages: MetadataRoute.Sitemap = (help || []).map((p) => ({ url: `${SITE_URL}/help/${p.slug}`, changeFrequency: 'weekly', priority: 0.5 }));
   // Shareable offer pages, /offer/{id}-{slug}
@@ -50,5 +52,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticPages, ...townPages, ...businessPages, ...offerPages, ...helpPages];
+  return [...staticPages, ...townPages, ...businessPages, ...offerPages, ...helpPages, ...blogPages];
 }

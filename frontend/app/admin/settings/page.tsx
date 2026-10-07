@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAction, useApi } from '@/lib/hooks';
 import { AdminPage, RequireCapability } from '../_components/admin-ui';
 
-type SecretName = 'stripeSecretKey' | 'stripeWebhookSecret' | 'twilioAccountSid' | 'twilioAuthToken' | 'twilioVerifyServiceSid' | 'resendApiKey' | 'recaptchaSecretKey';
+type SecretName = 'stripeSecretKey' | 'stripeWebhookSecret' | 'twilioAccountSid' | 'twilioAuthToken' | 'twilioVerifyServiceSid' | 'twilioMessagingServiceSid' | 'resendApiKey' | 'recaptchaSecretKey';
 
 interface Settings {
   siteName: string;
@@ -36,12 +36,13 @@ const SECRET_GROUPS: { title: string; hint: string; secrets: { name: SecretName;
     ],
   },
   {
-    title: 'Twilio Verify',
-    hint: 'Sends the SMS and voice codes for the phone check. Without it, codes are only shown in test mode.',
+    title: 'Twilio',
+    hint: 'Verify sends the SMS and voice codes for the phone check; a Messaging Service sends campaign texts. Without them, codes are only shown in test mode and texts are only logged.',
     secrets: [
       { name: 'twilioAccountSid', label: 'Account SID' },
       { name: 'twilioAuthToken', label: 'Auth token' },
       { name: 'twilioVerifyServiceSid', label: 'Verify service SID' },
+      { name: 'twilioMessagingServiceSid', label: 'Messaging service SID (campaign texts)' },
     ],
   },
   {

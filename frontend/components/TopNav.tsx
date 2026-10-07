@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { isStaff, useAuth } from '@/lib/auth-context';
+import { accountHref, useAuth } from '@/lib/auth-context';
 import Logo from './Logo';
 import { MenuIcon } from './icons';
 import { NAV, isNavActive } from './nav';
@@ -14,7 +14,7 @@ const LINKS = NAV.filter((item) => item.href !== '/');
 export default function TopNav({ onOpenMenu }: { onOpenMenu: () => void }) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
-  const dashboardHref = isStaff(user) ? '/admin' : '/dashboard';
+  const dashboardHref = accountHref(user);
   const followed = user?.followedBusinesses.length ?? 0;
 
   return (

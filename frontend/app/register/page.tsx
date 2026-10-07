@@ -23,6 +23,7 @@ function RegisterInner() {
     password: '',
     postcode: '',
     role: params.get('role') || 'customer',
+    marketingEmails: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -148,6 +149,15 @@ function RegisterInner() {
             />
           </label>
         )}
+        <label className="flex items-start gap-3 text-sm font-semibold text-ink-soft cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.marketingEmails}
+            onChange={(e) => setForm({ ...form, marketingEmails: e.target.checked })}
+            className="mt-1 w-4 h-4 accent-primary"
+          />
+          <span>Email me offers and news from TruOffers. You can unsubscribe at any time.</span>
+        </label>
         <button
           type="submit"
           disabled={busy}

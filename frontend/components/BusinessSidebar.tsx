@@ -24,6 +24,7 @@ import {
   OffersIcon,
   PlusIcon,
   StoreIcon,
+  UserIcon,
   UsersIcon,
 } from './icons';
 
@@ -49,6 +50,7 @@ const ITEMS: Item[] = [
   { href: '/dashboard/branches', label: 'Branches', icon: BranchIcon },
   { href: '/dashboard/reports', label: 'Customer reports', icon: FlagIcon },
   { href: '/dashboard/notifications', label: 'Notifications', icon: BellIcon },
+  { href: '/dashboard/support', label: 'Support', icon: HelpIcon },
 ];
 
 export default function BusinessSidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -121,6 +123,9 @@ export default function BusinessSidebar({ onNavigate }: { onNavigate?: () => voi
             <ExternalIcon className="w-5 h-5" /> View public page
           </Link>
         )}
+        <Link href="/account" onClick={onNavigate} className="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[14px] font-bold text-muted-2 hover:text-ink hover:bg-surface">
+          <UserIcon className="w-5 h-5" /> My account
+        </Link>
         <Link href="/help" onClick={onNavigate} className="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[14px] font-bold text-muted-2 hover:text-ink hover:bg-surface">
           <HelpIcon className="w-5 h-5" /> Help
         </Link>

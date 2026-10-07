@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Poppins } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
@@ -32,6 +32,12 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
   },
+  appleWebApp: { capable: true, title: 'TruOffers', statusBarStyle: 'default' },
+  icons: { icon: [{ url: '/icon.svg', type: 'image/svg+xml' }, { url: '/favicon.ico' }] },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#10462F',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -260,6 +260,8 @@ export interface User {
   capabilities?: string[];
   impersonatedBy?: string;
   offerAlerts?: boolean;
+  marketingEmails?: boolean;
+  marketingSms?: boolean;
   favouriteCuisines: string[];
   savedOffers: string[];
   followedBusinesses: string[];

@@ -150,7 +150,13 @@ export default function OfferEditor({ offer }: { offer?: Offer }) {
   const router = useRouter();
   const { business, manage, reload } = useBusiness();
   const [form, setForm] = useState<FormState>(() => fromOffer(offer));
-  const [step, setStep] = useState(0);
+  const [step, setStepState] = useState(0);
+  // Ticks only for steps already looked at (an existing offer has been through them all)
+  const [furthest, setFurthest] = useState(offer ? 3 : 0);
+  const setStep = (next: number) => {
+    setStepState(next);
+    setFurthest((f) => Math.max(f, next));
+  };
   const [busy, setBusy] = useState<'save' | 'submit' | 'photo' | 'ai' | null>(null);
   const [error, setError] = useState<ApiError | Error | null>(null);
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
@@ -274,8 +280,8 @@ export default function OfferEditor({ offer }: { offer?: Offer }) {
                   step === i ? 'bg-tint-blue text-primary' : stepErrors[i] ? 'bg-card border border-line text-muted' : 'bg-card border border-line'
                 }`}
               >
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] ${step === i ? 'bg-primary text-white' : !stepErrors[i] ? 'bg-verified/15 text-verified' : 'bg-page'}`}>
-                  {!stepErrors[i] && step !== i ? <CheckIcon className="w-3.5 h-3.5" /> : i + 1}
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] ${step === i ? 'bg-primary text-white' : !stepErrors[i] && i <= furthest ? 'bg-verified/15 text-verified' : 'bg-page'}`}>
+                  {!stepErrors[i] && step !== i && i <= furthest ? <CheckIcon className="w-3.5 h-3.5" /> : i + 1}
                 </span>
                 {label}
               </button>

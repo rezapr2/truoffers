@@ -195,7 +195,7 @@ function Coupons() {
               </div>
             </>
           ) : (
-            <p className="text-sm text-muted">{discount(editing as Coupon)}. The discount itself can’t change once created; make a new code instead.</p>
+            editing && <p className="text-sm text-muted">{discount(editing)}. The discount itself can’t change once created; make a new code instead.</p>
           )}
           <Field label="Description (internal)">
             <input className={inputClass} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />

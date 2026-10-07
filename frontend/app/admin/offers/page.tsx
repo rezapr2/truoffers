@@ -200,7 +200,7 @@ function OffersModeration() {
                   </Td>
                   <Td>{OFFER_TYPE_LABELS[o.discountType] ?? o.discountType}</Td>
                   <Td>
-                    {o.flagLabels.length ? (
+                    {o.flagLabels?.length ? (
                       <div className="flex flex-col gap-1">
                         {o.flagLabels.map((f) => (
                           <Tag key={f} tone="warn">

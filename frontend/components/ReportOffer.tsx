@@ -5,6 +5,7 @@ import { api, errorMessage } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { useAuth } from '@/lib/auth-context';
 import { deviceId, useSite } from '@/lib/site';
+import { loadRecaptcha } from '@/lib/recaptcha';
 import { Alert, btn, Field, inputClass, Modal } from './ui';
 import { FlagIcon } from './icons';
 
@@ -16,24 +17,6 @@ const REASONS = [
   { value: 'misleading', label: 'Misleading or offensive' },
   { value: 'other', label: 'Other' },
 ];
-
-declare global {
-  interface Window {
-    grecaptcha?: { render: (el: HTMLElement, options: { sitekey: string; callback: (token: string) => void; 'expired-callback'?: () => void }) => number; ready: (cb: () => void) => void };
-  }
-}
-
-function loadRecaptcha(): Promise<void> {
-  if (window.grecaptcha) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
-    script.async = true;
-    script.onload = () => window.grecaptcha?.ready(() => resolve());
-    script.onerror = () => reject(new Error('reCAPTCHA failed to load'));
-    document.head.appendChild(script);
-  });
-}
 
 /**
  * Spec "Offer reports": a "Report this offer" link on every offer card and offer page. Guests pass a reCAPTCHA;

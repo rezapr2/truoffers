@@ -19,6 +19,7 @@ interface RegisterInput {
   role?: string;
   phone?: string;
   postcode?: string;
+  marketingEmails?: boolean;
 }
 
 interface AuthState {
@@ -143,6 +144,14 @@ export const isStaff = (user: Pick<User, 'role'> | null | undefined) => !!user &
 /** Mirrors the API's capability names (see backend common/permissions.ts). */
 export const can = (user: Pick<User, 'capabilities'> | null | undefined, capability: string) =>
   !!user?.capabilities?.includes(capability);
+
+/** The signed-in person's own area: the admin panel, the business dashboard, or their account page. */
+export function accountHref(user: Pick<User, 'role'> | null | undefined): string {
+  if (!user) return '/login';
+  if (isStaff(user)) return '/admin';
+  if (['business_owner', 'business_staff', 'supplier'].includes(user.role)) return '/dashboard';
+  return '/account';
+}
 
 /** Where someone lands after signing in. */
 export function homeFor(user: Pick<User, 'role'>): string {

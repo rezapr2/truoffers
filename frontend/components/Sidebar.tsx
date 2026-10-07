@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { isStaff, useAuth } from '@/lib/auth-context';
+import { accountHref, isStaff, useAuth } from '@/lib/auth-context';
 import Logo from './Logo';
 import { DashboardIcon, HelpIcon, LoginIcon, LogoutIcon, ShieldIcon } from './icons';
 import { NAV, isNavActive, type NavItem } from './nav';
@@ -25,10 +25,10 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   const accountItem: NavItem | null = user
     ? {
-        href: isAdmin ? '/admin' : '/dashboard',
-        label: isAdmin ? 'Admin' : 'Dashboard',
+        href: accountHref(user),
+        label: isAdmin ? 'Admin' : accountHref(user) === '/account' ? 'My account' : 'Dashboard',
         icon: isAdmin ? ShieldIcon : DashboardIcon,
-        match: [isAdmin ? '/admin' : '/dashboard'],
+        match: [accountHref(user)],
       }
     : null;
 

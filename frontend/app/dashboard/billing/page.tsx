@@ -91,7 +91,6 @@ function BillingInner() {
 
   return (
     <DashboardPage title="Plan and billing" subtitle="Plans and promotions switch on as soon as payment is confirmed.">
-      <OwnerOnly>
         <div className="flex flex-col gap-6">
           {error && <Alert tone="danger">{error}</Alert>}
           {notice && <Alert tone="success">{notice}</Alert>}
@@ -230,15 +229,17 @@ function BillingInner() {
             )}
           </section>
         </div>
-      </OwnerOnly>
     </DashboardPage>
   );
 }
 
 export default function BillingPage() {
+  // Staff never load the owner-only billing data; they see why instead.
   return (
-    <Suspense fallback={<Spinner />}>
-      <BillingInner />
-    </Suspense>
+    <OwnerOnly pageTitle="Plan and billing">
+      <Suspense fallback={<Spinner />}>
+        <BillingInner />
+      </Suspense>
+    </OwnerOnly>
   );
 }

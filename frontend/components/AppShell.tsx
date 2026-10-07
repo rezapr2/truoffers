@@ -150,6 +150,7 @@ export function SideLink({
   active,
   badge,
   onNavigate,
+  compact,
 }: {
   href: string;
   label: string;
@@ -157,13 +158,15 @@ export function SideLink({
   active: boolean;
   badge?: number | string;
   onNavigate?: () => void;
+  // Shorter rows for long menus (the admin panel)
+  compact?: boolean;
 }) {
   return (
     <Link
       href={href}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
-      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-[14.5px] transition-colors ${
+      className={`flex items-center gap-3 px-3.5 rounded-2xl transition-colors ${compact ? 'py-[7px] text-[14px]' : 'py-2.5 text-[14.5px]'} ${
         active ? 'bg-tint-blue text-primary font-extrabold' : 'text-muted-2 hover:text-ink hover:bg-surface font-bold'
       }`}
     >

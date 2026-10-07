@@ -11,8 +11,10 @@ import {
   BadgeCheckIcon,
   CardIcon,
   DashboardIcon,
+  EditIcon,
   FileIcon,
   FlagIcon,
+  HelpIcon,
   LayersIcon,
   LayoutIcon,
   LogoutIcon,
@@ -34,6 +36,7 @@ interface Queues {
   offersWaiting: number;
   reportsOpen: number;
   suspensionReviews: number;
+  supportOpen?: number;
 }
 
 interface Item {
@@ -54,6 +57,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
       { href: '/admin/claims', label: 'Verification queue', icon: BadgeCheckIcon, capability: 'claims.review', badge: (q) => q.claimsWaiting + q.pendingProfileChanges },
       { href: '/admin/offers', label: 'Offer moderation', icon: OffersIcon, capability: 'offers.moderate', badge: (q) => q.offersWaiting },
       { href: '/admin/reports', label: 'Reports & flags', icon: FlagIcon, capability: 'reports.review', badge: (q) => q.reportsOpen },
+      { href: '/admin/support', label: 'Support', icon: HelpIcon, capability: 'support.manage', badge: (q) => q.supportOpen ?? 0 },
       { href: '/admin/businesses', label: 'Businesses', icon: StoreIcon, capability: 'admin.panel', badge: (q) => q.suspensionReviews },
       { href: '/admin/users', label: 'Users', icon: UsersIcon, capability: 'users.view' },
     ],
@@ -72,6 +76,8 @@ const GROUPS: { title: string; items: Item[] }[] = [
     items: [
       { href: '/admin/taxonomy', label: 'Categories & cities', icon: LayersIcon, capability: 'taxonomy.manage' },
       { href: '/admin/content', label: 'Content', icon: LayoutIcon, capability: 'content.manage' },
+      { href: '/admin/blog', label: 'Blog', icon: EditIcon, capability: 'content.manage' },
+      { href: '/admin/campaigns', label: 'Campaigns', icon: MegaphoneIcon, capability: 'campaigns.manage' },
       { href: '/admin/notifications', label: 'Emails & notifications', icon: MailIcon, capability: 'templates.manage' },
       { href: '/admin/scraper', label: 'Import robot', icon: RobotIcon, capability: 'scraper' },
     ],
@@ -100,7 +106,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
   const active = (item: Item) => (item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`));
 
   return (
-    <div className="flex flex-col min-h-full gap-5">
+    <div className="flex flex-col min-h-full gap-4">
       <div className="px-2 pt-1">
         <Logo />
         <div className="text-[12px] font-bold text-muted mt-2 px-1">
@@ -114,7 +120,7 @@ export default function AdminSidebar({ onNavigate }: { onNavigate?: () => void }
           <nav key={group.title} className="flex flex-col gap-0.5">
             <div className="text-[11px] font-extrabold uppercase tracking-wide text-muted px-3.5 mb-1">{group.title}</div>
             {items.map((item) => (
-              <SideLink key={item.href} href={item.href} label={item.label} icon={item.icon} active={active(item)} badge={queues && item.badge ? item.badge(queues) || undefined : undefined} onNavigate={onNavigate} />
+              <SideLink key={item.href} href={item.href} label={item.label} icon={item.icon} active={active(item)} badge={queues && item.badge ? item.badge(queues) || undefined : undefined} onNavigate={onNavigate} compact />
             ))}
           </nav>
         );

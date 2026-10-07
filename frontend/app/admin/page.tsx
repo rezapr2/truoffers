@@ -32,6 +32,8 @@ interface Overview {
     oldestOfferAgeHours: number | null;
     reportsOpen: number;
     suspensionReviews: number;
+    supportOpen?: number;
+    oldestTicketAgeHours?: number | null;
   };
   demand: {
     users: number;
@@ -74,12 +76,13 @@ export default function AdminOverviewPage() {
     <AdminPage title="Overview" subtitle="The site at a glance. Every figure opens the list behind it." actions={<DateChip />}>
       <section className="mb-10">
         <SectionTitle>Queues</SectionTitle>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
           <QueueCard href="/admin/claims" label="Claims to review" count={queues.claimsWaiting} oldest={queues.oldestClaimAgeHours} />
           <QueueCard href="/admin/claims?tab=changes" label="Profile changes" count={queues.pendingProfileChanges} hint="Locked fields" />
           <QueueCard href="/admin/offers?status=pending" label="Offers to review" count={queues.offersWaiting} oldest={queues.oldestOfferAgeHours} />
           <QueueCard href="/admin/reports" label="Open reports" count={queues.reportsOpen} />
           <QueueCard href="/admin/businesses?flag=suspension_review" label="Suspension reviews" count={queues.suspensionReviews} />
+          <QueueCard href="/admin/support" label="Support requests" count={queues.supportOpen ?? 0} oldest={queues.oldestTicketAgeHours ?? null} />
         </div>
         {queues.claimsInfoRequested > 0 && (
           <p className="text-sm text-muted font-semibold mt-3">

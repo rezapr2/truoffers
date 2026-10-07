@@ -13,7 +13,8 @@ import { AuditTrail, type AuditEntry } from '../_components/admin-ui';
 
 export type AdminOffer = Omit<Offer, 'businessId'> & {
   businessId?: { _id: string; name: string; slug: string; town?: string; postcode?: string; verificationLevel: number; website?: string; orderUrl?: string; phone?: string; status: string };
-  flagLabels: string[];
+  // Only in list rows; the drawer reads moderationFlags
+  flagLabels?: string[];
   approvedBy?: { name: string };
 };
 
@@ -122,7 +123,7 @@ export function OfferDrawer({ id, onClose, onChanged }: { id: string; onClose: (
       ) : (
         <div className="flex flex-col gap-6">
           <Feedback error={action.error} notice={action.notice} />
-          {offer.flagLabels.length > 0 && (
+          {(offer.moderationFlags?.length ?? 0) > 0 && (
             <Alert tone="warning" title="Held by the moderation rules">
               {offer.moderationFlags?.map(flagText).join('; ')}
             </Alert>
