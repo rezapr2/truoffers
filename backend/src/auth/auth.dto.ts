@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString, Length, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, Length, MaxLength, MinLength } from 'class-validator';
 import { Role } from '../common/enums';
 
 export class RegisterDto {
@@ -26,6 +26,11 @@ export class RegisterDto {
   @IsOptional()
   @IsEnum(Role)
   role?: Role;
+
+  // "Email me offers and news": marketing consent, off unless ticked
+  @IsOptional()
+  @IsBoolean()
+  marketingEmails?: boolean;
 }
 
 export class LoginDto {

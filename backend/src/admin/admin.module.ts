@@ -21,6 +21,7 @@ import { Payment, PaymentSchema } from '../schemas/payment.schema';
 import { Promotion, PromotionSchema } from '../schemas/promotion.schema';
 import { BusinessStrike, BusinessStrikeSchema, Report, ReportCase, ReportCaseSchema, ReportSchema } from '../schemas/report.schema';
 import { Subscription, SubscriptionSchema } from '../schemas/subscription.schema';
+import { SupportTicket, SupportTicketSchema } from '../schemas/support.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { AdminBusinessesService, BusinessQuery } from './admin-businesses.service';
 import { AdminOverviewService } from './admin-overview.service';
@@ -350,10 +351,11 @@ export class AdminTeamController {
       { name: BusinessStrike.name, schema: BusinessStrikeSchema },
       { name: AnalyticsEvent.name, schema: AnalyticsEventSchema },
       { name: LoginEvent.name, schema: LoginEventSchema },
+      { name: SupportTicket.name, schema: SupportTicketSchema },
     ]),
   ],
   controllers: [AdminOverviewController, AdminBusinessesController, AdminUsersController, AdminTeamController],
   providers: [AdminOverviewService, AdminBusinessesService, AdminUsersService],
-  exports: [AdminBusinessesService],
+  exports: [AdminBusinessesService, AdminUsersService],
 })
 export class AdminModule {}

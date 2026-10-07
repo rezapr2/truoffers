@@ -67,6 +67,7 @@ export class AuthService {
       postcode: dto.postcode,
       passwordHash,
       role,
+      ...(dto.marketingEmails ? { marketingEmails: true, marketingConsentAt: new Date() } : {}),
     });
     const devVerifyUrl = await this.sendVerification(user);
     await this.recordLogin({ user, success: true, method: 'register', meta });
@@ -316,6 +317,8 @@ export class AuthService {
       savedOffers: user.savedOffers,
       followedBusinesses: user.followedBusinesses,
       offerAlerts: user.offerAlerts,
+      marketingEmails: !!user.marketingEmails,
+      marketingSms: !!user.marketingSms,
     };
   }
 

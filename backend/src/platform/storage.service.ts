@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { S3Client, s3ConfigFromEnv } from './s3';
 
 export type Bucket = 'public' | 'private';
 export type FileKind = 'jpg' | 'png' | 'webp' | 'pdf';
@@ -29,13 +30,22 @@ export function sniffKind(buffer: Buffer): FileKind | null {
 }
 
 /**
- * Files on local disk under UPLOAD_DIR (a Docker volume in production). Public files (photos, logos, menus)
- * are served at /api/files/public/...; private files (verification documents, report photos) are only ever
- * streamed by the controllers that check who is asking.
+ * Files on local disk under UPLOAD_DIR (a Docker volume in production), or in an S3-compatible bucket with
+ * STORAGE_DRIVER=s3 (see s3.ts). Either way public files (photos, logos, menus) are served at
+ * /api/files/public/... and private files (verification documents, report photos) are only ever streamed by
+ * the controllers that check who is asking, so the bucket itself stays private.
  */
 @Injectable()
 export class StorageService {
   readonly root = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
+  private readonly s3 = (() => {
+    const config = s3ConfigFromEnv();
+    return config ? new S3Client(config) : null;
+  })();
+
+  get driver(): 'disk' | 's3' {
+    return this.s3 ? 's3' : 'disk';
+  }
 
   async save(bucket: Bucket, buffer: Buffer, allowed: FileKind[], maxBytes: number): Promise<{ key: string; kind: FileKind; size: number; url?: string }> {
     if (!buffer?.length) throw new BadRequestException('The file is empty');
@@ -46,14 +56,26 @@ export class StorageService {
     }
     const now = new Date();
     const key = `${bucket}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${randomBytes(16).toString('hex')}.${kind}`;
+    await this.write(key, buffer, kind);
+    return { key, kind, size: buffer.length, url: bucket === 'public' ? publicUrl(key) : undefined };
+  }
+
+  /** Stores bytes under a key produced by save() (also used to copy files from disk to a bucket). */
+  async write(key: string, buffer: Buffer, kind: FileKind): Promise<void> {
+    if (!KEY_PATTERN.test(key)) throw new BadRequestException('Invalid file key');
+    if (this.s3) return this.s3.put(key, buffer, MIME[kind]);
     const file = this.pathFor(key);
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, buffer, { mode: 0o640 });
-    return { key, kind, size: buffer.length, url: bucket === 'public' ? publicUrl(key) : undefined };
   }
 
   async read(key: string): Promise<{ buffer: Buffer; mime: string }> {
     if (!KEY_PATTERN.test(key)) throw new NotFoundException('File not found');
+    if (this.s3) {
+      const buffer = await this.s3.get(key);
+      if (!buffer) throw new NotFoundException('File not found');
+      return { buffer, mime: MIME[key.split('.').pop() as FileKind] };
+    }
     const file = this.pathFor(key);
     try {
       await stat(file);
@@ -66,6 +88,7 @@ export class StorageService {
 
   async remove(key: string | undefined | null): Promise<void> {
     if (!key || !KEY_PATTERN.test(key)) return;
+    if (this.s3) return this.s3.delete(key);
     await rm(this.pathFor(key), { force: true });
   }
 

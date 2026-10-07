@@ -18,7 +18,7 @@ import { encryptSecret, sha256 } from '../platform/crypto';
 import { otpauthUrl } from '../auth/totp';
 import { DEFAULT_OFFER_TYPES } from '../content/content.service';
 import { DEFAULT_PROMOTION_PRODUCTS } from '../promotions/promotions.service';
-import { loadDotEnv, MVP_PLANS, STARTER_AREAS, STARTER_FAQS, STARTER_HELP_PAGES, SUPPLIER_PLANS } from './mvp-defaults';
+import { loadDotEnv, MVP_PLANS, STARTER_AREAS, STARTER_BLOG_POSTS, STARTER_FAQS, STARTER_HELP_PAGES, SUPPLIER_PLANS } from './mvp-defaults';
 
 loadDotEnv();
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/truoffers';
@@ -42,6 +42,7 @@ async function main() {
     'promotionproducts', 'reports', 'reportcases', 'businessstrikes', 'reportblocks', 'notifications', 'emaillogs',
     'emailtemplates', 'sitesettings', 'sitecontents', 'helppages', 'areas', 'offertypes', 'businessinvites',
     'businesschangerequests', 'loginevents', 'migrations', 'wallets', 'wallettransactions',
+    'blogposts', 'supporttickets', 'campaigns', 'counters',
     // Scraper collections
     'scrapedwebsites', 'extractedoffercandidates', 'importjobs', 'providerpolicies', 'domainoptouts',
     'robotscaches', 'domaincrawlconfigs', 'adminauditlogs', 'scraperadapters', 'scrapersettings',
@@ -386,6 +387,7 @@ async function main() {
     withTimestamps({ key: 'home', value: { featuredTakeaways: { mode: 'auto', ids: [] }, topPicks: { mode: 'auto', ids: [] }, flashDeals: { mode: 'auto', ids: [] } } }),
   ]);
   await db.collection('helppages').insertMany(STARTER_HELP_PAGES.map(withTimestamps));
+  await db.collection('blogposts').insertMany(STARTER_BLOG_POSTS.map((post, i) => withTimestamps({ ...post, publishedAt: inDays(-(i + 1) * 3) })));
 
   // ---- Analytics: 14 days of events for the verified takeaways ----
   const events: Record<string, unknown>[] = [];

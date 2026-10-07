@@ -12,6 +12,7 @@ import { AuditService } from '../scraper/audit/audit.service';
 import { EmailService } from './email.service';
 import { NotificationsService } from './notifications.service';
 import { PhoneVerificationService } from './phone-verification.service';
+import { SmsService } from './sms.service';
 import {
   AdminAuditController,
   AdminEmailTemplatesController,
@@ -41,6 +42,7 @@ const SERVICES = [
   EmailService,
   NotificationsService,
   PhoneVerificationService,
+  SmsService,
   RecaptchaService,
   StorageService,
   AuditService,

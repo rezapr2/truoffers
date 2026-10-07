@@ -31,6 +31,10 @@ export enum Capability {
   CONTENT_MANAGE = 'content.manage',
   TEMPLATES_MANAGE = 'templates.manage',
   TEAM_MANAGE = 'team.manage',
+  // The support inbox (contact form and dashboard tickets)
+  SUPPORT_MANAGE = 'support.manage',
+  // Email, SMS and in-app campaigns
+  CAMPAIGNS_MANAGE = 'campaigns.manage',
   SETTINGS_MANAGE = 'settings.manage',
   SCRAPER = 'scraper',
 }
@@ -45,6 +49,7 @@ const MODERATOR: Capability[] = [
   Capability.REPORTS_REVIEW,
   Capability.AUDIT_VIEW,
   Capability.SCRAPER,
+  Capability.SUPPORT_MANAGE,
 ];
 
 // "admin" sits between moderator and super admin: it can act on businesses and users, but prices, money,

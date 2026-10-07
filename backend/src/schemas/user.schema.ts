@@ -102,6 +102,17 @@ export class User {
   // Email alerts when a followed takeaway posts an offer
   @Prop({ default: true })
   offerAlerts: boolean;
+
+  // Marketing consent (PECR): campaigns marked as marketing only reach people who opted in, per channel.
+  @Prop({ default: false })
+  marketingEmails: boolean;
+
+  @Prop({ default: false })
+  marketingSms: boolean;
+
+  // When the consent above last changed, for the record
+  @Prop({ type: Date })
+  marketingConsentAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

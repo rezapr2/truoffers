@@ -132,6 +132,63 @@ export const STARTER_HELP_PAGES = [
   },
 ];
 
+// Starter blog posts about how TruOffers works. Admins edit or remove them in Content → Blog.
+export const STARTER_BLOG_POSTS = [
+  {
+    slug: 'how-truoffers-verifies-takeaways',
+    title: 'How TruOffers verifies takeaways',
+    excerpt: 'What the “✓ TruOffers verified” badge means, and the checks a takeaway passes before it gets one.',
+    tags: ['For customers', 'For owners'],
+    body: [
+      'Every offer on TruOffers belongs to a real takeaway, and the badge next to its name tells you whether our team has checked who runs it.',
+      '## What the badge means',
+      '“✓ TruOffers verified” means the people managing the listing have proved they run the takeaway. Listings without that proof say “Not verified”. Both can show offers, but only verified takeaways can publish offers without a check from our team.',
+      '## The checks',
+      '- A 6-digit code sent by text or automated call to the shop’s phone number, so the person claiming the listing has access to the shop line.',
+      '- At least one more piece of evidence: a recent business document, a check on the takeaway’s own website or business email, its Food Hygiene Rating listing, or a photo of the shop front with a code written on paper.',
+      '- A review by a moderator, who compares the evidence with the listing and checks the order link goes to the takeaway’s own website or a known ordering provider.',
+      '## Keeping it accurate',
+      'Changes to a verified takeaway’s name, address, phone number or order link wait for a moderator before they show, and every verification is renewed once a year. If something looks wrong, use “Report this offer” and our team will look into it.',
+    ].join('\n\n'),
+  },
+  {
+    slug: 'cutting-marketplace-fees',
+    title: 'Cutting marketplace fees without losing orders',
+    excerpt: 'A practical guide for takeaways that want more orders through their own website or phone line.',
+    tags: ['For owners'],
+    body: [
+      'Marketplace apps bring orders, but the commission on each one adds up. Many takeaways keep the apps for reach and use offers to move regular customers to ordering direct.',
+      '## Give people a reason to order direct',
+      'An offer that only works on your own website or by phone, such as free garlic bread over £20 or 10% off collection, gives customers a clear reason to skip the app next time.',
+      '## Make ordering direct easy',
+      '- Put your own order link on your listing, so every offer sends people straight to it.',
+      '- Show your phone number for customers who prefer to call.',
+      '- Keep your menu up to date so nobody is surprised by prices.',
+      '## Keep customers coming back',
+      'Customers can follow your takeaway on TruOffers and get an alert when you post a new offer. A new offer every week or two keeps you in front of them without paying commission on the order.',
+      '## Measure it',
+      'Your dashboard shows how many people saw each offer, opened it and tapped through to order or call, so you can see which offers bring orders and run more of those.',
+    ].join('\n\n'),
+  },
+  {
+    slug: 'getting-the-most-from-takeaway-offers',
+    title: 'Getting the most from takeaway offers',
+    excerpt: 'How to find the best deals near you, and how to use them when you order.',
+    tags: ['For customers'],
+    body: [
+      'TruOffers lists live offers from takeaways near you, from percentage discounts to meal deals and free extras.',
+      '## Search by postcode',
+      'Enter your postcode to see offers from takeaways around you, nearest first. Filter by cuisine, delivery or collection, or show verified takeaways only.',
+      '## Check how to redeem',
+      'Tap an offer to see how it works: some are applied when you order online, some need a code at checkout, some work when you call, and some you show on your phone in the shop. The terms, minimum spend and the days it runs are on the offer.',
+      '## Follow your favourites',
+      'Follow a takeaway to get an alert when it posts a new offer. You can turn alerts off at any time on your account page.',
+      '## Something not right?',
+      'If a takeaway does not honour an offer, use “Report this offer”. Our team reviews every report and removes offers that are not honoured.',
+    ].join('\n\n'),
+  },
+].map((p) => ({ ...p, status: 'published', authorName: 'TruOffers team' }));
+
 export const STARTER_AREAS = [
   { name: 'Leeds', slug: 'leeds', sortOrder: 0, postcodeDistricts: ['LS1', 'LS6'], seoText: 'Takeaway offers across Leeds, from Headingley pizzerias to city-centre street food.' },
   { name: 'Manchester', slug: 'manchester', sortOrder: 1, postcodeDistricts: ['M4', 'M14'], seoText: 'Live takeaway deals in Manchester, including the Curry Mile in Rusholme.' },

@@ -16,6 +16,8 @@
     "migrate:scraper:prod": "node dist/scripts/migrate-scraper.js",
     "migrate:mvp": "ts-node -r tsconfig-paths/register src/scripts/migrate-mvp.ts",
     "migrate:mvp:prod": "node dist/scripts/migrate-mvp.js",
+    "storage:copy-to-s3": "ts-node -r tsconfig-paths/register src/scripts/copy-uploads-to-s3.ts",
+    "storage:copy-to-s3:prod": "node dist/scripts/copy-uploads-to-s3.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "jest --runInBand",

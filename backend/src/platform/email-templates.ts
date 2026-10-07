@@ -246,6 +246,22 @@ export const EMAIL_TEMPLATES: TemplateDefinition[] = [
     subject: '{{businessName}} on {{siteName}}: your {{month}} report',
     body: 'Here is how {{businessName}} did in {{month}}:\n\nImpressions: {{impressions}}\nProfile views: {{profileViews}}\nRedeem taps: {{redeemTaps}}\nOrder clicks: {{orderClicks}}\nCalls: {{calls}}\n\nSee the details:\n\n{{link}}',
   },
+  {
+    key: 'support_ticket_received',
+    name: 'Support request received',
+    audience: 'customer',
+    variables: ['name', 'number', 'subject', 'link'],
+    subject: 'We got your message ({{number}})',
+    body: 'Hi {{name}},\n\nThanks for getting in touch about "{{subject}}". Your reference is {{number}}. We usually reply within one working day.\n\nYou can add details or follow the conversation here:\n\n{{link}}',
+  },
+  {
+    key: 'support_reply',
+    name: 'Support reply',
+    audience: 'customer',
+    variables: ['name', 'number', 'subject', 'message', 'link'],
+    subject: 'Re: {{subject}} ({{number}})',
+    body: 'Hi {{name}},\n\n{{message}}\n\nReply here:\n\n{{link}}',
+  },
 ];
 
 export const TEMPLATE_BY_KEY = new Map(EMAIL_TEMPLATES.map((t) => [t.key, t]));

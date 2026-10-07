@@ -13,6 +13,7 @@ export const SECRET_ENV: Record<SecretName, string> = {
   twilioAccountSid: 'TWILIO_ACCOUNT_SID',
   twilioAuthToken: 'TWILIO_AUTH_TOKEN',
   twilioVerifyServiceSid: 'TWILIO_VERIFY_SERVICE_SID',
+  twilioMessagingServiceSid: 'TWILIO_MESSAGING_SERVICE_SID',
   resendApiKey: 'RESEND_API_KEY',
   recaptchaSecretKey: 'RECAPTCHA_SECRET_KEY',
 };

@@ -12,7 +12,8 @@
  * 4. Claims filed before the MVP flow get the new fields (kind, phone check result, submission date).
  * 5. Plans get the plan editor's structure; the spec's MVP plans are set up once (Free, Standard,
  *    Professional on sale; Starter and Premium hidden).
- * 6. Promotion products, offer types, site settings and starter content (once); missing settings get defaults.
+ * 6. Promotion products, offer types, site settings, starter content and blog posts (once); missing settings
+ *    get defaults.
  * 7. Wallet-funded daily promotions end (their wallet balances are reported, not touched).
  * 8. Cuisines get the taxonomy fields.
  * 9. Indexes for every new collection.
@@ -23,6 +24,9 @@ import { PromotionStatus, Role } from '../common/enums';
 import { DEFAULT_OFFER_TYPES } from '../content/content.service';
 import { DEFAULT_PROMOTION_PRODUCTS } from '../promotions/promotions.service';
 import { AdminAuditLog, AdminAuditLogSchema } from '../schemas/admin-audit-log.schema';
+import { BlogPost, BlogPostSchema } from '../schemas/blog.schema';
+import { Campaign, CampaignSchema } from '../schemas/campaign.schema';
+import { SupportTicket, SupportTicketSchema } from '../schemas/support.schema';
 import { Business, BusinessSchema } from '../schemas/business.schema';
 import { BusinessChangeRequest, BusinessChangeRequestSchema, BusinessInvite, BusinessInviteSchema } from '../schemas/business-team.schema';
 import { Category, CategorySchema } from '../schemas/category.schema';
@@ -39,7 +43,7 @@ import { SiteSettings, SiteSettingsSchema } from '../schemas/site-settings.schem
 import { Subscription, SubscriptionSchema } from '../schemas/subscription.schema';
 import { Area, AreaSchema, HelpPage, HelpPageSchema, OfferTypeConfig, OfferTypeConfigSchema, SiteContent, SiteContentSchema } from '../schemas/taxonomy.schema';
 import { User, UserSchema } from '../schemas/user.schema';
-import { loadDotEnv, MVP_PLANS, STARTER_AREAS, STARTER_FAQS, STARTER_HELP_PAGES, SUPPLIER_PLANS } from '../seed/mvp-defaults';
+import { loadDotEnv, MVP_PLANS, STARTER_AREAS, STARTER_BLOG_POSTS, STARTER_FAQS, STARTER_HELP_PAGES, SUPPLIER_PLANS } from '../seed/mvp-defaults';
 
 loadDotEnv();
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/truoffers';
@@ -179,6 +183,18 @@ async function main() {
     return 'promotion products, offer types, settings, FAQs, help pages and areas created';
   });
 
+  // 6a. Starter blog posts (the blog used to show placeholders)
+  await once(db, 'mvp-blog-v1', async () => {
+    let created = 0;
+    for (const post of STARTER_BLOG_POSTS) {
+      const result = await db
+        .collection('blogposts')
+        .updateOne({ slug: post.slug }, { $setOnInsert: { ...post, publishedAt: new Date(), createdAt: new Date(), updatedAt: new Date() } }, { upsert: true });
+      created += result.upsertedCount;
+    }
+    return `${created} starter blog post(s) published`;
+  });
+
   // 6b. The step above created the settings document with only its key. Fill every missing field with its
   // default (ordering providers, moderation rules, report thresholds, VAT) so nothing reads an empty value.
   await once(db, 'mvp-settings-defaults-v1', async () => {
@@ -235,6 +251,9 @@ async function main() {
     [SiteContent.name, SiteContentSchema],
     [HelpPage.name, HelpPageSchema],
     [AdminAuditLog.name, AdminAuditLogSchema],
+    [BlogPost.name, BlogPostSchema],
+    [SupportTicket.name, SupportTicketSchema],
+    [Campaign.name, CampaignSchema],
   ];
   for (const [name, schema] of models) await model(name, schema).createIndexes();
   console.log(`  indexes: ensured for ${models.length} collections`);

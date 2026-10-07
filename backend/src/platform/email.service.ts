@@ -53,35 +53,64 @@ export class EmailService {
         await this.log.create({ to, template, subject: email.subject, body: email.body, status: 'disabled' });
         return { status: 'disabled' };
       }
-      const apiKey = process.env.NODE_ENV === 'test' ? undefined : await this.settings.secret('resendApiKey');
-      if (!apiKey) {
-        await this.log.create({ to, template, subject: email.subject, body: email.body, status: 'logged' });
-        return { status: 'logged' };
-      }
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: email.from,
-          to: [to],
-          subject: email.subject,
-          text: email.body,
-          html: textToHtml(email.body, email.siteName),
-        }),
-        signal: AbortSignal.timeout(10_000),
-      });
-      const payload = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
-      if (!res.ok) throw new Error(payload.message || `Resend responded ${res.status}`);
-      await this.log.create({ to, template, subject: email.subject, body: email.body, status: 'sent', provider: 'resend', providerId: payload.id });
-      return { status: 'sent' };
+      return await this.deliver({ to, label: template, subject: email.subject, body: email.body, from: email.from, siteName: email.siteName });
     } catch (err) {
-      const message = (err as Error).message;
-      this.logger.warn(`Email ${template} to ${to} failed: ${message}`);
-      await this.log
-        .create({ to, template, subject: template, body: '', status: 'failed', error: message })
-        .catch(() => undefined);
-      return { status: 'failed' };
+      return this.failed(to, template, err);
     }
+  }
+
+  /**
+   * An email written by an admin (campaigns) rather than a template. Marketing emails carry an unsubscribe
+   * link in the body and the List-Unsubscribe headers that mail providers show as a button.
+   */
+  async sendDirect(input: { to: string; label: string; subject: string; body: string; unsubscribeUrl?: string }): Promise<{ status: string }> {
+    try {
+      const settings = await this.settings.get();
+      const body = input.unsubscribeUrl ? `${input.body.trim()}\n\n—\nYou are getting this because you asked for news and offers from ${settings.siteName}. Unsubscribe: ${input.unsubscribeUrl}` : input.body.trim();
+      return await this.deliver({
+        to: input.to,
+        label: input.label,
+        subject: input.subject,
+        body,
+        from: settings.emailFrom || process.env.EMAIL_FROM || 'TruOffers <hello@truoffers.co.uk>',
+        siteName: settings.siteName,
+        headers: input.unsubscribeUrl ? { 'List-Unsubscribe': `<${input.unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : undefined,
+      });
+    } catch (err) {
+      return this.failed(input.to, input.label, err);
+    }
+  }
+
+  private async deliver(email: { to: string; label: string; subject: string; body: string; from: string; siteName: string; headers?: Record<string, string> }) {
+    const apiKey = process.env.NODE_ENV === 'test' ? undefined : await this.settings.secret('resendApiKey');
+    if (!apiKey) {
+      await this.log.create({ to: email.to, template: email.label, subject: email.subject, body: email.body, status: 'logged' });
+      return { status: 'logged' };
+    }
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: email.from,
+        to: [email.to],
+        subject: email.subject,
+        text: email.body,
+        html: textToHtml(email.body, email.siteName),
+        ...(email.headers ? { headers: email.headers } : {}),
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const payload = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
+    if (!res.ok) throw new Error(payload.message || `Resend responded ${res.status}`);
+    await this.log.create({ to: email.to, template: email.label, subject: email.subject, body: email.body, status: 'sent', provider: 'resend', providerId: payload.id });
+    return { status: 'sent' };
+  }
+
+  private async failed(to: string, label: string, err: unknown) {
+    const message = (err as Error).message;
+    this.logger.warn(`Email ${label} to ${to} failed: ${message}`);
+    await this.log.create({ to, template: label, subject: label, body: '', status: 'failed', error: message }).catch(() => undefined);
+    return { status: 'failed' };
   }
 
   // ---- Admin ----
@@ -159,6 +188,8 @@ function sampleValue(name: string): string {
     month: 'September 2026',
     outcome: 'approved',
     fields: 'phone number',
+    number: 'T-10234',
+    subject: 'My listing shows the wrong phone number',
   };
   return samples[name] ?? name;
 }

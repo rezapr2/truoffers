@@ -45,3 +45,15 @@ export function safeEqual(a: string, b: string): boolean {
   const right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
 }
+
+/**
+ * A short signature for links that act without signing in (unsubscribe). Keyed like the settings secrets, so
+ * a link stops working if the key changes, which only means asking for a new one.
+ */
+export function signValue(purpose: string, value: string): string {
+  return createHash('sha256').update(`${purpose}:${value}:`).update(key()).digest('base64url').slice(0, 32);
+}
+
+export function checkSignedValue(purpose: string, value: string, signature: string): boolean {
+  return typeof signature === 'string' && signature.length === 32 && safeEqual(signValue(purpose, value), signature);
+}

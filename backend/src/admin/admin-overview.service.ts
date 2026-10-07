@@ -20,6 +20,7 @@ import { Payment, PaymentDocument } from '../schemas/payment.schema';
 import { Promotion, PromotionDocument } from '../schemas/promotion.schema';
 import { ReportCase, ReportCaseDocument } from '../schemas/report.schema';
 import { Subscription, SubscriptionDocument } from '../schemas/subscription.schema';
+import { SupportTicket, SupportTicketDocument } from '../schemas/support.schema';
 import { User, UserDocument } from '../schemas/user.schema';
 
 const DAY = 24 * 3600_000;
@@ -36,6 +37,7 @@ export class AdminOverviewService {
     @InjectModel(Promotion.name) private readonly promotions: Model<PromotionDocument>,
     @InjectModel(ReportCase.name) private readonly reportCases: Model<ReportCaseDocument>,
     @InjectModel(AnalyticsEvent.name) private readonly events: Model<AnalyticsEventDocument>,
+    @InjectModel(SupportTicket.name) private readonly tickets: Model<SupportTicketDocument>,
     private readonly claims: ClaimsAdminService,
   ) {}
 
@@ -63,6 +65,8 @@ export class AdminOverviewService {
       claimStats,
       topSearchAreas,
       signupsByDay,
+      supportOpen,
+      oldestTicket,
     ] = await Promise.all([
       this.businesses.countDocuments({ status: BusinessStatus.ACTIVE }),
       this.businesses.countDocuments({ status: BusinessStatus.ACTIVE, verificationLevel: { $gte: VerificationLevel.CLAIM_PENDING } }),
@@ -92,6 +96,8 @@ export class AdminOverviewService {
         { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
         { $sort: { _id: 1 } },
       ]),
+      this.tickets.countDocuments({ status: 'open' }),
+      this.tickets.findOne({ status: 'open' }).sort({ lastCustomerMessageAt: 1 }).select('lastCustomerMessageAt').lean(),
     ]);
     const paying = activeSubs.filter((s) => s.status === SubscriptionStatus.ACTIVE);
     const mrr = paying.reduce((sum, s) => sum + (s.interval === 'annual' ? s.price / 12 : s.price), 0);
@@ -106,6 +112,8 @@ export class AdminOverviewService {
         oldestOfferAgeHours: oldestOffer ? Math.round((now - new Date((oldestOffer as unknown as { updatedAt: Date }).updatedAt).getTime()) / 3600_000) : null,
         reportsOpen,
         suspensionReviews,
+        supportOpen,
+        oldestTicketAgeHours: oldestTicket?.lastCustomerMessageAt ? Math.round((now - new Date(oldestTicket.lastCustomerMessageAt).getTime()) / 3600_000) : null,
       },
       demand: { users, signups7d, searches30d, orderClicks30d, topSearchAreas, signupsByDay },
       revenue: {

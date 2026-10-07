@@ -43,6 +43,8 @@ export class SettingsSecrets {
   @Prop() twilioAccountSid?: string;
   @Prop() twilioAuthToken?: string;
   @Prop() twilioVerifyServiceSid?: string;
+  // Campaign SMS (Programmable Messaging): a Messaging Service SID with a UK sender
+  @Prop() twilioMessagingServiceSid?: string;
   @Prop() resendApiKey?: string;
   @Prop() recaptchaSecretKey?: string;
 }

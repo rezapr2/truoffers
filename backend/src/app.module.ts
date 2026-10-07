@@ -24,6 +24,9 @@ import { ImpersonationGuard, JwtAuthGuard, PermissionsGuard, RolesGuard } from '
 import { PlatformModule } from './platform/platform.module';
 import { PlansModule } from './plans/plans.service';
 import { ClaimsModule } from './claims/claims.module';
+import { BlogModule } from './blog/blog.module';
+import { SupportModule } from './support/support.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
 import { MaintenanceGuard } from './platform/maintenance.guard';
 import { ActorContextInterceptor, ActorContextMiddleware } from './common/actor-context';
 import { ScraperModule } from './scraper/scraper.module';
@@ -49,6 +52,9 @@ import { ScraperModule } from './scraper/scraper.module';
     ClaimsModule,
     SearchModule,
     ContentModule,
+    BlogModule,
+    SupportModule,
+    CampaignsModule,
     SuppliersModule,
     BillingModule,
     PromotionsModule,

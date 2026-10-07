@@ -163,6 +163,18 @@ export class AdminUsersService {
   async erase(id: string, admin: AuthUser) {
     const user = await this.load(id);
     this.assertCanManage(user, admin);
+    return this.eraseAccount(user, 'user.erased');
+  }
+
+  /** "Delete my account" from the account page. Staff accounts are removed by a super admin instead. */
+  async eraseSelf(id: string) {
+    const user = await this.load(id);
+    if (isStaff(user)) throw new BadRequestException('Ask a super admin to remove a staff account');
+    return this.eraseAccount(user, 'user.erased_self');
+  }
+
+  private async eraseAccount(user: UserDocument, action: string) {
+    const id = user.id as string;
     const businesses = await this.businesses.find({ 'members.userId': user._id });
     for (const business of businesses) {
       business.members = business.members.filter((m) => String(m.userId) !== id);
@@ -191,10 +203,12 @@ export class AdminUsersService {
       twoFactor: { enabled: false },
       role: Role.CUSTOMER,
       sessionsValidAfter: new Date(),
+      marketingEmails: false,
+      marketingSms: false,
     });
     await user.save();
     this.strategy.forget(user.id);
-    await this.audit.record({ action: 'user.erased', targetType: 'User', targetId: user._id, after: { businessesLeft: businesses.length } });
+    await this.audit.record({ action, targetType: 'User', targetId: user._id, after: { businessesLeft: businesses.length } });
     return { erased: true };
   }
 
