@@ -86,6 +86,9 @@ export const INSIGHT_METRICS: { key: string; label: string; events: string[]; ba
   { key: 'codeCopies', label: 'Code copies', events: ['code_copy'], basic: false },
   { key: 'directions', label: 'Directions', events: ['directions_click'], basic: false },
   { key: 'newFollowers', label: 'New followers', events: ['follow'], basic: false },
+  // Orders the business's Foodbell site reported as done after a visitor came from TruOffers (src/foodbell).
+  // Recorded by the server only: browsers can't send this event.
+  { key: 'foodbellOrders', label: 'Foodbell orders', events: ['partner_order'], basic: false },
 ];
 
 const EVENT_TO_METRIC = new Map<string, string>();
@@ -159,13 +162,15 @@ export class AnalyticsService {
     const full = level !== 'views';
     const days = Math.min(365, Math.max(7, options.days ?? 30));
     const since = new Date(Date.now() - days * 24 * 3600_000);
-    const metrics = INSIGHT_METRICS.filter((m) => full || m.basic);
+    // Foodbell orders only mean something to businesses that have connected their Foodbell site
+    const offered = INSIGHT_METRICS.filter((m) => m.key !== 'foodbellOrders' || business.foodbell);
+    const metrics = offered.filter((m) => full || m.basic);
     const events = metrics.flatMap((m) => m.events);
     const match: Record<string, unknown> = { businessId: business._id, createdAt: { $gte: since }, eventName: { $in: events } };
     const offerId = full ? objectId(options.offerId) : undefined;
     if (offerId) match.offerId = offerId;
 
-    const [daily, perOffer, offers] = await Promise.all([
+    const [daily, perOffer, offers, revenue] = await Promise.all([
       this.eventModel.aggregate([
         { $match: match },
         { $group: { _id: { day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Europe/London' } }, event: '$eventName' }, count: { $sum: 1 } } },
@@ -177,6 +182,12 @@ export class AnalyticsService {
           ])
         : Promise.resolve([]),
       full ? this.offerModel.find({ businessId: business._id }).select('title status displayLabel').lean() : Promise.resolve([]),
+      full && business.foodbell
+        ? this.eventModel.aggregate([
+            { $match: { businessId: business._id, eventName: 'partner_order', createdAt: { $gte: since }, ...(offerId ? { offerId } : {}) } },
+            { $group: { _id: null, total: { $sum: '$metadata.total' } } },
+          ])
+        : Promise.resolve([]),
     ]);
 
     const dayKeys = Array.from({ length: days }, (_, i) =>
@@ -209,8 +220,11 @@ export class AnalyticsService {
       planName: plan.name,
       days,
       metrics: metrics.map((m) => ({ key: m.key, label: m.label })),
-      lockedMetrics: INSIGHT_METRICS.filter((m) => !metrics.includes(m)).map((m) => ({ key: m.key, label: m.label })),
+      lockedMetrics: offered.filter((m) => !metrics.includes(m)).map((m) => ({ key: m.key, label: m.label })),
       totals: { ...totals, followers: business.followerCount ?? 0 },
+      // Value of the Foodbell orders above, when the business is connected to Foodbell
+      foodbellRevenue: Math.round(((revenue as { total: number }[])[0]?.total ?? 0) * 100) / 100,
+      foodbellConnected: business.foodbell?.status === 'connected',
       series,
       offers: (offers as { _id: Types.ObjectId; title: string; status: string; displayLabel: string }[])
         .map((o) => ({ _id: o._id, title: o.title, status: o.status, displayLabel: o.displayLabel, ...(byOffer.get(String(o._id)) ?? Object.fromEntries(metrics.map((m) => [m.key, 0]))) }))

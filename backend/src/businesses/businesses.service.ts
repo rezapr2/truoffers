@@ -49,6 +49,11 @@ function duplicateListing(err: unknown): unknown {
     : err;
 }
 
+// Dishes mirrored from the business's Foodbell site change there (src/foodbell), not here.
+function assertOwnMenuItem(item: { source?: string }) {
+  if (item.source === 'foodbell') throw new BadRequestException('This dish comes from your Foodbell menu. Change it in Foodbell and TruOffers updates within a minute.');
+}
+
 export function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -187,7 +192,10 @@ export class BusinessesService {
         .select(PUBLIC_OFFER_PROJECTION)
         .sort({ createdAt: -1 })
         .lean(),
-      this.menuModel.find({ businessId: business._id }).sort({ section: 1, sortOrder: 1 }).lean(),
+      // A menu mirrored from Foodbell (src/foodbell) is the menu while it lasts; items typed in here wait behind it.
+      this.menuModel
+        .exists({ businessId: business._id, source: 'foodbell' })
+        .then((mirrored) => this.menuModel.find({ businessId: business._id, ...(mirrored ? { source: 'foodbell' } : {}) }).sort({ section: 1, sortOrder: 1 }).lean()),
       // Spec §9: imported offers hidden while a recheck confirms whether they are still offered.
       this.offerModel.countDocuments({ businessId: business._id, status: OfferStatus.POSSIBLY_REMOVED, $or: [{ endsAt: null }, { endsAt: { $gte: now } }] }),
     ]);
@@ -653,6 +661,7 @@ export class BusinessesService {
     await this.access.load(businessId, user, 'staff', { write: true });
     const item = await this.menuModel.findOne({ _id: itemId, businessId: new Types.ObjectId(businessId) });
     if (!item) throw new NotFoundException('Menu item not found');
+    assertOwnMenuItem(item);
     const before = { name: item.name, price: item.price, section: item.section, description: item.description };
     item.set(dto);
     await item.save();
@@ -662,7 +671,9 @@ export class BusinessesService {
 
   async removeMenuItem(businessId: string, itemId: string, user: AuthUser) {
     await this.access.load(businessId, user, 'staff', { write: true });
-    const item = await this.menuModel.findOneAndDelete({ _id: itemId, businessId: new Types.ObjectId(businessId) });
+    const item = await this.menuModel.findOne({ _id: itemId, businessId: new Types.ObjectId(businessId) });
+    if (item) assertOwnMenuItem(item);
+    if (item) await item.deleteOne();
     if (item) await this.audit.record({ action: 'menu.item_removed', targetType: 'Business', targetId: businessId, before: { name: item.name, price: item.price } });
     return { deleted: true };
   }

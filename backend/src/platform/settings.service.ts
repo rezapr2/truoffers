@@ -16,6 +16,7 @@ export const SECRET_ENV: Record<SecretName, string> = {
   twilioMessagingServiceSid: 'TWILIO_MESSAGING_SERVICE_SID',
   resendApiKey: 'RESEND_API_KEY',
   recaptchaSecretKey: 'RECAPTCHA_SECRET_KEY',
+  foodbellSharedSecret: 'FOODBELL_SHARED_SECRET',
 };
 
 export type SettingsView = Omit<SiteSettings, 'secrets'> & {

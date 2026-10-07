@@ -27,6 +27,7 @@ import { ClaimsModule } from './claims/claims.module';
 import { BlogModule } from './blog/blog.module';
 import { SupportModule } from './support/support.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { FoodbellModule } from './foodbell/foodbell.module';
 import { MaintenanceGuard } from './platform/maintenance.guard';
 import { ActorContextInterceptor, ActorContextMiddleware } from './common/actor-context';
 import { ScraperModule } from './scraper/scraper.module';
@@ -55,6 +56,7 @@ import { ScraperModule } from './scraper/scraper.module';
     BlogModule,
     SupportModule,
     CampaignsModule,
+    FoodbellModule,
     SuppliersModule,
     BillingModule,
     PromotionsModule,

@@ -26,6 +26,10 @@ export class MenuItem {
 
   @Prop({ default: 0 })
   sortOrder: number;
+
+  // Set on items mirrored from the business's ordering platform ("foodbell"); owners' own items have none.
+  @Prop()
+  source?: string;
 }
 
 export const MenuItemSchema = SchemaFactory.createForClass(MenuItem);

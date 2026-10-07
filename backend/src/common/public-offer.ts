@@ -33,6 +33,8 @@ export const OFFER_INTERNAL_FIELDS = [
   'submitWhenVerified',
   'expiryWarnedAt',
   'hiddenByReportsAt',
+  // Which Foodbell promotion an offer mirrors (src/foodbell)
+  'external',
 ] as const;
 
 export const PUBLIC_OFFER_PROJECTION = OFFER_INTERNAL_FIELDS.map((field) => `-${field}`).join(' ');
@@ -56,6 +58,8 @@ export const BUSINESS_INTERNAL_FIELDS = [
   'reverificationDueAt',
   'reverificationNotifiedAt',
   'source',
+  // The Foodbell connection (store id, sync state); the public "Foodbell partner" tag is isFoodbellClient
+  'foodbell',
 ] as const;
 
 export const PUBLIC_BUSINESS_PROJECTION = BUSINESS_INTERNAL_FIELDS.map((field) => `-${field}`).join(' ');

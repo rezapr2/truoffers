@@ -47,6 +47,8 @@ export class SettingsSecrets {
   @Prop() twilioMessagingServiceSid?: string;
   @Prop() resendApiKey?: string;
   @Prop() recaptchaSecretKey?: string;
+  // Signs requests to and from Foodbell (src/foodbell); Foodbell holds the same value
+  @Prop() foodbellSharedSecret?: string;
 }
 
 // One document, key "site".
@@ -74,6 +76,9 @@ export class SiteSettings {
 
   @Prop({ default: 'TruOffers <hello@truoffers.co.uk>' }) emailFrom: string;
   @Prop() recaptchaSiteKey?: string;
+
+  // Foodbell's API, e.g. https://api.foodbell.co.uk/api (src/foodbell)
+  @Prop({ default: 'https://api.foodbell.co.uk/api' }) foodbellApiUrl: string;
 
   @Prop({ type: SettingsSecrets, default: () => ({}) }) secrets: SettingsSecrets;
 

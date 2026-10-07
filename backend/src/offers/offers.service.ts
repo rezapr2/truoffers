@@ -63,6 +63,14 @@ export function defaultLabel(dto: Pick<CreateOfferDto, 'discountType' | 'value'>
   }
 }
 
+// Offers mirrored from the business's Foodbell site (src/foodbell) change there: an edit here would be overwritten,
+// and a deleted one would come back, at the next sync. Pausing here is kept.
+function assertNotMirrored(offer: Pick<Offer, 'external'>) {
+  if (offer.external?.provider === 'foodbell') {
+    throw new BadRequestException({ message: 'This deal comes from your Foodbell site. Change or switch it off in Foodbell and TruOffers updates within a minute. You can pause it here.', code: 'mirrored_offer' });
+  }
+}
+
 // The business fields public offer cards show.
 export const OFFER_CARD_BUSINESS_FIELDS =
   'name slug town postcode postcodeArea verificationLevel isFoodbellClient reviews logoUrl orderUrl phone website status categories';
@@ -345,9 +353,10 @@ export class OffersService {
    * Edits. A live or scheduled offer is checked again: if it still passes it stays published, otherwise it waits
    * for a moderator. A rejected offer becomes a draft until it is resubmitted.
    */
-  async update(offerId: string, dto: UpdateOfferDto, user: AuthUser) {
+  async update(offerId: string, dto: UpdateOfferDto, user: AuthUser, options: { fromSource?: boolean } = {}) {
     const { offer, business } = await this.loadManaged(offerId, user);
     if (offer.status === OfferStatus.EXPIRED) throw new BadRequestException('This offer has ended. Re-post it as a new draft instead.');
+    if (!options.fromSource) assertNotMirrored(offer);
     const plan = await this.plans.planFor(business._id);
     const startsAt = dto.startsAt !== undefined ? offerStart(dto.startsAt) : offer.startsAt;
     const endsAt = dto.endsAt !== undefined ? offerEnd(dto.endsAt) : offer.endsAt;
@@ -478,6 +487,7 @@ export class OffersService {
     const offer = Types.ObjectId.isValid(offerId) ? await this.offerModel.findById(offerId) : null;
     if (!offer) throw new NotFoundException('Offer not found');
     await this.access.load(String(offer.businessId), user, 'staff', { write: true });
+    if (offer.status !== OfferStatus.EXPIRED) assertNotMirrored(offer);
     const before = { title: offer.title, status: offer.status };
     if (offer.origin === OfferOrigin.SCRAPER) {
       // Imported offers are kept as removed so the next scrape of the website doesn't bring them back.

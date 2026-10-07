@@ -91,6 +91,22 @@ export class SuspensionReview {
   @Prop() resolution?: string;
 }
 
+// The business's Foodbell store, when the owner connected it (src/foodbell). Foodbell is the ordering platform
+// the blueprint's §27 hooks point at: profile, hours, menu and deals are mirrored from it.
+@Schema({ _id: false })
+export class FoodbellConnection {
+  @Prop({ required: true }) storeId: string;
+  @Prop() domain?: string;
+  // connected | disconnected
+  @Prop({ default: 'connected' }) status: string;
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' }) connectedBy?: Types.ObjectId;
+  @Prop({ type: Date }) connectedAt?: Date;
+  @Prop({ type: Date }) lastSyncAt?: Date;
+  @Prop() lastSyncError?: string;
+  // What the last sync did, for the owner's Foodbell page
+  @Prop({ type: Object }) lastSyncSummary?: Record<string, unknown>;
+}
+
 @Schema({ timestamps: true })
 export class Business {
   @Prop({ required: true, trim: true })
@@ -258,6 +274,9 @@ export class Business {
 
   @Prop()
   stripeCustomerId?: string;
+
+  @Prop({ type: FoodbellConnection })
+  foodbell?: FoodbellConnection;
 }
 
 export const BusinessSchema = SchemaFactory.createForClass(Business);

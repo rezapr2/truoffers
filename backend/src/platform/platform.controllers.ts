@@ -27,9 +27,11 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUrl,
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import type { Response } from 'express';
@@ -154,6 +156,8 @@ class UpdateSettingsDto {
   @IsOptional() @IsArray() @ArrayMaxSize(100) @IsString({ each: true }) knownOrderingDomains?: string[];
   @IsOptional() @IsString() @MaxLength(120) emailFrom?: string;
   @IsOptional() @IsString() @MaxLength(100) recaptchaSiteKey?: string;
+  // May be cleared (FOODBELL_API_URL, when set, wins either way)
+  @IsOptional() @ValidateIf((_, v) => v !== '') @IsUrl({ require_tld: false, protocols: ['http', 'https'] }) @MaxLength(200) foodbellApiUrl?: string;
   // Each value replaces the stored secret; "" clears it.
   @IsOptional() @IsObject() secrets?: Partial<Record<SecretName, string>>;
 }

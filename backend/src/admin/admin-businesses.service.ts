@@ -125,7 +125,7 @@ export class AdminBusinessesService {
     const settings = await this.settings.get();
     const [members, offers, subscription, payments, claims, reportCases, strikes, trail] = await Promise.all([
       this.users.find({ _id: { $in: (business.members ?? []).map((m) => m.userId) } }).select('name email status lastLoginAt').lean(),
-      this.offers.find({ businessId: business._id }).select('title status displayLabel origin startsAt endsAt impressions orderClicks createdAt').sort({ createdAt: -1 }).limit(50).lean(),
+      this.offers.find({ businessId: business._id }).select('title status displayLabel origin external.provider startsAt endsAt impressions orderClicks createdAt').sort({ createdAt: -1 }).limit(50).lean(),
       this.subscriptions.findOne({ businessId: business._id }).sort({ createdAt: -1 }).lean(),
       this.payments.find({ businessId: business._id }).sort({ createdAt: -1 }).limit(20).lean(),
       this.claims.find({ businessId: business._id }).sort({ createdAt: -1 }).limit(10).populate('userId', 'name email').select('status kind userId submittedAt decidedAt reasonCode').lean(),

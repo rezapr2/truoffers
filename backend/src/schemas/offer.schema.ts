@@ -193,6 +193,11 @@ export class Offer {
   @Prop()
   sourceDomain?: string;
 
+  // A deal mirrored from the business's ordering platform (src/foodbell): which deal, and a hash of what was last
+  // applied so an unchanged deal is not re-submitted. Edited at the source, not on TruOffers.
+  @Prop({ type: Object })
+  external?: { provider: string; id: string; hash?: string };
+
   // The spec offer type when discountType alone can't express it.
   @Prop()
   offerTypeRaw?: string;
@@ -256,6 +261,7 @@ OfferSchema.index({ status: 1, endsAt: 1 });
 OfferSchema.index({ status: 1, startsAt: 1 });
 OfferSchema.index({ businessId: 1, status: 1 });
 OfferSchema.index({ businessId: 1, contentFingerprint: 1 });
+OfferSchema.index({ businessId: 1, 'external.provider': 1, 'external.id': 1 }, { sparse: true });
 OfferSchema.index({ scrapedWebsiteRef: 1, status: 1 });
 OfferSchema.index(
   { dedupeKey: 1 },
