@@ -118,6 +118,25 @@ Where the two disagree, the MVP spec wins.
   `/admin/settings`. They are stored encrypted and never shown again; environment variables are the
   fallback.
 
+Also built on top of the spec, closing the blueprint's remaining gaps:
+
+- **Support tickets (§11)**: the contact form and the dashboard's Support page open a ticket with a
+  reference (T-10001). Replies go by email with a private link, so guests can carry on the conversation
+  without an account. Staff answer from `/admin/support` (assign, internal notes, priority, CSV); a
+  ticket waiting on the customer closes itself after 14 days.
+- **Campaigns (§14.1)**: `/admin/campaigns` sends email, text and in-app messages to customers by
+  postcode area or to businesses by level, plan and town, or to a takeaway's followers, with a live
+  recipient count, a test send, scheduling and per-channel results. Marketing campaigns only reach
+  people who opted in (a tick box at sign-up, toggles on the account page) and carry a one-click
+  unsubscribe link; service campaigns reach everyone. Texts need a Twilio Messaging Service SID.
+- **Blog**: posts are written in `/admin/blog` (cover image, tags, search title and description,
+  draft or published) and shown on `/blog` with article structured data and sitemap entries.
+- **Account page**: `/account` for every signed-in person: details, alert and marketing preferences,
+  followed takeaways, saved offers, support requests, and "delete my account" (GDPR).
+- **File storage**: uploads stay on the `api-uploads` volume by default. `STORAGE_DRIVER=s3` moves them
+  to any S3-compatible bucket (AWS, Cloudflare R2, Backblaze B2, MinIO); the bucket stays private
+  because files are still served through the API. `npm run storage:copy-to-s3` copies existing files.
+
 ## What's implemented (blueprint → code)
 
 - **Search (§7.1, §10)** — postcode → geocode (postcodes.io + offline fallback) → `$geoNear`
@@ -374,18 +393,15 @@ Unless provider review is on, it also releases websites held for a provider that
 
 Honest gaps against the blueprint, so nobody plans around something that isn't there:
 
-- **Mobile apps (§13)** — no native iOS/Android. The site is fully responsive; the blueprint puts
-  apps in V2 anyway.
-- **Two verification methods (§8)** — `email_domain` and `google_profile_match` exist as enum
-  values but perform no automated check: picking them just files a claim for manual admin review.
-  Working today: phone OTP, document upload, manual review, Foodbell auto-verify.
-- **Admin tooling (§14.1)**: the email/SMS/push campaign manager and a blog CMS are not built.
-  Listing merge, reports, categories, homepage content, help pages and email templates are.
-- **`support_tickets` (§11)**: this collection doesn't exist; support runs over email for now.
-- **File storage**: uploads (photos, menus, private verification documents) go to a Docker volume on
-  the VPS, not to object storage. Back it up with the database (see Backups).
-- **Foodbell deep integration (§27)** — only the hooks exist (`isFoodbellClient`, the verified
-  badge, tracked order links). Menu import and dashboard publishing need a real Foodbell API.
+- **Native mobile apps (§13)**: no iOS or Android app; the blueprint puts them in V2. The site is
+  responsive and installable (it has a web app manifest, so phones can add it to the home screen).
+- **Web push notifications**: campaigns and alerts reach people by email, text and the in-app
+  notification bell, not by browser push.
+- **Foodbell deep integration (§27)**: only the hooks exist (the Foodbell partner tag and tracked order
+  links). Menu import and publishing from the Foodbell dashboard need Foodbell's API.
+
+The blueprint's `email_domain` and `google_profile_match` claim methods were replaced by the MVP spec's
+evidence list (domain email or website meta tag, FHRS match, documents, shop-front photo).
 
 ## Social login (Google & Apple)
 
@@ -433,7 +449,7 @@ gitignored.
 | `.env.build` | build machine (Mac/CI) | `build-and-push.sh` | `SITE_URL`, `PLATFORM`, `REGISTRY`, public client IDs — **no secrets** |
 | `.env` (repo root) | **VPS only** | `docker compose` / `deploy.sh` | `SITE_DOMAIN`, `SITE_URL`, `JWT_SECRET`, Stripe/API keys |
 
-Every optional key (Stripe, Twilio, Resend, reCAPTCHA, OAuth, Google Places, Anthropic) degrades
+Every optional key (Stripe, Twilio, Resend, reCAPTCHA, S3, OAuth, Google Places, Anthropic) degrades
 gracefully when blank: the feature switches to mock or template mode rather than crashing. Stripe,
 Twilio, Resend and reCAPTCHA keys can also be entered in `/admin/settings` after deploying; a key
 saved there wins over the environment. They're encrypted with `SETTINGS_ENCRYPTION_KEY` (or
